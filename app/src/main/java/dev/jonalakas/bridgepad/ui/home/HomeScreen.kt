@@ -114,7 +114,7 @@ fun HomeScreen(
             }
             if (
                 hidState.sessionActive &&
-                (hidState.status == HidSessionStatus.READY || hidState.status == HidSessionStatus.CONNECTING)
+                hidState.status == HidSessionStatus.READY
             ) {
                 if (!hidState.pairingModeActive) {
                     item {

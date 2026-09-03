@@ -23,6 +23,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Guided PC pairing with temporary Bluetooth discoverability, live bond updates
   and filtering of paired devices to computers.
 - Visible pairing-mode feedback with automatic timeout and completion messages.
+- Connection-state checks that avoid duplicate HID connection requests while
+  Windows is already connecting or connected.
 
 ### Changed
 

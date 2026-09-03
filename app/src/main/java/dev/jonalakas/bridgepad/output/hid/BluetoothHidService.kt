@@ -99,14 +99,7 @@ class BluetoothHidService : Service() {
                     "Connecting to ${device.safeName()}…",
                 )
                 BluetoothProfile.STATE_CONNECTED -> {
-                    connectedDevice = device
-                    HidSessionStore.update {
-                        it.copy(
-                            status = HidSessionStatus.CONNECTED,
-                            connectedHost = device.safeName(),
-                            message = "Connected. The test button can now send HID reports.",
-                        )
-                    }
+                    acceptConnectedDevice(device)
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     connectedDevice = null
@@ -224,9 +217,34 @@ class BluetoothHidService : Service() {
     private fun connect(address: String?) {
         if (address.isNullOrBlank() || hidDevice == null) return
         val device = adapter?.getRemoteDevice(address) ?: return
+        when (hidDevice?.getConnectionState(device)) {
+            BluetoothProfile.STATE_CONNECTED -> {
+                acceptConnectedDevice(device)
+                return
+            }
+            BluetoothProfile.STATE_CONNECTING -> {
+                update(
+                    HidSessionStatus.CONNECTING,
+                    "Windows is already connecting to ${device.safeName()}…",
+                )
+                return
+            }
+        }
         update(HidSessionStatus.CONNECTING, "Requesting connection to ${device.safeName()}…")
         if (hidDevice?.connect(device) != true) {
             update(HidSessionStatus.ERROR, "Android rejected the connection request.")
+        }
+    }
+
+    private fun acceptConnectedDevice(device: BluetoothDevice) {
+        connectedDevice = device
+        HidSessionStore.update {
+            it.copy(
+                status = HidSessionStatus.CONNECTED,
+                connectedHost = device.safeName(),
+                message = "Connected. The test button can now send HID reports.",
+                feedbackLevel = HidFeedbackLevel.INFO,
+            )
         }
     }
 
