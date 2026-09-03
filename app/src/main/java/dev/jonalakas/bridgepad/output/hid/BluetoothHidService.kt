@@ -30,6 +30,7 @@ class BluetoothHidService : Service() {
     private var adapter: BluetoothAdapter? = null
     private var hidDevice: BluetoothHidDevice? = null
     private var connectedDevice: BluetoothDevice? = null
+    private var testAxisValue = 0
     private var shuttingDown = false
     private val handler = Handler(Looper.getMainLooper())
     private var discoverabilityTimeout: Runnable? = null
@@ -145,6 +146,7 @@ class BluetoothHidService : Service() {
             ACTION_CONNECT -> connect(intent.getStringExtra(EXTRA_ADDRESS))
             ACTION_TEST_PRESS -> sendTestReport(pressed = true)
             ACTION_TEST_RELEASE -> sendTestReport(pressed = false)
+            ACTION_TEST_AXIS -> sendAxisReport(intent.getIntExtra(EXTRA_AXIS_VALUE, 0))
             ACTION_REFRESH_HOSTS -> if (!shuttingDown) refreshPairedHosts()
             ACTION_DISCOVERABILITY_STARTED -> showDiscoverabilityMessage(
                 intent.getIntExtra(EXTRA_DISCOVERABLE_DURATION, 120),
@@ -250,9 +252,21 @@ class BluetoothHidService : Service() {
 
     private fun sendTestReport(pressed: Boolean) {
         val device = connectedDevice ?: return
-        val report = GamepadHidDescriptor.southButtonReport(pressed)
+        val report = GamepadHidDescriptor.gamepadReport(pressed, testAxisValue)
         if (hidDevice?.sendReport(device, GamepadHidDescriptor.REPORT_ID, report) != true) {
             update(HidSessionStatus.ERROR, "The HID test report could not be sent.")
+        }
+    }
+
+    private fun sendAxisReport(value: Int) {
+        val device = connectedDevice ?: return
+        testAxisValue = value.coerceIn(-127, 127)
+        val report = GamepadHidDescriptor.gamepadReport(
+            southPressed = false,
+            xAxis = testAxisValue,
+        )
+        if (hidDevice?.sendReport(device, GamepadHidDescriptor.REPORT_ID, report) != true) {
+            update(HidSessionStatus.ERROR, "The HID axis report could not be sent.")
         }
     }
 
@@ -294,6 +308,7 @@ class BluetoothHidService : Service() {
         hidDevice?.let { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
         hidDevice = null
         connectedDevice = null
+        testAxisValue = 0
     }
 
     private fun showDiscoverabilityMessage(durationSeconds: Int) {
@@ -379,11 +394,13 @@ class BluetoothHidService : Service() {
         const val ACTION_CONNECT = "dev.jonalakas.bridgepad.hid.CONNECT"
         const val ACTION_TEST_PRESS = "dev.jonalakas.bridgepad.hid.TEST_PRESS"
         const val ACTION_TEST_RELEASE = "dev.jonalakas.bridgepad.hid.TEST_RELEASE"
+        const val ACTION_TEST_AXIS = "dev.jonalakas.bridgepad.hid.TEST_AXIS"
         const val ACTION_REFRESH_HOSTS = "dev.jonalakas.bridgepad.hid.REFRESH_HOSTS"
         const val ACTION_DISCOVERABILITY_STARTED = "dev.jonalakas.bridgepad.hid.DISCOVERABILITY_STARTED"
         const val ACTION_STOP = "dev.jonalakas.bridgepad.hid.STOP"
         const val EXTRA_ADDRESS = "host_address"
         const val EXTRA_DISCOVERABLE_DURATION = "discoverable_duration"
+        const val EXTRA_AXIS_VALUE = "axis_value"
 
         private const val CHANNEL_ID = "bluetooth_hid_session"
         private const val NOTIFICATION_ID = 1001

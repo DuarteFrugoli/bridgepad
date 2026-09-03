@@ -111,8 +111,12 @@ Procedure:
 8. Open the controller properties in `joy.cpl`.
 9. Tap **Send test button** repeatedly and confirm that button 1 is pressed and
    released every time.
-10. Tap **Stop HID spike** and confirm that no input remains pressed.
-11. Repeat after backgrounding the app, turning the screen off and reconnecting.
+10. Move **Test X axis** and confirm that the Windows X-axis indicator follows
+    it. Use **Minimum**, **Center** and **Maximum** to verify both extremes and
+    the exact neutral position.
+11. Tap **Stop HID spike** and confirm that no input remains pressed and the
+    axis returns to center.
+12. Repeat after backgrounding the app, turning the screen off and reconnecting.
 
 If Windows and Android were already paired before the HID service was
 registered, remove the pairing on both devices and repeat the procedure. The

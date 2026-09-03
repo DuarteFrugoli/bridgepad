@@ -20,3 +20,10 @@ its evidence recorded here.
 - Result: PASS
 - Evidence: debug APK installed and launched successfully; the application
   displayed the expected app version and device information.
+
+### 2026-09-03 — Phase 1 partial validation
+
+- Bluetooth HID registration and Windows connection: PASS
+- Digital test button press/release in `joy.cpl`: PASS
+- Foreground service while the app is in background: PASS
+- Axis ranges, screen-off duration and long-session stability: pending

@@ -94,6 +94,12 @@ class MainActivity : ComponentActivity() {
                             100,
                         )
                     },
+                    onSendTestAxis = { value ->
+                        startService(
+                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_TEST_AXIS)
+                                .putExtra(BluetoothHidService.EXTRA_AXIS_VALUE, value),
+                        )
+                    },
                     onStopHid = {
                         startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_STOP))
                     },

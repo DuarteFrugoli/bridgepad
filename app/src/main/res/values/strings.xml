@@ -23,4 +23,9 @@
     <string name="stop_hid_spike">Stop HID spike</string>
     <string name="pair_new_pc">Pair new PC</string>
     <string name="no_paired_computers">No paired computer was found. Tap Pair new PC, approve discoverability, then add this phone from Windows Bluetooth settings.</string>
+    <string name="test_x_axis">Test X axis</string>
+    <string name="axis_value">HID value: %1$d</string>
+    <string name="axis_minimum">Minimum</string>
+    <string name="axis_center">Center</string>
+    <string name="axis_maximum">Maximum</string>
 </resources>

@@ -25,6 +25,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Visible pairing-mode feedback with automatic timeout and completion messages.
 - Connection-state checks that avoid duplicate HID connection requests while
   Windows is already connecting or connected.
+- Interactive X-axis control with exact minimum, center and maximum test values.
 
 ### Changed
 

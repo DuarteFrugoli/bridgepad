@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,13 +15,19 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.diagnostics.DeviceInfo
 import dev.jonalakas.bridgepad.output.hid.HidSessionState
@@ -42,6 +49,7 @@ fun HomeScreen(
     onConnect: (String) -> Unit,
     onPairNewPc: () -> Unit,
     onSendTestButton: () -> Unit,
+    onSendTestAxis: (Int) -> Unit,
     onStopHid: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -146,6 +154,9 @@ fun HomeScreen(
                         Text(stringResource(R.string.send_test_button))
                     }
                 }
+                item {
+                    AxisTestControl(onValueChanged = onSendTestAxis)
+                }
             }
             if (hidState.sessionActive) {
                 item {
@@ -222,7 +233,56 @@ private fun HomeScreenPreview() {
             onConnect = {},
             onPairNewPc = {},
             onSendTestButton = {},
+            onSendTestAxis = {},
             onStopHid = {},
         )
+    }
+}
+
+@Composable
+private fun AxisTestControl(
+    onValueChanged: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var value by remember { mutableFloatStateOf(0f) }
+
+    fun send(newValue: Float) {
+        value = newValue.coerceIn(-1f, 1f)
+        onValueChanged((value * 127f).roundToInt())
+    }
+
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.test_x_axis),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = stringResource(R.string.axis_value, (value * 127f).roundToInt()),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Slider(
+                value = value,
+                onValueChange = ::send,
+                valueRange = -1f..1f,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                OutlinedButton(onClick = { send(-1f) }) {
+                    Text(stringResource(R.string.axis_minimum))
+                }
+                OutlinedButton(onClick = { send(0f) }) {
+                    Text(stringResource(R.string.axis_center))
+                }
+                OutlinedButton(onClick = { send(1f) }) {
+                    Text(stringResource(R.string.axis_maximum))
+                }
+            }
+        }
     }
 }

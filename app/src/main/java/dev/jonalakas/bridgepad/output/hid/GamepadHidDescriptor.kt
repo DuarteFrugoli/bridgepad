@@ -51,7 +51,8 @@ object GamepadHidDescriptor {
 
     fun neutralReport(): ByteArray = byteArrayOf(0, 0, 8, 0, 0, 0, 0, 0, 0)
 
-    fun southButtonReport(pressed: Boolean): ByteArray = neutralReport().also {
-        if (pressed) it[0] = 0x01
+    fun gamepadReport(southPressed: Boolean, xAxis: Int): ByteArray = neutralReport().also {
+        if (southPressed) it[0] = 0x01
+        it[3] = xAxis.coerceIn(-127, 127).toByte()
     }
 }
