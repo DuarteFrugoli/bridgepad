@@ -8,7 +8,7 @@ its evidence recorded here.
 
 | Manufacturer | Model | Android version | Role | Status |
 | --- | --- | --- | --- | --- |
-| Samsung | Galaxy A55 | To be recorded | Primary device for Gate A | Not tested |
+| Samsung | Galaxy A35 | To be recorded | Primary device for Gate A | Not tested |
 
 ## Test results
 

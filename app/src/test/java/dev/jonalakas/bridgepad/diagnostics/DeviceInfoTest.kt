@@ -6,16 +6,16 @@ import org.junit.Test
 class DeviceInfoTest {
     @Test
     fun displayModel_combinesManufacturerAndModel() {
-        val info = DeviceInfo("Samsung", "Galaxy A55", "16", 36)
+        val info = DeviceInfo("Samsung", "Galaxy A35", "16", 36)
 
-        assertEquals("Samsung Galaxy A55", info.displayModel)
+        assertEquals("Samsung Galaxy A35", info.displayModel)
     }
 
     @Test
     fun displayModel_usesKnownValueWhenOtherIsBlank() {
-        val info = DeviceInfo("", "Galaxy A55", "16", 36)
+        val info = DeviceInfo("", "Galaxy A35", "16", 36)
 
-        assertEquals("Galaxy A55", info.displayModel)
+        assertEquals("Galaxy A35", info.displayModel)
     }
 
     @Test

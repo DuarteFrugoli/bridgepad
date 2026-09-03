@@ -107,7 +107,7 @@ private fun HomeScreenPreview() {
             appVersion = "0.1.0",
             deviceInfo = DeviceInfo(
                 manufacturer = "Samsung",
-                model = "Galaxy A55",
+                model = "Galaxy A35",
                 androidVersion = "16",
                 sdkLevel = 36,
             ),
