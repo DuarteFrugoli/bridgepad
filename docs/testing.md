@@ -28,19 +28,21 @@ The same checks run as independent jobs in GitHub Actions after every push.
 2. Enable **USB debugging** in **Settings > Developer options**.
 3. Connect the unlocked device to Windows with a data-capable USB cable.
 4. Accept the RSA debugging prompt on the device.
-5. In the VS Code terminal, verify the connection:
+5. Find the Android SDK path in the `sdk.dir` entry of `local.properties`.
+6. In the VS Code terminal, verify the connection, replacing `<ANDROID_SDK>`
+   with that path:
 
 ```powershell
-& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" devices
+& "<ANDROID_SDK>\platform-tools\adb.exe" devices
 ```
 
-6. Install the current debug build:
+7. Install the current debug build:
 
 ```powershell
 .\gradlew.bat installDebug
 ```
 
-7. Open BridgePad on the device and confirm that its version, manufacturer,
+8. Open BridgePad on the device and confirm that its version, manufacturer,
    model, Android version and API level are displayed correctly.
 
 If Windows does not list the device, change the USB mode to file transfer and
