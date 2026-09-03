@@ -194,6 +194,11 @@ class BluetoothHidService : Service() {
                 bluetoothEnabled = adapter?.isEnabled == true,
                 connectedHost = null,
                 message = message,
+                feedbackLevel = if (status == HidSessionStatus.IDLE) {
+                    HidFeedbackLevel.WARNING
+                } else {
+                    HidFeedbackLevel.ERROR
+                },
             )
         }
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -208,7 +213,17 @@ class BluetoothHidService : Service() {
     }
 
     private fun update(status: HidSessionStatus, message: String) {
-        HidSessionStore.update { it.copy(status = status, message = message) }
+        HidSessionStore.update {
+            it.copy(
+                status = status,
+                message = message,
+                feedbackLevel = if (status == HidSessionStatus.ERROR) {
+                    HidFeedbackLevel.ERROR
+                } else {
+                    HidFeedbackLevel.INFO
+                },
+            )
+        }
     }
 
     private fun BluetoothDevice.safeName(): String = name?.takeIf { it.isNotBlank() } ?: address

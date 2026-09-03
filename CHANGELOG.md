@@ -17,6 +17,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Bluetooth HID Device spike with runtime permission handling, foreground
   service, paired-host selection and a test gamepad report.
 - Experimental HID descriptor and Gate A test procedure.
+- Reusable warning and error cards for actionable session feedback.
 
 ### Changed
 

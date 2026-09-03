@@ -25,6 +25,9 @@ import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.diagnostics.DeviceInfo
 import dev.jonalakas.bridgepad.output.hid.HidSessionState
 import dev.jonalakas.bridgepad.output.hid.HidSessionStatus
+import dev.jonalakas.bridgepad.output.hid.HidFeedbackLevel
+import dev.jonalakas.bridgepad.ui.components.NoticeCard
+import dev.jonalakas.bridgepad.ui.components.NoticeTone
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,7 +83,20 @@ fun HomeScreen(
                 )
             }
             item {
-                Text(hidState.message, style = MaterialTheme.typography.bodyLarge)
+                when (hidState.feedbackLevel) {
+                    HidFeedbackLevel.WARNING -> NoticeCard(
+                        message = hidState.message,
+                        tone = NoticeTone.WARNING,
+                    )
+                    HidFeedbackLevel.ERROR -> NoticeCard(
+                        message = hidState.message,
+                        tone = NoticeTone.ERROR,
+                    )
+                    HidFeedbackLevel.INFO -> Text(
+                        text = hidState.message,
+                        style = MaterialTheme.typography.bodyLarge,
+                    )
+                }
             }
             if (!bluetoothPermissionGranted) {
                 item {

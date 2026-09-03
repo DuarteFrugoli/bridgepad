@@ -15,6 +15,12 @@ enum class HidSessionStatus {
     ERROR,
 }
 
+enum class HidFeedbackLevel {
+    INFO,
+    WARNING,
+    ERROR,
+}
+
 data class PairedHost(val address: String, val name: String)
 
 data class HidSessionState(
@@ -24,6 +30,7 @@ data class HidSessionState(
     val pairedHosts: List<PairedHost> = emptyList(),
     val connectedHost: String? = null,
     val message: String = "Start the HID spike to check this device.",
+    val feedbackLevel: HidFeedbackLevel = HidFeedbackLevel.INFO,
 )
 
 object HidSessionStore {
