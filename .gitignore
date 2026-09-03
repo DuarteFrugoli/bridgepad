@@ -14,3 +14,11 @@
 .cxx
 local.properties
 /docs/private
+/.vscode/
+/.kotlin/
+/.idea/deploymentTargetSelector.xml
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
