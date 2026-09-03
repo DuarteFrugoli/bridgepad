@@ -541,6 +541,43 @@ A future iOS version would therefore be implemented natively rather than forcing
 
 ---
 
+## Build and Test
+
+The Android application uses the namespace and application ID
+`dev.jonalakas.bridgepad`, supports Android 9 or newer (`minSdk = 28`) and starts
+at version `0.1.0`.
+
+### Requirements
+
+- Android SDK configured in `local.properties`;
+- JDK 17 or newer (the JDK bundled with Android Studio is supported);
+- a terminal opened at the repository root.
+
+On Windows, run:
+
+```powershell
+.\gradlew.bat testDebugUnitTest
+.\gradlew.bat lintDebug
+.\gradlew.bat assembleDebug
+```
+
+The generated APK is available at:
+
+```text
+app/build/outputs/apk/debug/app-debug.apk
+```
+
+To install it on an Android device connected through ADB:
+
+```powershell
+.\gradlew.bat installDebug
+```
+
+Detailed physical-device setup and the hardware test record are documented in
+[`docs/testing.md`](./docs/testing.md).
+
+---
+
 ## Repository Structure
 
 The project is expected to evolve approximately like this:

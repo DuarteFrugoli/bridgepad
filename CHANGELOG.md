@@ -10,6 +10,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 - Initial Android project using Kotlin and Jetpack Compose.
 - GitHub Actions checks for unit tests, lint and debug builds.
+- Device baseline screen with app and Android system information.
+- Repeatable build, installation and hardware-testing documentation.
+- Architecture decision record for native Android and API 28.
 
 ## [0.1.0]
 

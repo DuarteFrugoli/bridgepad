@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">BridgePad</string>
+    <string name="baseline_title">Device baseline</string>
+    <string name="baseline_description">BridgePad is ready for the first hardware validation.</string>
+    <string name="app_information">Application</string>
+    <string name="device_information">Test device</string>
+    <string name="version_label">Version</string>
+    <string name="status_label">Status</string>
+    <string name="status_early_development">Early development</string>
+    <string name="device_label">Device</string>
+    <string name="android_label">Android</string>
+    <string name="api_level_label">API level</string>
 </resources>

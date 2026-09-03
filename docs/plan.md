@@ -203,15 +203,15 @@ Criar uma base pequena, reproduzível e verificável para os experimentos.
 
 ### Trabalho
 
-- [ ] Inicializar Git e definir licença open source.
-- [ ] Criar projeto Android em Kotlin com Jetpack Compose.
-- [ ] Definir `minSdk = 28` e documentar a escolha.
-- [ ] Definir application ID, namespace e estratégia de versionamento.
-- [ ] Adicionar lint, testes unitários e build de debug.
-- [ ] Criar CI para build, lint e unit tests.
-- [ ] Criar uma tela inicial mínima com versão e informações do aparelho.
-- [ ] Registrar dados de teste: fabricante, modelo, versão Android e versão do app.
-- [ ] Criar `docs/decisions/` e o primeiro ADR sobre Android nativo/API mínima.
+- [x] Inicializar Git e definir licença open source.
+- [x] Criar projeto Android em Kotlin com Jetpack Compose.
+- [x] Definir `minSdk = 28` e documentar a escolha.
+- [x] Definir application ID, namespace e estratégia de versionamento.
+- [x] Adicionar lint, testes unitários e build de debug.
+- [x] Criar CI para build, lint e unit tests.
+- [x] Criar uma tela inicial mínima com versão e informações do aparelho.
+- [x] Registrar dados de teste: fabricante, modelo, versão Android e versão do app.
+- [x] Criar `docs/decisions/` e o primeiro ADR sobre Android nativo/API mínima.
 
 ### Entregáveis
 
