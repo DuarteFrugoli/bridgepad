@@ -30,6 +30,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   selection.
 - Explicit host authorization so starting HID always presents the existing-PC
   or new-pairing choice instead of reconnecting automatically.
+- Gate A approval evidence for Bluetooth HID on the Galaxy A35, Windows and
+  Steam Input.
 
 ### Changed
 
