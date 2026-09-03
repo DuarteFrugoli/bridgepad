@@ -84,6 +84,7 @@ class BluetoothHidService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        HidSessionStore.update { it.copy(sessionActive = true) }
         createNotificationChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -112,24 +113,18 @@ class BluetoothHidService : Service() {
 
     override fun onDestroy() {
         releaseProfile()
-        HidSessionStore.update { HidSessionState() }
+        HidSessionStore.update { it.copy(sessionActive = false, connectedHost = null) }
         super.onDestroy()
     }
 
     private fun startHid() {
         val currentAdapter = adapter
         if (currentAdapter == null) {
-            update(HidSessionStatus.ERROR, "This device has no Bluetooth adapter.")
+            finishSession(HidSessionStatus.ERROR, "This device has no Bluetooth adapter.")
             return
         }
         if (!currentAdapter.isEnabled) {
-            HidSessionStore.update {
-                it.copy(
-                    status = HidSessionStatus.ERROR,
-                    bluetoothEnabled = false,
-                    message = "Turn Bluetooth on and try again.",
-                )
-            }
+            finishSession(HidSessionStatus.IDLE, "Bluetooth is off. Turn it on and try again.")
             return
         }
         HidSessionStore.update {
@@ -140,7 +135,7 @@ class BluetoothHidService : Service() {
             )
         }
         val requested = currentAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HID_DEVICE)
-        if (!requested) update(HidSessionStatus.ERROR, "HID Device profile is unavailable.")
+        if (!requested) finishSession(HidSessionStatus.ERROR, "HID Device profile is unavailable.")
     }
 
     private fun registerHidApp() {
@@ -186,6 +181,21 @@ class BluetoothHidService : Service() {
             hidDevice?.disconnect(device)
         }
         releaseProfile()
+        HidSessionStore.update { HidSessionState(message = "HID session stopped.") }
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
+    private fun finishSession(status: HidSessionStatus, message: String) {
+        HidSessionStore.update {
+            it.copy(
+                status = status,
+                sessionActive = false,
+                bluetoothEnabled = adapter?.isEnabled == true,
+                connectedHost = null,
+                message = message,
+            )
+        }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

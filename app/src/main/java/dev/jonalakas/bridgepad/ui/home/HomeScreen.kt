@@ -88,7 +88,7 @@ fun HomeScreen(
                         Text(stringResource(R.string.grant_permissions))
                     }
                 }
-            } else if (hidState.status == HidSessionStatus.IDLE || hidState.status == HidSessionStatus.ERROR) {
+            } else if (!hidState.sessionActive) {
                 item {
                     Button(onClick = onStartHid, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.start_hid_spike))
@@ -112,7 +112,7 @@ fun HomeScreen(
                     }
                 }
             }
-            if (hidState.status != HidSessionStatus.IDLE) {
+            if (hidState.sessionActive) {
                 item {
                     OutlinedButton(onClick = onStopHid, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.stop_hid_spike))

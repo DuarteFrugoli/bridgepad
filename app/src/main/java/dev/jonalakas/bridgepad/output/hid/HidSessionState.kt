@@ -19,6 +19,7 @@ data class PairedHost(val address: String, val name: String)
 
 data class HidSessionState(
     val status: HidSessionStatus = HidSessionStatus.IDLE,
+    val sessionActive: Boolean = false,
     val bluetoothEnabled: Boolean = false,
     val pairedHosts: List<PairedHost> = emptyList(),
     val connectedHost: String? = null,
