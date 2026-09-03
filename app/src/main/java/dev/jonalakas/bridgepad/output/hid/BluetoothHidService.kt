@@ -30,6 +30,7 @@ class BluetoothHidService : Service() {
     private var adapter: BluetoothAdapter? = null
     private var hidDevice: BluetoothHidDevice? = null
     private var connectedDevice: BluetoothDevice? = null
+    private var requestedHostAddress: String? = null
     private var testAxisValue = 0
     private var shuttingDown = false
     private val handler = Handler(Looper.getMainLooper())
@@ -87,10 +88,9 @@ class BluetoothHidService : Service() {
             if (registered) {
                 refreshPairedHosts()
                 if (pluggedDevice != null) {
-                    acceptConnectedDevice(pluggedDevice)
-                } else {
-                    update(HidSessionStatus.READY, "HID gamepad registered. Select a paired PC.")
+                    hidDevice?.disconnect(pluggedDevice)
                 }
+                update(HidSessionStatus.READY, "HID gamepad registered. Choose a paired PC or pair a new one.")
             } else {
                 connectedDevice = null
                 finishSession(HidSessionStatus.ERROR, "Android did not keep the HID registration.")
@@ -99,15 +99,28 @@ class BluetoothHidService : Service() {
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             if (shuttingDown) return
+            val wasRequested = device.address == requestedHostAddress
             when (state) {
-                BluetoothProfile.STATE_CONNECTING -> update(
-                    HidSessionStatus.CONNECTING,
-                    "Connecting to ${device.safeName()}…",
-                )
+                BluetoothProfile.STATE_CONNECTING -> if (wasRequested) {
+                    update(
+                        HidSessionStatus.CONNECTING,
+                        "Connecting to ${device.safeName()}…",
+                    )
+                }
                 BluetoothProfile.STATE_CONNECTED -> {
-                    acceptConnectedDevice(device)
+                    if (wasRequested) {
+                        acceptConnectedDevice(device)
+                    } else {
+                        hidDevice?.disconnect(device)
+                        update(
+                            HidSessionStatus.READY,
+                            "Choose a paired PC before connecting.",
+                        )
+                    }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
+                    if (!wasRequested && connectedDevice == null) return
+                    requestedHostAddress = null
                     connectedDevice = null
                     HidSessionStore.update {
                         it.copy(
@@ -225,6 +238,7 @@ class BluetoothHidService : Service() {
     private fun connect(address: String?) {
         if (address.isNullOrBlank() || hidDevice == null) return
         val device = adapter?.getRemoteDevice(address) ?: return
+        requestedHostAddress = address
         when (hidDevice?.getConnectionState(device)) {
             BluetoothProfile.STATE_CONNECTED -> {
                 acceptConnectedDevice(device)
@@ -260,6 +274,7 @@ class BluetoothHidService : Service() {
             else -> {
                 update(HidSessionStatus.CONNECTING, "Requesting connection to ${device.safeName()}…")
                 if (hidDevice?.connect(device) != true) {
+                    requestedHostAddress = null
                     update(HidSessionStatus.ERROR, "Android rejected the connection request.")
                 }
             }
@@ -268,6 +283,7 @@ class BluetoothHidService : Service() {
 
     private fun acceptConnectedDevice(device: BluetoothDevice) {
         connectedDevice = device
+        requestedHostAddress = device.address
         HidSessionStore.update {
             it.copy(
                 status = HidSessionStatus.CONNECTED,
@@ -337,6 +353,7 @@ class BluetoothHidService : Service() {
         hidDevice?.let { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
         hidDevice = null
         connectedDevice = null
+        requestedHostAddress = null
         testAxisValue = 0
     }
 
