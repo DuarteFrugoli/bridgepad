@@ -42,8 +42,18 @@ class MainActivity : ComponentActivity() {
                 }
                 val discoverableLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
-                ) {
-                    startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_REFRESH_HOSTS))
+                ) { result ->
+                    if (result.resultCode > 0) {
+                        startService(
+                            BluetoothHidService.intent(
+                                this,
+                                BluetoothHidService.ACTION_DISCOVERABILITY_STARTED,
+                            ).putExtra(
+                                BluetoothHidService.EXTRA_DISCOVERABLE_DURATION,
+                                result.resultCode,
+                            ),
+                        )
+                    }
                 }
                 val hidState by HidSessionStore.state.collectAsState()
 

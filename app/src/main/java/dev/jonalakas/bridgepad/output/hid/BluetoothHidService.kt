@@ -18,7 +18,9 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import dev.jonalakas.bridgepad.MainActivity
 import dev.jonalakas.bridgepad.R
@@ -29,6 +31,8 @@ class BluetoothHidService : Service() {
     private var hidDevice: BluetoothHidDevice? = null
     private var connectedDevice: BluetoothDevice? = null
     private var shuttingDown = false
+    private val handler = Handler(Looper.getMainLooper())
+    private var discoverabilityTimeout: Runnable? = null
 
     private val bluetoothStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -40,7 +44,21 @@ class BluetoothHidService : Service() {
                     }
                 }
                 BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
-                    if (!shuttingDown) refreshPairedHosts()
+                    if (!shuttingDown) {
+                        refreshPairedHosts()
+                        if (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR) ==
+                            BluetoothDevice.BOND_BONDED
+                        ) {
+                            cancelDiscoverabilityMessage()
+                            HidSessionStore.update {
+                                it.copy(
+                                    pairingModeActive = false,
+                                    message = "Computer paired. Select it from the list to connect HID.",
+                                    feedbackLevel = HidFeedbackLevel.INFO,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -135,6 +153,9 @@ class BluetoothHidService : Service() {
             ACTION_TEST_PRESS -> sendTestReport(pressed = true)
             ACTION_TEST_RELEASE -> sendTestReport(pressed = false)
             ACTION_REFRESH_HOSTS -> if (!shuttingDown) refreshPairedHosts()
+            ACTION_DISCOVERABILITY_STARTED -> showDiscoverabilityMessage(
+                intent.getIntExtra(EXTRA_DISCOVERABLE_DURATION, 120),
+            )
             ACTION_STOP -> stopHid()
         }
         return START_NOT_STICKY
@@ -145,6 +166,7 @@ class BluetoothHidService : Service() {
     override fun onDestroy() {
         val stateWasFinalized = shuttingDown
         shuttingDown = true
+        cancelDiscoverabilityMessage()
         releaseProfile()
         runCatching { unregisterReceiver(bluetoothStateReceiver) }
         if (!stateWasFinalized) {
@@ -256,6 +278,33 @@ class BluetoothHidService : Service() {
         connectedDevice = null
     }
 
+    private fun showDiscoverabilityMessage(durationSeconds: Int) {
+        cancelDiscoverabilityMessage()
+        HidSessionStore.update {
+            it.copy(
+                pairingModeActive = true,
+                message = "This phone is visible to nearby devices for $durationSeconds seconds. Add it from Windows Bluetooth settings.",
+                feedbackLevel = HidFeedbackLevel.WARNING,
+            )
+        }
+        val timeout = Runnable {
+            HidSessionStore.update {
+                it.copy(
+                    pairingModeActive = false,
+                    message = "Phone visibility ended. Tap Pair new PC to try again.",
+                    feedbackLevel = HidFeedbackLevel.INFO,
+                )
+            }
+        }
+        discoverabilityTimeout = timeout
+        handler.postDelayed(timeout, durationSeconds.coerceAtLeast(1) * 1_000L)
+    }
+
+    private fun cancelDiscoverabilityMessage() {
+        discoverabilityTimeout?.let(handler::removeCallbacks)
+        discoverabilityTimeout = null
+    }
+
     @Suppress("DEPRECATION")
     private fun registerBluetoothStateReceiver() {
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
@@ -313,8 +362,10 @@ class BluetoothHidService : Service() {
         const val ACTION_TEST_PRESS = "dev.jonalakas.bridgepad.hid.TEST_PRESS"
         const val ACTION_TEST_RELEASE = "dev.jonalakas.bridgepad.hid.TEST_RELEASE"
         const val ACTION_REFRESH_HOSTS = "dev.jonalakas.bridgepad.hid.REFRESH_HOSTS"
+        const val ACTION_DISCOVERABILITY_STARTED = "dev.jonalakas.bridgepad.hid.DISCOVERABILITY_STARTED"
         const val ACTION_STOP = "dev.jonalakas.bridgepad.hid.STOP"
         const val EXTRA_ADDRESS = "host_address"
+        const val EXTRA_DISCOVERABLE_DURATION = "discoverable_duration"
 
         private const val CHANNEL_ID = "bluetooth_hid_session"
         private const val NOTIFICATION_ID = 1001

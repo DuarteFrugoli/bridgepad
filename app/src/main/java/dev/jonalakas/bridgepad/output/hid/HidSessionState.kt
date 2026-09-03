@@ -28,6 +28,7 @@ data class HidSessionState(
     val sessionActive: Boolean = false,
     val bluetoothEnabled: Boolean = false,
     val pairedHosts: List<PairedHost> = emptyList(),
+    val pairingModeActive: Boolean = false,
     val connectedHost: String? = null,
     val message: String = "Start the HID spike to check this device.",
     val feedbackLevel: HidFeedbackLevel = HidFeedbackLevel.INFO,

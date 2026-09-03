@@ -22,6 +22,7 @@ The project follows [Semantic Versioning](https://semver.org/).
   and late callback errors after a session ends.
 - Guided PC pairing with temporary Bluetooth discoverability, live bond updates
   and filtering of paired devices to computers.
+- Visible pairing-mode feedback with automatic timeout and completion messages.
 
 ### Changed
 

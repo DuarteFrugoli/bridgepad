@@ -116,12 +116,14 @@ fun HomeScreen(
                 hidState.sessionActive &&
                 (hidState.status == HidSessionStatus.READY || hidState.status == HidSessionStatus.CONNECTING)
             ) {
-                item {
-                    Button(onClick = onPairNewPc, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.pair_new_pc))
+                if (!hidState.pairingModeActive) {
+                    item {
+                        Button(onClick = onPairNewPc, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.pair_new_pc))
+                        }
                     }
                 }
-                if (hidState.pairedHosts.isEmpty()) {
+                if (hidState.pairedHosts.isEmpty() && !hidState.pairingModeActive) {
                     item {
                         NoticeCard(
                             message = stringResource(R.string.no_paired_computers),
