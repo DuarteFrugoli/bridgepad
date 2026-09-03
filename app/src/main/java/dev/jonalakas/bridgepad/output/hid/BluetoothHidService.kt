@@ -34,6 +34,7 @@ class BluetoothHidService : Service() {
     private var shuttingDown = false
     private val handler = Handler(Looper.getMainLooper())
     private var discoverabilityTimeout: Runnable? = null
+    private var pendingConnection: Runnable? = null
 
     private val bluetoothStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -85,7 +86,11 @@ class BluetoothHidService : Service() {
             if (shuttingDown) return
             if (registered) {
                 refreshPairedHosts()
-                update(HidSessionStatus.READY, "HID gamepad registered. Select a paired PC.")
+                if (pluggedDevice != null) {
+                    acceptConnectedDevice(pluggedDevice)
+                } else {
+                    update(HidSessionStatus.READY, "HID gamepad registered. Select a paired PC.")
+                }
             } else {
                 connectedDevice = null
                 finishSession(HidSessionStatus.ERROR, "Android did not keep the HID registration.")
@@ -162,6 +167,7 @@ class BluetoothHidService : Service() {
         val stateWasFinalized = shuttingDown
         shuttingDown = true
         cancelDiscoverabilityMessage()
+        cancelPendingConnection()
         releaseProfile()
         runCatching { unregisterReceiver(bluetoothStateReceiver) }
         if (!stateWasFinalized) {
@@ -232,9 +238,31 @@ class BluetoothHidService : Service() {
                 return
             }
         }
-        update(HidSessionStatus.CONNECTING, "Requesting connection to ${device.safeName()}…")
-        if (hidDevice?.connect(device) != true) {
-            update(HidSessionStatus.ERROR, "Android rejected the connection request.")
+        update(
+            HidSessionStatus.CONNECTING,
+            "Waiting briefly for Windows to connect to ${device.safeName()}…",
+        )
+        cancelPendingConnection()
+        val request = Runnable { connectAfterAutomaticAttempt(device) }
+        pendingConnection = request
+        handler.postDelayed(request, AUTOMATIC_CONNECTION_GRACE_PERIOD_MS)
+    }
+
+    private fun connectAfterAutomaticAttempt(device: BluetoothDevice) {
+        pendingConnection = null
+        if (shuttingDown) return
+        when (hidDevice?.getConnectionState(device)) {
+            BluetoothProfile.STATE_CONNECTED -> acceptConnectedDevice(device)
+            BluetoothProfile.STATE_CONNECTING -> update(
+                HidSessionStatus.CONNECTING,
+                "Windows is connecting to ${device.safeName()}…",
+            )
+            else -> {
+                update(HidSessionStatus.CONNECTING, "Requesting connection to ${device.safeName()}…")
+                if (hidDevice?.connect(device) != true) {
+                    update(HidSessionStatus.ERROR, "Android rejected the connection request.")
+                }
+            }
         }
     }
 
@@ -273,6 +301,7 @@ class BluetoothHidService : Service() {
     private fun stopHid() {
         if (shuttingDown) return
         shuttingDown = true
+        cancelPendingConnection()
         connectedDevice?.let { device ->
             hidDevice?.sendReport(device, GamepadHidDescriptor.REPORT_ID, GamepadHidDescriptor.neutralReport())
             hidDevice?.disconnect(device)
@@ -336,6 +365,11 @@ class BluetoothHidService : Service() {
     private fun cancelDiscoverabilityMessage() {
         discoverabilityTimeout?.let(handler::removeCallbacks)
         discoverabilityTimeout = null
+    }
+
+    private fun cancelPendingConnection() {
+        pendingConnection?.let(handler::removeCallbacks)
+        pendingConnection = null
     }
 
     @Suppress("DEPRECATION")
@@ -404,6 +438,7 @@ class BluetoothHidService : Service() {
 
         private const val CHANNEL_ID = "bluetooth_hid_session"
         private const val NOTIFICATION_ID = 1001
+        private const val AUTOMATIC_CONNECTION_GRACE_PERIOD_MS = 1_500L
 
         fun intent(context: Context, action: String) =
             Intent(context, BluetoothHidService::class.java).setAction(action)

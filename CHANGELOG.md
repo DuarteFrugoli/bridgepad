@@ -26,6 +26,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Connection-state checks that avoid duplicate HID connection requests while
   Windows is already connecting or connected.
 - Interactive X-axis control with exact minimum, center and maximum test values.
+- Grace period for Windows-initiated HID connections and support for Android's
+  already-plugged host callback, avoiding competing connection requests.
 
 ### Changed
 
