@@ -14,6 +14,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Repeatable build, installation and hardware-testing documentation.
 - Architecture decision record for native Android and API 28.
 - Brazilian Portuguese README and a public English documentation policy.
+- Bluetooth HID Device spike with runtime permission handling, foreground
+  service, paired-host selection and a test gamepad report.
+- Experimental HID descriptor and Gate A test procedure.
 
 ### Changed
 

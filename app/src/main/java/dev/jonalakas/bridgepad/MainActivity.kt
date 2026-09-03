@@ -1,10 +1,25 @@
 package dev.jonalakas.bridgepad
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
+import androidx.core.content.ContextCompat
 import dev.jonalakas.bridgepad.diagnostics.AndroidDeviceInfoProvider
+import dev.jonalakas.bridgepad.output.hid.BluetoothHidService
+import dev.jonalakas.bridgepad.output.hid.HidSessionStore
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
@@ -17,11 +32,62 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BridgePadTheme {
+                var bluetoothPermissionGranted by remember { mutableStateOf(hasBluetoothPermission()) }
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestMultiplePermissions(),
+                ) {
+                    bluetoothPermissionGranted = hasBluetoothPermission()
+                }
+                val hidState by HidSessionStore.state.collectAsState()
+
                 HomeScreen(
                     appVersion = BuildConfig.VERSION_NAME,
                     deviceInfo = deviceInfo,
+                    bluetoothPermissionGranted = bluetoothPermissionGranted,
+                    hidState = hidState,
+                    onRequestPermissions = { permissionLauncher.launch(requiredPermissions()) },
+                    onStartHid = {
+                        ContextCompat.startForegroundService(
+                            this,
+                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_START),
+                        )
+                    },
+                    onConnect = { address ->
+                        startService(
+                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_CONNECT)
+                                .putExtra(BluetoothHidService.EXTRA_ADDRESS, address),
+                        )
+                    },
+                    onSendTestButton = {
+                        startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_TEST_PRESS))
+                        Handler(Looper.getMainLooper()).postDelayed(
+                            {
+                                startService(
+                                    BluetoothHidService.intent(this, BluetoothHidService.ACTION_TEST_RELEASE),
+                                )
+                            },
+                            100,
+                        )
+                    },
+                    onStopHid = {
+                        startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_STOP))
+                    },
                 )
             }
         }
     }
+
+    private fun hasBluetoothPermission(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun requiredPermissions(): Array<String> = buildList {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            add(Manifest.permission.BLUETOOTH_CONNECT)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }.toTypedArray()
 }

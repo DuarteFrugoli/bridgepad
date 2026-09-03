@@ -10,4 +10,15 @@
     <string name="device_label">Device</string>
     <string name="android_label">Android</string>
     <string name="api_level_label">API level</string>
+    <string name="hid_spike_title">Bluetooth HID spike</string>
+    <string name="hid_spike_description">Validate whether this Android device can act as a Bluetooth gamepad.</string>
+    <string name="bluetooth_hid">Bluetooth HID</string>
+    <string name="permission_label">Permission</string>
+    <string name="session_state_label">Session</string>
+    <string name="bluetooth_label">Bluetooth</string>
+    <string name="host_label">Host</string>
+    <string name="grant_permissions">Grant Bluetooth permissions</string>
+    <string name="start_hid_spike">Start HID spike</string>
+    <string name="send_test_button">Send test button</string>
+    <string name="stop_hid_spike">Stop HID spike</string>
 </resources>

@@ -7,9 +7,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -20,6 +23,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.diagnostics.DeviceInfo
+import dev.jonalakas.bridgepad.output.hid.HidSessionState
+import dev.jonalakas.bridgepad.output.hid.HidSessionStatus
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,6 +32,13 @@ import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 fun HomeScreen(
     appVersion: String,
     deviceInfo: DeviceInfo,
+    bluetoothPermissionGranted: Boolean,
+    hidState: HidSessionState,
+    onRequestPermissions: () -> Unit,
+    onStartHid: () -> Unit,
+    onConnect: (String) -> Unit,
+    onSendTestButton: () -> Unit,
+    onStopHid: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -44,15 +56,68 @@ fun HomeScreen(
         ) {
             item {
                 Text(
-                    text = stringResource(R.string.baseline_title),
+                    text = stringResource(R.string.hid_spike_title),
                     style = MaterialTheme.typography.headlineMedium,
                 )
             }
             item {
                 Text(
-                    text = stringResource(R.string.baseline_description),
+                    text = stringResource(R.string.hid_spike_description),
                     style = MaterialTheme.typography.bodyLarge,
                 )
+            }
+            item {
+                InfoCard(
+                    title = stringResource(R.string.bluetooth_hid),
+                    rows = listOf(
+                        stringResource(R.string.permission_label) to
+                            if (bluetoothPermissionGranted) "Granted" else "Required",
+                        stringResource(R.string.session_state_label) to hidState.status.name,
+                        stringResource(R.string.bluetooth_label) to
+                            if (hidState.bluetoothEnabled) "Enabled" else "Not confirmed",
+                        stringResource(R.string.host_label) to (hidState.connectedHost ?: "Not connected"),
+                    ),
+                )
+            }
+            item {
+                Text(hidState.message, style = MaterialTheme.typography.bodyLarge)
+            }
+            if (!bluetoothPermissionGranted) {
+                item {
+                    Button(onClick = onRequestPermissions, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.grant_permissions))
+                    }
+                }
+            } else if (hidState.status == HidSessionStatus.IDLE || hidState.status == HidSessionStatus.ERROR) {
+                item {
+                    Button(onClick = onStartHid, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.start_hid_spike))
+                    }
+                }
+            }
+            if (hidState.status == HidSessionStatus.READY || hidState.status == HidSessionStatus.CONNECTING) {
+                items(hidState.pairedHosts, key = { it.address }) { host ->
+                    OutlinedButton(
+                        onClick = { onConnect(host.address) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Connect to ${host.name}")
+                    }
+                }
+            }
+            if (hidState.status == HidSessionStatus.CONNECTED) {
+                item {
+                    Button(onClick = onSendTestButton, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.send_test_button))
+                    }
+                }
+            }
+            if (hidState.status != HidSessionStatus.IDLE) {
+                item {
+                    OutlinedButton(onClick = onStopHid, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.stop_hid_spike))
+                    }
+                }
             }
             item {
                 InfoCard(
@@ -111,6 +176,17 @@ private fun HomeScreenPreview() {
                 androidVersion = "16",
                 sdkLevel = 36,
             ),
+            bluetoothPermissionGranted = true,
+            hidState = HidSessionState(
+                status = HidSessionStatus.READY,
+                bluetoothEnabled = true,
+                message = "HID gamepad registered. Select a paired PC.",
+            ),
+            onRequestPermissions = {},
+            onStartHid = {},
+            onConnect = {},
+            onSendTestButton = {},
+            onStopHid = {},
         )
     }
 }

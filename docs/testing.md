@@ -88,3 +88,30 @@ identifiers in public reports.
 - confirm Android version and API level match system settings;
 - rotate, background and reopen the app;
 - record the result in `docs/compatibility.md`.
+
+## Phase 1 Bluetooth HID spike
+
+Prerequisites:
+
+- pair the Android device and Windows PC in their system Bluetooth settings;
+- keep Bluetooth enabled on both devices;
+- install the latest debug APK;
+- open `joy.cpl` on Windows (`Win + R`, then enter `joy.cpl`).
+
+Procedure:
+
+1. Open BridgePad and grant the requested Nearby devices permission.
+2. Tap **Start HID spike**.
+3. Confirm that the session reaches `READY`.
+4. Select the paired Windows PC from the host list.
+5. Confirm that the session reaches `CONNECTED` and Windows lists BridgePad as
+   a game controller.
+6. Open the controller properties in `joy.cpl`.
+7. Tap **Send test button** repeatedly and confirm that button 1 is pressed and
+   released every time.
+8. Tap **Stop HID spike** and confirm that no input remains pressed.
+9. Repeat after backgrounding the app, turning the screen off and reconnecting.
+
+Record the exact status message and relevant Logcat output if registration or
+connection fails. This result decides Gate A; it is expected that some Android
+devices may not expose or reliably maintain the HID Device profile.
