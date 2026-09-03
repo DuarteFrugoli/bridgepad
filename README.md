@@ -1,5 +1,7 @@
 # BridgePad
 
+[English](./README.md) | [Português (Brasil)](./README.pt-BR.md)
+
 > **Connect any controller. Use any input. Play anywhere.**
 
 BridgePad is a free and open-source project designed to turn Android phones and tablets into a **universal gamepad bridge**.
@@ -606,8 +608,6 @@ app/
     └── diagnostics/
 
 docs/
-├── idea.md
-├── plan.md
 ├── compatibility.md
 ├── testing.md
 └── decisions/
@@ -623,22 +623,17 @@ Additional repositories or modules should only be introduced when there is a dem
 
 More detailed documentation is available in the `docs` directory.
 
-### `docs/idea.md`
+### `docs/compatibility.md`
 
-Describes the long-term product vision, architecture, possible inputs, outputs and future platforms.
+Records the Android devices, controllers and host combinations validated on real hardware.
 
-### `docs/plan.md`
+### `docs/testing.md`
 
-Contains the executable development plan for the first MVP, including:
+Contains repeatable build, installation and hardware-test procedures.
 
-- Development phases
-- Technical gates
-- Acceptance criteria
-- Hardware tests
-- Risks
-- Release requirements
+### `docs/decisions/`
 
-The execution plan should take priority when deciding what to implement next.
+Contains architecture decision records explaining important technical choices.
 
 ---
 
