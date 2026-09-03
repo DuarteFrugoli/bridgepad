@@ -728,16 +728,6 @@ Every push runs two independent GitHub Actions jobs:
 - unit tests and Android lint;
 - debug APK build.
 
-The build does not depend on the test job, so both execute even if one fails. If
-either job fails, the workflow sends an email through the configured SMTP
-account.
-
-Configure these repository secrets under **Settings → Secrets and variables →
-Actions**:
-
-- `MAIL_SERVER`: SMTP server hostname;
-- `MAIL_PORT`: SMTP server port, normally `465` for a secure connection;
-- `MAIL_USERNAME`: SMTP login;
-- `MAIL_PASSWORD`: SMTP password or app password;
-- `MAIL_FROM`: sender address accepted by the SMTP server;
-- `MAIL_TO`: address that receives failure notifications.
+The build does not depend on the test job, so both execute even if one fails.
+Workflow notifications are handled by each contributor's GitHub notification
+settings.

@@ -10,7 +10,6 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 - Initial Android project using Kotlin and Jetpack Compose.
 - GitHub Actions checks for unit tests, lint and debug builds.
-- Email notification for failed CI checks.
 
 ## [0.1.0]
 
