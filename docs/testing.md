@@ -93,7 +93,6 @@ identifiers in public reports.
 
 Prerequisites:
 
-- pair the Android device and Windows PC in their system Bluetooth settings;
 - keep Bluetooth enabled on both devices;
 - install the latest debug APK;
 - open `joy.cpl` on Windows (`Win + R`, then enter `joy.cpl`).
@@ -103,14 +102,22 @@ Procedure:
 1. Open BridgePad and grant the requested Nearby devices permission.
 2. Tap **Start HID spike**.
 3. Confirm that the session reaches `READY`.
-4. Select the paired Windows PC from the host list.
-5. Confirm that the session reaches `CONNECTED` and Windows lists BridgePad as
+4. Tap **Pair new PC** and approve the Android discoverability request.
+5. On Windows, open **Bluetooth & devices**, add a Bluetooth device and select
+   the phone. Confirm the pairing prompt on both devices when shown.
+6. Select the paired Windows PC from the computer list in BridgePad.
+7. Confirm that the session reaches `CONNECTED` and Windows lists BridgePad as
    a game controller.
-6. Open the controller properties in `joy.cpl`.
-7. Tap **Send test button** repeatedly and confirm that button 1 is pressed and
+8. Open the controller properties in `joy.cpl`.
+9. Tap **Send test button** repeatedly and confirm that button 1 is pressed and
    released every time.
-8. Tap **Stop HID spike** and confirm that no input remains pressed.
-9. Repeat after backgrounding the app, turning the screen off and reconnecting.
+10. Tap **Stop HID spike** and confirm that no input remains pressed.
+11. Repeat after backgrounding the app, turning the screen off and reconnecting.
+
+If Windows and Android were already paired before the HID service was
+registered, remove the pairing on both devices and repeat the procedure. The
+USB cable may remain connected for installation and Logcat; it does not replace
+or normally interfere with the Bluetooth HID connection.
 
 Record the exact status message and relevant Logcat output if registration or
 connection fails. This result decides Gate A; it is expected that some Android

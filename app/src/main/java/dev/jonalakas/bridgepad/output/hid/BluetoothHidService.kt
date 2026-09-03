@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
@@ -31,10 +32,16 @@ class BluetoothHidService : Service() {
 
     private val bluetoothStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
-            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
-            if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
-                finishSession(HidSessionStatus.IDLE, "Bluetooth is off. Turn it on and try again.")
+            when (intent?.action) {
+                BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                    if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
+                        finishSession(HidSessionStatus.IDLE, "Bluetooth is off. Turn it on and try again.")
+                    }
+                }
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                    if (!shuttingDown) refreshPairedHosts()
+                }
             }
         }
     }
@@ -127,6 +134,7 @@ class BluetoothHidService : Service() {
             ACTION_CONNECT -> connect(intent.getStringExtra(EXTRA_ADDRESS))
             ACTION_TEST_PRESS -> sendTestReport(pressed = true)
             ACTION_TEST_RELEASE -> sendTestReport(pressed = false)
+            ACTION_REFRESH_HOSTS -> if (!shuttingDown) refreshPairedHosts()
             ACTION_STOP -> stopHid()
         }
         return START_NOT_STICKY
@@ -183,6 +191,9 @@ class BluetoothHidService : Service() {
 
     private fun refreshPairedHosts() {
         val hosts = adapter?.bondedDevices.orEmpty()
+            .filter {
+                it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER
+            }
             .map { PairedHost(it.address, it.safeName()) }
             .sortedBy { it.name.lowercase() }
         HidSessionStore.update { it.copy(pairedHosts = hosts, bluetoothEnabled = true) }
@@ -248,6 +259,7 @@ class BluetoothHidService : Service() {
     @Suppress("DEPRECATION")
     private fun registerBluetoothStateReceiver() {
         val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+            .apply { addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED) }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(bluetoothStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
@@ -300,6 +312,7 @@ class BluetoothHidService : Service() {
         const val ACTION_CONNECT = "dev.jonalakas.bridgepad.hid.CONNECT"
         const val ACTION_TEST_PRESS = "dev.jonalakas.bridgepad.hid.TEST_PRESS"
         const val ACTION_TEST_RELEASE = "dev.jonalakas.bridgepad.hid.TEST_RELEASE"
+        const val ACTION_REFRESH_HOSTS = "dev.jonalakas.bridgepad.hid.REFRESH_HOSTS"
         const val ACTION_STOP = "dev.jonalakas.bridgepad.hid.STOP"
         const val EXTRA_ADDRESS = "host_address"
 

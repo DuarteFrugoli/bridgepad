@@ -1,6 +1,8 @@
 package dev.jonalakas.bridgepad
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -38,6 +40,11 @@ class MainActivity : ComponentActivity() {
                 ) {
                     bluetoothPermissionGranted = hasBluetoothPermission()
                 }
+                val discoverableLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult(),
+                ) {
+                    startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_REFRESH_HOSTS))
+                }
                 val hidState by HidSessionStore.state.collectAsState()
 
                 HomeScreen(
@@ -56,6 +63,14 @@ class MainActivity : ComponentActivity() {
                         startService(
                             BluetoothHidService.intent(this, BluetoothHidService.ACTION_CONNECT)
                                 .putExtra(BluetoothHidService.EXTRA_ADDRESS, address),
+                        )
+                    },
+                    onPairNewPc = {
+                        discoverableLauncher.launch(
+                            Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(
+                                BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,
+                                120,
+                            ),
                         )
                     },
                     onSendTestButton = {
@@ -79,12 +94,17 @@ class MainActivity : ComponentActivity() {
 
     private fun hasBluetoothPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
-            PackageManager.PERMISSION_GRANTED
+            listOf(
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_ADVERTISE,
+            ).all {
+                ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+            }
 
     private fun requiredPermissions(): Array<String> = buildList {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             add(Manifest.permission.BLUETOOTH_CONNECT)
+            add(Manifest.permission.BLUETOOTH_ADVERTISE)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(Manifest.permission.POST_NOTIFICATIONS)

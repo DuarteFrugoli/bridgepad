@@ -40,6 +40,7 @@ fun HomeScreen(
     onRequestPermissions: () -> Unit,
     onStartHid: () -> Unit,
     onConnect: (String) -> Unit,
+    onPairNewPc: () -> Unit,
     onSendTestButton: () -> Unit,
     onStopHid: () -> Unit,
     modifier: Modifier = Modifier,
@@ -115,6 +116,19 @@ fun HomeScreen(
                 hidState.sessionActive &&
                 (hidState.status == HidSessionStatus.READY || hidState.status == HidSessionStatus.CONNECTING)
             ) {
+                item {
+                    Button(onClick = onPairNewPc, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.pair_new_pc))
+                    }
+                }
+                if (hidState.pairedHosts.isEmpty()) {
+                    item {
+                        NoticeCard(
+                            message = stringResource(R.string.no_paired_computers),
+                            tone = NoticeTone.WARNING,
+                        )
+                    }
+                }
                 items(hidState.pairedHosts, key = { it.address }) { host ->
                     OutlinedButton(
                         onClick = { onConnect(host.address) },
@@ -204,6 +218,7 @@ private fun HomeScreenPreview() {
             onRequestPermissions = {},
             onStartHid = {},
             onConnect = {},
+            onPairNewPc = {},
             onSendTestButton = {},
             onStopHid = {},
         )

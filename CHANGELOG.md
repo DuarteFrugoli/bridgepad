@@ -20,6 +20,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Reusable warning and error cards for actionable session feedback.
 - Deterministic HID cleanup when Bluetooth changes state, preventing stale hosts
   and late callback errors after a session ends.
+- Guided PC pairing with temporary Bluetooth discoverability, live bond updates
+  and filtering of paired devices to computers.
 
 ### Changed
 

@@ -21,4 +21,6 @@
     <string name="start_hid_spike">Start HID spike</string>
     <string name="send_test_button">Send test button</string>
     <string name="stop_hid_spike">Stop HID spike</string>
+    <string name="pair_new_pc">Pair new PC</string>
+    <string name="no_paired_computers">No paired computer was found. Tap Pair new PC, approve discoverability, then add this phone from Windows Bluetooth settings.</string>
 </resources>
