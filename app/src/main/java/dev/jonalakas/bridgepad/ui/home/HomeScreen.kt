@@ -111,7 +111,10 @@ fun HomeScreen(
                     }
                 }
             }
-            if (hidState.status == HidSessionStatus.READY || hidState.status == HidSessionStatus.CONNECTING) {
+            if (
+                hidState.sessionActive &&
+                (hidState.status == HidSessionStatus.READY || hidState.status == HidSessionStatus.CONNECTING)
+            ) {
                 items(hidState.pairedHosts, key = { it.address }) { host ->
                     OutlinedButton(
                         onClick = { onConnect(host.address) },

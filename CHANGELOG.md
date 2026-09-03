@@ -18,6 +18,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   service, paired-host selection and a test gamepad report.
 - Experimental HID descriptor and Gate A test procedure.
 - Reusable warning and error cards for actionable session feedback.
+- Deterministic HID cleanup when Bluetooth changes state, preventing stale hosts
+  and late callback errors after a session ends.
 
 ### Changed
 

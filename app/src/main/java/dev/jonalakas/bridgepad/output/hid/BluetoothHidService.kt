@@ -11,8 +11,10 @@ import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -25,34 +27,47 @@ class BluetoothHidService : Service() {
     private var adapter: BluetoothAdapter? = null
     private var hidDevice: BluetoothHidDevice? = null
     private var connectedDevice: BluetoothDevice? = null
+    private var shuttingDown = false
+
+    private val bluetoothStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+            if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
+                finishSession(HidSessionStatus.IDLE, "Bluetooth is off. Turn it on and try again.")
+            }
+        }
+    }
 
     private val profileListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
-            if (profile != BluetoothProfile.HID_DEVICE) return
+            if (profile != BluetoothProfile.HID_DEVICE || shuttingDown) return
             hidDevice = proxy as BluetoothHidDevice
             registerHidApp()
         }
 
         override fun onServiceDisconnected(profile: Int) {
-            if (profile != BluetoothProfile.HID_DEVICE) return
+            if (profile != BluetoothProfile.HID_DEVICE || shuttingDown) return
             hidDevice = null
             connectedDevice = null
-            update(HidSessionStatus.ERROR, "Android disconnected the HID Device profile.")
+            finishSession(HidSessionStatus.ERROR, "Android disconnected the HID Device profile.")
         }
     }
 
     private val callback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
+            if (shuttingDown) return
             if (registered) {
                 refreshPairedHosts()
                 update(HidSessionStatus.READY, "HID gamepad registered. Select a paired PC.")
             } else {
                 connectedDevice = null
-                update(HidSessionStatus.ERROR, "Android did not keep the HID registration.")
+                finishSession(HidSessionStatus.ERROR, "Android did not keep the HID registration.")
             }
         }
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
+            if (shuttingDown) return
             when (state) {
                 BluetoothProfile.STATE_CONNECTING -> update(
                     HidSessionStatus.CONNECTING,
@@ -84,7 +99,15 @@ class BluetoothHidService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        HidSessionStore.update { it.copy(sessionActive = true) }
+        shuttingDown = false
+        HidSessionStore.update {
+            HidSessionState(
+                status = HidSessionStatus.STARTING,
+                sessionActive = true,
+                message = "Starting the Bluetooth HID session…",
+            )
+        }
+        registerBluetoothStateReceiver()
         createNotificationChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -112,8 +135,13 @@ class BluetoothHidService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        val stateWasFinalized = shuttingDown
+        shuttingDown = true
         releaseProfile()
-        HidSessionStore.update { it.copy(sessionActive = false, connectedHost = null) }
+        runCatching { unregisterReceiver(bluetoothStateReceiver) }
+        if (!stateWasFinalized) {
+            HidSessionStore.update { HidSessionState(message = "HID session ended.") }
+        }
         super.onDestroy()
     }
 
@@ -148,7 +176,9 @@ class BluetoothHidService : Service() {
             GamepadHidDescriptor.bytes,
         )
         val accepted = hidDevice?.registerApp(settings, null, null, mainExecutor, callback) == true
-        if (!accepted) update(HidSessionStatus.ERROR, "Android rejected the HID registration request.")
+        if (!accepted) {
+            finishSession(HidSessionStatus.ERROR, "Android rejected the HID registration request.")
+        }
     }
 
     private fun refreshPairedHosts() {
@@ -176,6 +206,8 @@ class BluetoothHidService : Service() {
     }
 
     private fun stopHid() {
+        if (shuttingDown) return
+        shuttingDown = true
         connectedDevice?.let { device ->
             hidDevice?.sendReport(device, GamepadHidDescriptor.REPORT_ID, GamepadHidDescriptor.neutralReport())
             hidDevice?.disconnect(device)
@@ -187,12 +219,13 @@ class BluetoothHidService : Service() {
     }
 
     private fun finishSession(status: HidSessionStatus, message: String) {
+        if (shuttingDown) return
+        shuttingDown = true
         HidSessionStore.update {
-            it.copy(
+            HidSessionState(
                 status = status,
                 sessionActive = false,
                 bluetoothEnabled = adapter?.isEnabled == true,
-                connectedHost = null,
                 message = message,
                 feedbackLevel = if (status == HidSessionStatus.IDLE) {
                     HidFeedbackLevel.WARNING
@@ -210,6 +243,16 @@ class BluetoothHidService : Service() {
         hidDevice?.let { adapter?.closeProfileProxy(BluetoothProfile.HID_DEVICE, it) }
         hidDevice = null
         connectedDevice = null
+    }
+
+    @Suppress("DEPRECATION")
+    private fun registerBluetoothStateReceiver() {
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(bluetoothStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(bluetoothStateReceiver, filter)
+        }
     }
 
     private fun update(status: HidSessionStatus, message: String) {
