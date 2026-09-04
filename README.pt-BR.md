@@ -31,9 +31,11 @@ O primeiro MVP permitirá:
 - apresentar o celular como um gamepad Bluetooth HID genérico;
 - jogar por meio do Steam Input;
 - consultar informações básicas de diagnóstico.
+- escolher entre captura de maior compatibilidade e captura USB persistente;
+- salvar um mapeamento por modelo/descriptor de controle USB.
 
 O MVP não inclui LAN, aplicativo desktop, XInput nativo, rumble, layouts
-editáveis, macros, iOS, consoles ou compatibilidade garantida com todos os
+editáveis, macros, consoles ou compatibilidade garantida com todos os
 aparelhos Android.
 
 Depois do MVP, o roadmap inclui layouts touchscreen editáveis com presets
@@ -41,6 +43,21 @@ personalizados e gatilhos L2/R2 analógicos cuja intensidade pode ser definida
 pela posição do toque ou pelo deslocamento do dedo. Também estão previstos um
 touchpad configurável para controlar o mouse, clicar e executar gestos, além da
 pesquisa de um modo semelhante ao touchpad do PlayStation para a Steam Input.
+Depois do aplicativo Android, o plano é criar o BridgePad Desktop primeiro para
+Windows e depois Linux. PlayStation e Xbox são objetivos posteriores, começando
+por pesquisa e protótipos dos protocolos e requisitos de autenticação. macOS e
+iOS não fazem parte do planejamento atual.
+
+## Modos de captura do controle físico
+
+- **Compatibilidade:** utiliza os eventos já normalizados pelo Android e aceita
+  mais controles, mas o BridgePad precisa ficar visível e com a tela ligada.
+- **USB em segundo plano:** lê diretamente um controle USB HID compatível e
+  continua funcionando com o aplicativo minimizado ou a tela apagada.
+
+O modo USB em segundo plano possui um assistente de mapeamento. O perfil fica
+salvo no aparelho e é restaurado ao reconectar o mesmo tipo de controle. A troca
+de modo não altera o BridgePad reconhecido pelo Windows ou pela Steam.
 
 ## Arquitetura
 
@@ -108,6 +125,8 @@ Para instalar em um aparelho conectado por ADB:
 ```
 
 As instruções detalhadas estão em [`docs/testing.md`](./docs/testing.md).
+O checklist do candidato a MVP está em
+[`docs/release-checklist.md`](./docs/release-checklist.md).
 
 ## Compatibilidade
 
@@ -136,3 +155,7 @@ publique endereços Bluetooth ou outros identificadores pessoais.
 
 BridgePad é distribuído sob a Apache License 2.0. Consulte o arquivo
 [`LICENSE`](./LICENSE) para os termos completos.
+
+A política de privacidade está disponível em [`PRIVACY.md`](./PRIVACY.md).
+Os avisos de dependências estão em
+[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).

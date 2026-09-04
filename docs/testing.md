@@ -279,3 +279,14 @@ With a physical USB gamepad selected and an active PC connection:
     Input.
 12. End and restart the session, enable Background USB again, and confirm that
     the saved mapping is restored without running the wizard again.
+
+## Phase 7 MVP stabilization
+
+Use [`release-checklist.md`](./release-checklist.md) as the authoritative Gate C
+record. Complete every available device/host scenario, record unavailable
+matrix entries explicitly, and add the observed results to
+[`compatibility.md`](./compatibility.md).
+
+Any crash, stuck input, unrecoverable pairing/reconnection failure, incorrect
+required control on supported hardware, or unexpected termination of a mode
+that explicitly supports background use blocks the MVP release.
