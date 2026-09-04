@@ -327,9 +327,9 @@ class BluetoothHidService : Service() {
         update(HidSessionStatus.REGISTERING, "Registering the BridgePad HID gamepad…")
         val settings = BluetoothHidDeviceAppSdpSettings(
             "BridgePad",
-            "BridgePad Bluetooth HID gamepad bridge",
+            "BridgePad Bluetooth HID gamepad and mouse bridge",
             "BridgePad",
-            0x02,
+            BluetoothHidDevice.SUBCLASS1_MOUSE or BluetoothHidDevice.SUBCLASS2_GAMEPAD,
             GamepadHidDescriptor.bytes,
         )
         val accepted = hidDevice?.registerApp(settings, null, null, mainExecutor, callback) == true

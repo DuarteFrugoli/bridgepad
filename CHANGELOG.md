@@ -10,6 +10,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 - Foreground-service notifications now explain the capabilities and limitations
   of the selected touchscreen, physical gamepad or Background USB input mode.
+- The Bluetooth HID service now advertises both mouse and gamepad capabilities
+  so hosts recognize reports from the touchscreen touchpads.
 
 ### Added
 
