@@ -15,6 +15,7 @@
 local.properties
 /docs/private
 /.vscode/
+/.codex/
 /.kotlin/
 /.idea/deploymentTargetSelector.xml
 *.jks
