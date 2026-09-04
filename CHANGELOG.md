@@ -12,9 +12,13 @@ The project follows [Semantic Versioning](https://semver.org/).
   of the selected touchscreen, physical gamepad or Background USB input mode.
 - The Bluetooth HID service now advertises both mouse and gamepad capabilities
   so hosts recognize reports from the touchscreen touchpads.
+- Temporary mouse pipeline diagnostics were removed after successful hardware
+  validation of the composite HID touchpad output.
 
 ### Fixed
 
+- Dynamic receivers now declare explicit export behavior on every supported
+  Android version, resolving release-blocking Android lint errors.
 - Mouse and gamepad axes now declare their own physical ranges instead of
   inheriting the D-pad's 0-to-315-degree range from the HID descriptor.
 - Newly paired computers are now authorized and connected as HID hosts in the

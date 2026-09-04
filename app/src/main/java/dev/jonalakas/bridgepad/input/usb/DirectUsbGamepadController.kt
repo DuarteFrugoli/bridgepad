@@ -15,6 +15,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import java.util.concurrent.atomic.AtomicBoolean
@@ -48,8 +49,12 @@ class DirectUsbGamepadController(
 
     fun register() {
         val filter = IntentFilter(ACTION_USB_PERMISSION)
-        if (Build.VERSION.SDK_INT >= 33) context.registerReceiver(permissionReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        else @Suppress("DEPRECATION") context.registerReceiver(permissionReceiver, filter)
+        ContextCompat.registerReceiver(
+            context,
+            permissionReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
     }
 
     fun start() {

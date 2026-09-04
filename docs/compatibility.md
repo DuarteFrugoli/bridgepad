@@ -8,7 +8,7 @@ its evidence recorded here.
 
 | Manufacturer | Model | Android version | Role | Status |
 | --- | --- | --- | --- | --- |
-| Samsung | Galaxy A35 | Android 16 (API 36) | Primary Android test device | Gates A and B passed |
+| Samsung | Galaxy A35 | Android 16 (API 36) | Primary Android test device | Gates A, B and Phase 7 passed |
 
 ## Test results
 
@@ -79,7 +79,7 @@ its evidence recorded here.
 - The fixed layout is accepted for the MVP; editable layouts, presets and
   analog touchscreen triggers remain post-MVP roadmap items
 
-### 2026-09-04 — Background USB capture (partial validation)
+### 2026-09-04 — Background USB capture
 
 - Android device: Samsung Galaxy A35, Android 16 (API 36)
 - Input device: GameSir X5 Lite over USB-C
@@ -90,5 +90,21 @@ its evidence recorded here.
   Background USB mode: PASS
 - Known issue addressed after the first test: automatically inferred controls
   did not match every physical label; a persistent mapping wizard was added
-- Pending validation: saved mapping, every mapped control, app background,
-  screen off, cable removal while held and capture-mode switching
+- Saved mapping, every mapped control, app background, screen off, cable
+  removal while held and capture-mode switching: PASS
+
+### 2026-09-04 — Mouse touchpad and Phase 7 stabilization
+
+- Android device: Samsung Galaxy A35, Android 16 (API 36)
+- Host: Windows 11 with current stable Steam
+- Composite Bluetooth HID gamepad and mouse recognition: PASS
+- Integrated and full-screen touchpad movement and left click: PASS
+- Signed horizontal and vertical relative movement: PASS
+- Clean installation, onboarding and permission recovery: PASS
+- New PC pairing and existing PC reconnection: PASS
+- Touchscreen, Compatibility and Background USB input modes: PASS
+- Saved USB mapping and live capture-mode switching: PASS
+- Bluetooth, host disconnection and pairing cancellation recovery: PASS
+- Twenty start/connect/stop cycles and continuous two-hour session: PASS
+- Activity recreation, background return and diagnostic sharing: PASS
+- Result: no blocking defect observed during Phase 7 validation
