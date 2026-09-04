@@ -95,6 +95,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   grant before reporting denial, avoiding a false warning and second mode tap.
 - Background USB capture no longer shows a missing-gamepad warning when
   claiming the HID interface removes it from Android's `InputDevice` list.
+- In-progress USB mapping steps and bindings now survive Activity recreation
+  when the phone orientation changes.
 - Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
   A35 through Steam Input.
 

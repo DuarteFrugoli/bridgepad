@@ -5,6 +5,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
@@ -62,12 +64,18 @@ fun UsbMappingScreen(
     onSave: (UsbGamepadMapping) -> Unit,
     onCancel: () -> Unit,
 ) {
-    var stepIndex by remember { mutableIntStateOf(0) }
+    var stepIndex by rememberSaveable { mutableIntStateOf(0) }
     var baseline by remember { mutableStateOf(usbState.rawGamepad) }
     var armed by remember { mutableStateOf(false) }
-    val buttons = remember { mutableStateMapOf<VirtualControl, VirtualControl>() }
-    val axes = remember { mutableStateMapOf<VirtualAxis, AxisBinding>() }
-    val dpad = remember { mutableStateMapOf<DpadDirection, DpadDirection>() }
+    val buttons = rememberSaveable(
+        saver = buttonMappingSaver(),
+    ) { mutableStateMapOf<VirtualControl, VirtualControl>() }
+    val axes = rememberSaveable(
+        saver = axesMappingSaver(),
+    ) { mutableStateMapOf<VirtualAxis, AxisBinding>() }
+    val dpad = rememberSaveable(
+        saver = dpadMappingSaver(),
+    ) { mutableStateMapOf<DpadDirection, DpadDirection>() }
     var instruction by remember { mutableStateOf("Release all controls, then follow the prompt.") }
     val step = steps.getOrNull(stepIndex)
 
@@ -245,3 +253,48 @@ private fun VirtualControl.displayName(): String = when (this) {
 }
 
 private fun VirtualAxis.displayName(): String = name.replace('_', ' ')
+
+private fun buttonMappingSaver() = listSaver<
+    androidx.compose.runtime.snapshots.SnapshotStateMap<VirtualControl, VirtualControl>,
+    String,
+>(
+    save = { map -> map.map { (target, source) -> "$target,$source" } },
+    restore = { saved ->
+        mutableStateMapOf<VirtualControl, VirtualControl>().apply {
+            saved.forEach { value ->
+                val (target, source) = value.split(',', limit = 2)
+                put(VirtualControl.valueOf(target), VirtualControl.valueOf(source))
+            }
+        }
+    },
+)
+
+private fun axesMappingSaver() = listSaver<
+    androidx.compose.runtime.snapshots.SnapshotStateMap<VirtualAxis, AxisBinding>,
+    String,
+>(
+    save = { map -> map.map { (target, binding) -> "$target,${binding.source},${binding.inverted}" } },
+    restore = { saved ->
+        mutableStateMapOf<VirtualAxis, AxisBinding>().apply {
+            saved.forEach { value ->
+                val parts = value.split(',')
+                put(VirtualAxis.valueOf(parts[0]), AxisBinding(VirtualAxis.valueOf(parts[1]), parts[2].toBoolean()))
+            }
+        }
+    },
+)
+
+private fun dpadMappingSaver() = listSaver<
+    androidx.compose.runtime.snapshots.SnapshotStateMap<DpadDirection, DpadDirection>,
+    String,
+>(
+    save = { map -> map.map { (target, source) -> "$target,$source" } },
+    restore = { saved ->
+        mutableStateMapOf<DpadDirection, DpadDirection>().apply {
+            saved.forEach { value ->
+                val (target, source) = value.split(',', limit = 2)
+                put(DpadDirection.valueOf(target), DpadDirection.valueOf(source))
+            }
+        }
+    },
+)
