@@ -79,6 +79,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 - USB mapping now follows the familiar face buttons, D-pad, left controls,
   right controls, shoulders/triggers and system-button order, with mapped-A
   skip support for unavailable controls.
+- The USB mapping wizard can return to and replace the previous binding instead
+  of resetting the current empty step.
 - Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
   A35 through Steam Input.
 

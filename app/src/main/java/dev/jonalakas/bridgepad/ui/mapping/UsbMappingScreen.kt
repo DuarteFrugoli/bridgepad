@@ -151,12 +151,19 @@ fun UsbMappingScreen(
                 }
                 OutlinedButton(
                     onClick = {
-                        baseline = usbState.rawGamepad
-                        armed = usbState.rawGamepad.isNeutral()
-                        instruction = if (armed) "Ready." else "Release all controls first."
+                        val previousIndex = stepIndex - 1
+                        if (previousIndex >= 0) {
+                            when (val previous = steps[previousIndex]) {
+                                is MappingStep.Button -> buttons.remove(previous.target)
+                                is MappingStep.Dpad -> dpad.remove(previous.target)
+                                is MappingStep.Axis -> axes.remove(previous.target)
+                            }
+                            stepIndex = previousIndex
+                        }
                     },
+                    enabled = stepIndex > 0,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Reset this step") }
+                ) { Text("Previous step") }
             } else {
                 Text("Mapping complete", style = MaterialTheme.typography.headlineSmall)
                 Text("Save this profile to apply it automatically whenever this controller is connected.")
@@ -172,6 +179,18 @@ fun UsbMappingScreen(
                     },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Save mapping") }
+                OutlinedButton(
+                    onClick = {
+                        val previousIndex = steps.lastIndex
+                        when (val previous = steps[previousIndex]) {
+                            is MappingStep.Button -> buttons.remove(previous.target)
+                            is MappingStep.Dpad -> dpad.remove(previous.target)
+                            is MappingStep.Axis -> axes.remove(previous.target)
+                        }
+                        stepIndex = previousIndex
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Previous step") }
             }
             OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
         }
