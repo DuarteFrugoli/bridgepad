@@ -43,6 +43,12 @@ The project follows [Semantic Versioning](https://semver.org/).
 - End-to-end forwarding from a USB gamepad to the connected Bluetooth HID host.
 - Live input rate, HID output rate and approximate event-to-report latency.
 - Gate B approval evidence for the complete GameSir-to-Steam Input pipeline.
+- Fixed landscape touchscreen controller with two sticks, eight-direction
+  D-pad, face buttons, shoulders, digital triggers and system buttons.
+- Independent multitouch handling and safe neutralization on cancellation,
+  navigation or loss of focus.
+- Touchscreen input integration with the existing gamepad merger and Bluetooth
+  HID output pipeline.
 
 ### Changed
 

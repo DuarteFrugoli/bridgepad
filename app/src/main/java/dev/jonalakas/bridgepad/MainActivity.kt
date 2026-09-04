@@ -3,6 +3,7 @@ package dev.jonalakas.bridgepad
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -14,17 +15,24 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import dev.jonalakas.bridgepad.diagnostics.AndroidDeviceInfoProvider
 import dev.jonalakas.bridgepad.input.android.AndroidGamepadController
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
+import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.output.hid.BluetoothHidService
 import dev.jonalakas.bridgepad.output.hid.HidSessionStore
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
+import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 class MainActivity : ComponentActivity() {
@@ -40,6 +48,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             BridgePadTheme {
                 var bluetoothPermissionGranted by remember { mutableStateOf(hasBluetoothPermission()) }
+                var showTouchController by rememberSaveable { mutableStateOf(false) }
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestMultiplePermissions(),
                 ) {
@@ -63,7 +72,16 @@ class MainActivity : ComponentActivity() {
                 val hidState by HidSessionStore.state.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
 
-                HomeScreen(
+                if (showTouchController) {
+                    LaunchedEffect(Unit) { enterGamepadMode() }
+                    TouchscreenGamepadScreen(
+                        hidState = hidState,
+                        onExit = {
+                            showTouchController = false
+                            exitGamepadMode()
+                        },
+                    )
+                } else HomeScreen(
                     appVersion = BuildConfig.VERSION_NAME,
                     deviceInfo = deviceInfo,
                     bluetoothPermissionGranted = bluetoothPermissionGranted,
@@ -90,6 +108,9 @@ class MainActivity : ComponentActivity() {
                             ),
                         )
                     },
+                    onOpenTouchController = {
+                        showTouchController = true
+                    },
                     onStopHid = {
                         startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_STOP))
                     },
@@ -104,6 +125,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
+        TouchGamepadStore.neutralize()
         gamepadController.stop()
         super.onStop()
     }
@@ -113,6 +135,21 @@ class MainActivity : ComponentActivity() {
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
         gamepadController.handleMotionEvent(event) || super.dispatchGenericMotionEvent(event)
+
+    private fun enterGamepadMode() {
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    private fun exitGamepadMode() {
+        TouchGamepadStore.deactivate()
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        WindowCompat.getInsetsController(window, window.decorView)
+            .show(WindowInsetsCompat.Type.systemBars())
+    }
 
     private fun hasBluetoothPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||

@@ -34,6 +34,8 @@ import dev.jonalakas.bridgepad.core.output.HidReportEncoder
 import dev.jonalakas.bridgepad.core.output.OutputScheduler
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
+import dev.jonalakas.bridgepad.input.touch.TouchGamepadSnapshot
+import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,7 +56,9 @@ class BluetoothHidService : Service() {
     private var discoverabilityTimeout: Runnable? = null
     private var pendingConnection: Runnable? = null
     private var latestPhysicalState = PhysicalGamepadState()
+    private var latestTouchState = TouchGamepadSnapshot()
     private var lastObservedInputCount = 0L
+    private var lastObservedTouchInputCount = 0L
     private var pendingInputTimestampNanos: Long? = null
     private var metricsStartedNanos = 0L
     private var inputEventsSinceConnection = 0L
@@ -189,6 +193,7 @@ class BluetoothHidService : Service() {
         }
         adapter = getSystemService(BluetoothManager::class.java)?.adapter
         observePhysicalGamepad()
+        observeTouchGamepad()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -320,7 +325,7 @@ class BluetoothHidService : Service() {
             it.copy(
                 status = HidSessionStatus.CONNECTED,
                 connectedHost = device.safeName(),
-                message = "Connected. Physical gamepad input is being sent to the PC.",
+                message = "Connected. Gamepad input is being sent to the PC.",
                 feedbackLevel = HidFeedbackLevel.INFO,
             )
         }
@@ -329,11 +334,11 @@ class BluetoothHidService : Service() {
 
     private fun observePhysicalGamepad() {
         latestPhysicalState = PhysicalGamepadStore.state.value
-        outputScheduler.submit(mergePhysicalSources(latestPhysicalState))
+        outputScheduler.submit(mergeInputSources())
         serviceScope.launch {
             PhysicalGamepadStore.updates.collect { state ->
                 latestPhysicalState = state
-                outputScheduler.submit(mergePhysicalSources(state))
+                outputScheduler.submit(mergeInputSources())
                 if (state.inputEventCount != lastObservedInputCount) {
                     if (connectedDevice != null) inputEventsSinceConnection++
                     lastObservedInputCount = state.inputEventCount
@@ -343,8 +348,29 @@ class BluetoothHidService : Service() {
         }
     }
 
-    private fun mergePhysicalSources(state: PhysicalGamepadState): VirtualGamepadState {
-        val primary = state.devices.firstOrNull()?.sourceId
+    private fun observeTouchGamepad() {
+        latestTouchState = TouchGamepadStore.state.value
+        lastObservedTouchInputCount = latestTouchState.inputEventCount
+        outputScheduler.submit(mergeInputSources())
+        serviceScope.launch {
+            TouchGamepadStore.updates.collect { state ->
+                latestTouchState = state
+                outputScheduler.submit(mergeInputSources())
+                if (state.inputEventCount != lastObservedTouchInputCount) {
+                    if (connectedDevice != null) inputEventsSinceConnection++
+                    lastObservedTouchInputCount = state.inputEventCount
+                    pendingInputTimestampNanos = state.lastInputTimestampNanos
+                }
+            }
+        }
+    }
+
+    private fun mergeInputSources(): VirtualGamepadState {
+        val primary = if (latestTouchState.active) {
+            TouchGamepadStore.sourceId
+        } else {
+            latestPhysicalState.devices.firstOrNull()?.sourceId
+        }
         val ownership = if (primary == null) {
             InputOwnership()
         } else {
@@ -353,16 +379,16 @@ class BluetoothHidService : Service() {
                 dpad = primary,
             )
         }
-        val sources = state.sourceStates.map { (sourceId, gamepad) ->
+        val sources = latestPhysicalState.sourceStates.map { (sourceId, gamepad) ->
             SourceGamepadState(sourceId, gamepad)
-        }
+        } + SourceGamepadState(TouchGamepadStore.sourceId, latestTouchState.gamepad)
         return InputMerger.merge(sources, ownership)
     }
 
     private fun startOutputPipeline() {
         handler.removeCallbacks(outputTick)
         outputScheduler.stop()
-        outputScheduler.submit(mergePhysicalSources(latestPhysicalState))
+        outputScheduler.submit(mergeInputSources())
         metricsStartedNanos = monotonicNanos()
         lastMetricsUpdateNanos = metricsStartedNanos
         inputEventsSinceConnection = 0
@@ -525,7 +551,7 @@ class BluetoothHidService : Service() {
     private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_launcher_foreground)
         .setContentTitle("BridgePad gamepad bridge")
-        .setContentText("USB gamepad forwarding is active")
+        .setContentText("Gamepad forwarding is active")
         .setOngoing(true)
         .setContentIntent(
             PendingIntent.getActivity(

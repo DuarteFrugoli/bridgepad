@@ -11,7 +11,7 @@
     <string name="android_label">Android</string>
     <string name="api_level_label">API level</string>
     <string name="hid_spike_title">Gamepad bridge</string>
-    <string name="hid_spike_description">Send a USB gamepad connected to this Android device to a Windows PC over Bluetooth.</string>
+    <string name="hid_spike_description">Use the touchscreen or a USB gamepad as a Bluetooth controller for a Windows PC.</string>
     <string name="bluetooth_hid">Bluetooth HID</string>
     <string name="permission_label">Permission</string>
     <string name="session_state_label">Session</string>
@@ -28,4 +28,5 @@
     <string name="input_rate_label">Input rate</string>
     <string name="output_rate_label">Output rate</string>
     <string name="latency_label">Last event latency</string>
+    <string name="open_touch_controller">Open touchscreen controller</string>
 </resources>

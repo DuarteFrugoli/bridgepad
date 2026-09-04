@@ -44,6 +44,7 @@ fun HomeScreen(
     onStartHid: () -> Unit,
     onConnect: (String) -> Unit,
     onPairNewPc: () -> Unit,
+    onOpenTouchController: () -> Unit,
     onStopHid: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -147,6 +148,11 @@ fun HomeScreen(
             }
             if (hidState.status == HidSessionStatus.CONNECTED) {
                 item {
+                    Button(onClick = onOpenTouchController, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.open_touch_controller))
+                    }
+                }
+                item {
                     InfoCard(
                         title = stringResource(R.string.live_bridge_metrics),
                         rows = listOf(
@@ -235,6 +241,7 @@ private fun HomeScreenPreview() {
             onStartHid = {},
             onConnect = {},
             onPairNewPc = {},
+            onOpenTouchController = {},
             onStopHid = {},
         )
     }

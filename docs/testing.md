@@ -190,35 +190,38 @@ Record the displayed input rate, output rate and typical last-event latency.
 Gate B is approved only after every required control is correct and the
 one-hour session completes without stuck input or an app-caused disconnect.
 
-## Phase 4 end-to-end gamepad bridge
+## Phase 5 touchscreen gamepad
 
 Prerequisites:
 
-- complete the Phase 3 checks with the GameSir connected over USB-C;
-- connect BridgePad to the Windows PC as a Bluetooth HID gamepad;
-- open controller properties through `joy.cpl`.
+- connect BridgePad to Windows and open `joy.cpl`;
+- start the gamepad bridge and tap **Open touchscreen controller**;
+- keep the phone in landscape orientation.
 
 Procedure:
 
-1. Start the gamepad bridge, select the paired PC and wait for `CONNECTED`.
-2. Confirm the output rate settles close to `100 Hz` while connected.
-3. Test every face button, bumper, Start, Select, L3 and R3 in `joy.cpl`.
-4. Test all D-pad directions, including diagonals and neutral.
-5. Move both sticks to their extremes and center, then press both triggers
-   independently and together.
-6. Hold multiple buttons while moving both sticks and pressing a trigger.
-   Confirm all fields update without stuck inputs.
-7. Disconnect the GameSir during active input. Confirm the Windows controller
-   returns to neutral.
-8. Reconnect the GameSir, then disconnect and reconnect Bluetooth during active
-   input. Confirm the new session starts from the current logical state without
-   stale controls.
-9. Configure the generic controller in Steam Input and test a game through
-   Steam Input.
-10. When available, test a second game that accepts the HID/DirectInput device
-    without Steam Input.
-11. Keep the bridge connected and actively use it for at least one hour.
+1. Confirm the controller fills the usable display without overlapping system
+   cutouts or gesture areas.
+2. Test A, B, X, Y, L1, R1, Start, Select, L3 and R3 individually and confirm
+   each control changes visual state while pressed.
+3. Test L2 and R2. Each digital trigger must move independently between its
+   neutral and maximum HID values.
+4. Test all D-pad directions and diagonals, then release in each direction and
+   confirm the hat returns to neutral.
+5. Move both sticks through their full circular range. Confirm their knobs stay
+   inside the visual base and return exactly to center when released.
+6. Hold one stick while rapidly alternating face buttons and D-pad directions.
+7. Use at least five simultaneous touches when the device supports them,
+   including both sticks and multiple buttons.
+8. Exchange fingers rapidly between controls and confirm one pointer never
+   releases or moves a control owned by another pointer.
+9. While controls are active, open Menu, press Android Back, background the app
+   and rotate or lock the device. Confirm Windows returns to a neutral state in
+   every case.
+10. Repeat the layout check on a second screen size or aspect ratio when one is
+    available.
+11. Play through Steam Input using only the touchscreen for at least 30 minutes.
 
-Record the displayed input rate, output rate and typical last-event latency.
-Gate B is approved only after every required control is correct and the
-one-hour session completes without stuck input or an app-caused disconnect.
+Record any inaccessible control, missed pointer, stuck state or uncomfortable
+placement. Visual polish and editable presets are intentionally outside the MVP
+phase; this check validates the fixed default layout and touch behavior.
