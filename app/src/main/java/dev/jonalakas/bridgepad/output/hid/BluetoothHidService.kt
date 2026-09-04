@@ -23,6 +23,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import dev.jonalakas.bridgepad.MainActivity
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.gamepad.SourceGamepadState
