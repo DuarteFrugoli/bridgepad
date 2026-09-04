@@ -22,6 +22,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   avoiding a race where Windows connects before Android reports bonding complete.
 - Touchpads now use Compose-relative pointer deltas and reject invalid motion
   spikes instead of sending absolute-coordinate jumps to the PC mouse.
+- Initial pointer-down events are excluded from touchpad movement so their
+  screen position cannot be interpreted as a drag from the coordinate origin.
 
 ### Added
 

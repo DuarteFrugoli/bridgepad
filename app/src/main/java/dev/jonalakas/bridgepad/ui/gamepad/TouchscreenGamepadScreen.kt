@@ -240,6 +240,10 @@ private fun MouseTouchpad(modifier: Modifier = Modifier) {
                         val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
                             ?: break
                         if (!change.pressed) break
+                        if (!change.previousPressed) {
+                            change.consume()
+                            continue
+                        }
                         val delta = change.positionChange()
                         distance += hypot(delta.x, delta.y)
                         if (
