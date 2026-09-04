@@ -61,6 +61,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   gamepad input.
 - The post-MVP roadmap now includes configurable analog touchscreen triggers
   driven by touch position or drag distance.
+- The post-MVP roadmap now includes a mouse touchpad and research into a
+  PlayStation-style clickable touch surface for Steam Input.
 
 ## [0.1.0]
 

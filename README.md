@@ -401,6 +401,10 @@ Potential future work includes:
 - Android TV
 - Advanced touchscreen layouts with saved user presets
 - Configurable analog touchscreen triggers using touch position or drag distance
+- Configurable touchscreen touchpad with relative mouse movement, click and
+  gestures
+- Research into a PlayStation-style high-resolution touch surface with a
+  clickable pad and left/right regions for Steam Input
 - Gyroscope controls
 - Controller profiles
 - Advanced remapping

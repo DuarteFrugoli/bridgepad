@@ -38,7 +38,9 @@ aparelhos Android.
 
 Depois do MVP, o roadmap inclui layouts touchscreen editáveis com presets
 personalizados e gatilhos L2/R2 analógicos cuja intensidade pode ser definida
-pela posição do toque ou pelo deslocamento do dedo.
+pela posição do toque ou pelo deslocamento do dedo. Também estão previstos um
+touchpad configurável para controlar o mouse, clicar e executar gestos, além da
+pesquisa de um modo semelhante ao touchpad do PlayStation para a Steam Input.
 
 ## Arquitetura
 
