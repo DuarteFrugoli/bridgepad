@@ -22,6 +22,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import dev.jonalakas.bridgepad.MainActivity
 import dev.jonalakas.bridgepad.R
@@ -614,6 +615,10 @@ class BluetoothHidService : Service() {
             GamepadHidDescriptor.MOUSE_REPORT_ID,
             GamepadHidDescriptor.mouseReport(report.buttons, report.deltaX, report.deltaY),
         ) == true
+        Log.d(
+            MOUSE_DEBUG_TAG,
+            "HID buttons=${report.buttons} dx=${report.deltaX} dy=${report.deltaY} sent=$sent",
+        )
         if (!sent) {
             SessionLog.record("MOUSE", "A mouse report could not be sent")
         }
@@ -790,6 +795,7 @@ class BluetoothHidService : Service() {
         private const val OUTPUT_RATE_HZ = 100
         private const val OUTPUT_INTERVAL_MS = 10L
         private const val METRICS_UPDATE_INTERVAL_NANOS = 500_000_000L
+        private const val MOUSE_DEBUG_TAG = "BridgePadMouse"
         private val DIRECT_USB_SOURCE_ID = dev.jonalakas.bridgepad.core.gamepad.SourceId("direct-usb")
 
         fun intent(context: Context, action: String) =

@@ -20,10 +20,6 @@ The project follows [Semantic Versioning](https://semver.org/).
   from the paired-device list.
 - Incoming HID connections are accepted while explicit PC pairing is active,
   avoiding a race where Windows connects before Android reports bonding complete.
-- Touchpads now use Compose-relative pointer deltas and reject invalid motion
-  spikes instead of sending absolute-coordinate jumps to the PC mouse.
-- Initial pointer-down events are excluded from touchpad movement so their
-  screen position cannot be interpreted as a drag from the coordinate origin.
 
 ### Added
 

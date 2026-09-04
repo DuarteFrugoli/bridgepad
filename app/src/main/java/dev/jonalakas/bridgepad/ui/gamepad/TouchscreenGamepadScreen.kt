@@ -1,5 +1,6 @@
 package dev.jonalakas.bridgepad.ui.gamepad
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
@@ -240,24 +241,18 @@ private fun MouseTouchpad(modifier: Modifier = Modifier) {
                         val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
                             ?: break
                         if (!change.pressed) break
-                        if (!change.previousPressed) {
-                            change.consume()
-                            continue
-                        }
                         val delta = change.positionChange()
                         distance += hypot(delta.x, delta.y)
-                        if (
-                            delta != Offset.Zero &&
-                            delta.x.isFinite() &&
-                            delta.y.isFinite() &&
-                            kotlin.math.abs(delta.x) <= size.width &&
-                            kotlin.math.abs(delta.y) <= size.height
-                        ) {
+                        if (delta != Offset.Zero) {
+                            Log.d(MOUSE_DEBUG_TAG, "touch dx=${delta.x} dy=${delta.y}")
                             TouchMouseStore.move(delta.x, delta.y)
                         }
                         change.consume()
                     }
-                    if (distance <= 12.dp.toPx()) TouchMouseStore.click()
+                    if (distance <= 12.dp.toPx()) {
+                        Log.d(MOUSE_DEBUG_TAG, "touch click distance=$distance")
+                        TouchMouseStore.click()
+                    }
                 }
             },
         shape = RoundedCornerShape(18.dp),
@@ -494,3 +489,5 @@ internal fun directionForPosition(position: Offset, width: Float, height: Float)
 }
 
 private fun formatMetric(value: Float): String = String.format(Locale.ROOT, "%.1f", value)
+
+private const val MOUSE_DEBUG_TAG = "BridgePadMouse"
