@@ -329,7 +329,10 @@ class BluetoothHidService : Service() {
             "BridgePad",
             "BridgePad Bluetooth HID gamepad and mouse bridge",
             "BridgePad",
-            BluetoothHidDevice.SUBCLASS1_MOUSE or BluetoothHidDevice.SUBCLASS2_GAMEPAD,
+            (
+                BluetoothHidDevice.SUBCLASS1_MOUSE.toInt() or
+                    BluetoothHidDevice.SUBCLASS2_GAMEPAD.toInt()
+            ).toByte(),
             GamepadHidDescriptor.bytes,
         )
         val accepted = hidDevice?.registerApp(settings, null, null, mainExecutor, callback) == true
