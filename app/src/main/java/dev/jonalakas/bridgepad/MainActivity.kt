@@ -1,6 +1,7 @@
 package dev.jonalakas.bridgepad
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.ClipData
@@ -260,9 +261,11 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean =
         gamepadController.handleKeyEvent(event) || super.dispatchKeyEvent(event)
 
+    @SuppressLint("RestrictedApi")
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
         gamepadController.handleMotionEvent(event) || super.dispatchGenericMotionEvent(event)
 
