@@ -1,6 +1,8 @@
 package dev.jonalakas.bridgepad.ui.mapping
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -16,7 +18,12 @@ import dev.jonalakas.bridgepad.input.usb.UsbGamepadMapping
 private sealed interface MappingStep {
     val prompt: String
     data class Button(val target: VirtualControl, override val prompt: String) : MappingStep
-    data class Axis(val target: VirtualAxis, override val prompt: String) : MappingStep
+    data class Dpad(val target: DpadDirection, override val prompt: String) : MappingStep
+    data class Axis(
+        val target: VirtualAxis,
+        val expectedSign: Int,
+        override val prompt: String,
+    ) : MappingStep
 }
 
 private val steps = listOf(
@@ -24,18 +31,28 @@ private val steps = listOf(
     MappingStep.Button(VirtualControl.FACE_EAST, "Press the right face button (B)"),
     MappingStep.Button(VirtualControl.FACE_WEST, "Press the left face button (X)"),
     MappingStep.Button(VirtualControl.FACE_NORTH, "Press the top face button (Y)"),
-    MappingStep.Button(VirtualControl.LEFT_BUMPER, "Press the left bumper (L1)"),
-    MappingStep.Button(VirtualControl.RIGHT_BUMPER, "Press the right bumper (R1)"),
-    MappingStep.Button(VirtualControl.SELECT, "Press Select / Back"),
-    MappingStep.Button(VirtualControl.START, "Press Start / Menu"),
+    MappingStep.Dpad(DpadDirection.WEST, "Press D-pad left"),
+    MappingStep.Dpad(DpadDirection.EAST, "Press D-pad right"),
+    MappingStep.Dpad(DpadDirection.NORTH, "Press D-pad up"),
+    MappingStep.Dpad(DpadDirection.SOUTH, "Press D-pad down"),
+    MappingStep.Axis(VirtualAxis.LEFT_X, -1, "Move the left stick fully left"),
+    MappingStep.Axis(VirtualAxis.LEFT_X, 1, "Move the left stick fully right"),
+    MappingStep.Axis(VirtualAxis.LEFT_Y, -1, "Move the left stick fully up"),
+    MappingStep.Axis(VirtualAxis.LEFT_Y, 1, "Move the left stick fully down"),
     MappingStep.Button(VirtualControl.LEFT_STICK_BUTTON, "Press the left stick (L3)"),
+    MappingStep.Axis(VirtualAxis.RIGHT_X, -1, "Move the right stick fully left"),
+    MappingStep.Axis(VirtualAxis.RIGHT_X, 1, "Move the right stick fully right"),
+    MappingStep.Axis(VirtualAxis.RIGHT_Y, -1, "Move the right stick fully up"),
+    MappingStep.Axis(VirtualAxis.RIGHT_Y, 1, "Move the right stick fully down"),
     MappingStep.Button(VirtualControl.RIGHT_STICK_BUTTON, "Press the right stick (R3)"),
-    MappingStep.Axis(VirtualAxis.LEFT_X, "Move the left stick fully right"),
-    MappingStep.Axis(VirtualAxis.LEFT_Y, "Move the left stick fully down"),
-    MappingStep.Axis(VirtualAxis.RIGHT_X, "Move the right stick fully right"),
-    MappingStep.Axis(VirtualAxis.RIGHT_Y, "Move the right stick fully down"),
-    MappingStep.Axis(VirtualAxis.LEFT_TRIGGER, "Fully press the left trigger (L2)"),
-    MappingStep.Axis(VirtualAxis.RIGHT_TRIGGER, "Fully press the right trigger (R2)"),
+    MappingStep.Button(VirtualControl.LEFT_BUMPER, "Press the left bumper (L1)"),
+    MappingStep.Axis(VirtualAxis.LEFT_TRIGGER, 1, "Fully press the left trigger (L2)"),
+    MappingStep.Button(VirtualControl.RIGHT_BUMPER, "Press the right bumper (R1)"),
+    MappingStep.Axis(VirtualAxis.RIGHT_TRIGGER, 1, "Fully press the right trigger (R2)"),
+    MappingStep.Button(VirtualControl.SELECT, "Press Back / Select / Share"),
+    MappingStep.Button(VirtualControl.START, "Press Start / Options / Menu"),
+    MappingStep.Button(VirtualControl.EXTRA_1, "Press Guide / PS / Home"),
+    MappingStep.Button(VirtualControl.EXTRA_2, "Press Share / Capture"),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -50,6 +67,7 @@ fun UsbMappingScreen(
     var armed by remember { mutableStateOf(false) }
     val buttons = remember { mutableStateMapOf<VirtualControl, VirtualControl>() }
     val axes = remember { mutableStateMapOf<VirtualAxis, AxisBinding>() }
+    val dpad = remember { mutableStateMapOf<DpadDirection, DpadDirection>() }
     var instruction by remember { mutableStateOf("Release all controls, then follow the prompt.") }
     val step = steps.getOrNull(stepIndex)
 
@@ -68,6 +86,15 @@ fun UsbMappingScreen(
             }
             return@LaunchedEffect
         }
+        val pressedNow = usbState.rawGamepad.pressedButtons - baseline.pressedButtons
+        val skipSource = buttons[VirtualControl.FACE_SOUTH]
+        if (currentStep !is MappingStep.Button || currentStep.target != VirtualControl.FACE_SOUTH) {
+            if (skipSource != null && skipSource in pressedNow) {
+                armed = false
+                stepIndex++
+                return@LaunchedEffect
+            }
+        }
         when (currentStep) {
             is MappingStep.Button -> {
                 val source = (usbState.rawGamepad.pressedButtons - baseline.pressedButtons).firstOrNull()
@@ -77,12 +104,25 @@ fun UsbMappingScreen(
                     stepIndex++
                 }
             }
+            is MappingStep.Dpad -> {
+                if (usbState.rawGamepad.dpad != DpadDirection.NEUTRAL &&
+                    usbState.rawGamepad.dpad != baseline.dpad
+                ) {
+                    dpad[currentStep.target] = usbState.rawGamepad.dpad
+                    armed = false
+                    stepIndex++
+                }
+            }
             is MappingStep.Axis -> {
                 val movement = VirtualAxis.entries.map { axis ->
                     axis to (usbState.rawGamepad.valueOf(axis) - baseline.valueOf(axis))
                 }.maxByOrNull { kotlin.math.abs(it.second) }
                 if (movement != null && kotlin.math.abs(movement.second) >= 0.45f) {
-                    axes[currentStep.target] = AxisBinding(movement.first, movement.second < 0f)
+                    val observedSign = if (movement.second < 0f) -1 else 1
+                    axes[currentStep.target] = AxisBinding(
+                        source = movement.first,
+                        inverted = observedSign != currentStep.expectedSign,
+                    )
                     armed = false
                     stepIndex++
                 }
@@ -92,7 +132,7 @@ fun UsbMappingScreen(
 
     Scaffold(topBar = { TopAppBar(title = { Text("Configure USB gamepad") }) }) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             Text(usbState.deviceName ?: "USB gamepad", style = MaterialTheme.typography.titleMedium)
@@ -106,6 +146,7 @@ fun UsbMappingScreen(
                     Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(step.prompt, style = MaterialTheme.typography.headlineSmall)
                         Text(instruction)
+                        if (stepIndex > 0) Text("Press the mapped A button to skip this control.")
                     }
                 }
                 OutlinedButton(
@@ -120,7 +161,15 @@ fun UsbMappingScreen(
                 Text("Mapping complete", style = MaterialTheme.typography.headlineSmall)
                 Text("Save this profile to apply it automatically whenever this controller is connected.")
                 Button(
-                    onClick = { onSave(UsbGamepadMapping(buttons.toMap(), axes.toMap())) },
+                    onClick = {
+                        onSave(
+                            UsbGamepadMapping(
+                                buttons = buttons.toMap(),
+                                axes = axes.toMap(),
+                                dpad = dpad.toMap(),
+                            ),
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("Save mapping") }
             }

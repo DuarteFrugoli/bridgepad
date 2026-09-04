@@ -279,6 +279,12 @@ With a physical USB gamepad selected and an active PC connection:
     Input.
 12. End and restart the session, enable Background USB again, and confirm that
     the saved mapping is restored without running the wizard again.
+13. Run the wizard again and verify its order: A/B/X/Y; D-pad left/right/up/down;
+    left stick left/right/up/down and L3; right stick left/right/up/down and R3;
+    L1/L2/R1/R2; Back/Select/Share; Start/Options/Menu; Guide/PS/Home; and
+    Share/Capture.
+14. On a nonessential step, press the physical button mapped as A and confirm
+    that the step is skipped without assigning A to that control.
 
 ## Phase 7 MVP stabilization
 

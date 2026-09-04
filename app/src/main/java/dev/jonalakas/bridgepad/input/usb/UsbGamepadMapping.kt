@@ -4,12 +4,14 @@ import android.content.Context
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
+import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 
 data class AxisBinding(val source: VirtualAxis, val inverted: Boolean = false)
 
 data class UsbGamepadMapping(
     val buttons: Map<VirtualControl, VirtualControl> = VirtualControl.entries.associateWith { it },
     val axes: Map<VirtualAxis, AxisBinding> = VirtualAxis.entries.associateWith { AxisBinding(it) },
+    val dpad: Map<DpadDirection, DpadDirection> = DpadDirection.entries.associateWith { it },
 ) {
     fun apply(raw: VirtualGamepadState): VirtualGamepadState {
         val mappedButtons = buttons.mapNotNullTo(mutableSetOf()) { (target, source) ->
@@ -22,7 +24,7 @@ data class UsbGamepadMapping(
         }
         return VirtualGamepadState(
             pressedButtons = mappedButtons,
-            dpad = raw.dpad,
+            dpad = dpad.entries.firstOrNull { it.value == raw.dpad }?.key ?: DpadDirection.NEUTRAL,
             leftStickX = axis(VirtualAxis.LEFT_X).coerceIn(-1f, 1f),
             leftStickY = axis(VirtualAxis.LEFT_Y).coerceIn(-1f, 1f),
             rightStickX = axis(VirtualAxis.RIGHT_X).coerceIn(-1f, 1f),
@@ -45,16 +47,26 @@ object UsbGamepadMappingStore {
             .getString(deviceKey, null).orEmpty()
         val buttons = mutableMapOf<VirtualControl, VirtualControl>()
         val axes = mutableMapOf<VirtualAxis, AxisBinding>()
+        val dpad = mutableMapOf<DpadDirection, DpadDirection>()
         saved.lineSequence().forEach { line ->
             val parts = line.split(',')
             runCatching {
                 when (parts.firstOrNull()) {
                     "B" -> buttons[VirtualControl.valueOf(parts[1])] = VirtualControl.valueOf(parts[2])
                     "A" -> axes[VirtualAxis.valueOf(parts[1])] = AxisBinding(VirtualAxis.valueOf(parts[2]), parts.getOrNull(3)?.toBoolean() == true)
+                    "D" -> dpad[DpadDirection.valueOf(parts[1])] = DpadDirection.valueOf(parts[2])
                 }
             }
         }
-        return if (buttons.isEmpty() && axes.isEmpty()) UsbGamepadMapping() else UsbGamepadMapping(buttons, axes)
+        return if (buttons.isEmpty() && axes.isEmpty() && dpad.isEmpty()) {
+            UsbGamepadMapping()
+        } else {
+            UsbGamepadMapping(
+                buttons = buttons,
+                axes = axes,
+                dpad = dpad.ifEmpty { DpadDirection.entries.associateWith { it } },
+            )
+        }
     }
 
     fun save(deviceKey: String, mapping: UsbGamepadMapping) {
@@ -62,6 +74,7 @@ object UsbGamepadMappingStore {
         val value = buildString {
             mapping.buttons.forEach { (target, source) -> appendLine("B,$target,$source") }
             mapping.axes.forEach { (target, binding) -> appendLine("A,$target,${binding.source},${binding.inverted}") }
+            mapping.dpad.forEach { (target, source) -> appendLine("D,$target,$source") }
         }
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE).edit().putString(deviceKey, value).apply()
     }
