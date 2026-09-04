@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,15 +22,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.core.content.ContextCompat
 import dev.jonalakas.bridgepad.diagnostics.AndroidDeviceInfoProvider
+import dev.jonalakas.bridgepad.input.android.AndroidGamepadController
+import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.output.hid.BluetoothHidService
 import dev.jonalakas.bridgepad.output.hid.HidSessionStore
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 class MainActivity : ComponentActivity() {
+    private lateinit var gamepadController: AndroidGamepadController
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        gamepadController = AndroidGamepadController(this)
 
         val deviceInfo = AndroidDeviceInfoProvider.get()
 
@@ -56,12 +63,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val hidState by HidSessionStore.state.collectAsState()
+                val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
 
                 HomeScreen(
                     appVersion = BuildConfig.VERSION_NAME,
                     deviceInfo = deviceInfo,
                     bluetoothPermissionGranted = bluetoothPermissionGranted,
                     hidState = hidState,
+                    physicalGamepadState = physicalGamepadState,
                     onRequestPermissions = { permissionLauncher.launch(requiredPermissions()) },
                     onStartHid = {
                         ContextCompat.startForegroundService(
@@ -107,6 +116,22 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        gamepadController.start()
+    }
+
+    override fun onStop() {
+        gamepadController.stop()
+        super.onStop()
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        gamepadController.handleKeyEvent(event) || super.dispatchKeyEvent(event)
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
+        gamepadController.handleMotionEvent(event) || super.dispatchGenericMotionEvent(event)
 
     private fun hasBluetoothPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||

@@ -28,4 +28,6 @@
     <string name="axis_minimum">Minimum</string>
     <string name="axis_center">Center</string>
     <string name="axis_maximum">Maximum</string>
+    <string name="physical_gamepad_diagnostic">Physical gamepad diagnostic</string>
+    <string name="no_physical_gamepad">No USB gamepad detected. Connect one through USB-C.</string>
 </resources>

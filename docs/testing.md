@@ -126,3 +126,33 @@ or normally interfere with the Bluetooth HID connection.
 Record the exact status message and relevant Logcat output if registration or
 connection fails. This result decides Gate A; it is expected that some Android
 devices may not expose or reliably maintain the HID Device profile.
+
+## Phase 3 USB gamepad diagnostic
+
+Prerequisites:
+
+- install the latest debug APK on the Android device;
+- connect the GameSir X5 Lite directly through USB-C;
+- keep the BridgePad screen open during input diagnostics.
+
+Procedure:
+
+1. Confirm that the **Physical gamepad diagnostic** card displays the GameSir
+   name, vendor/product IDs, descriptor and reported axes.
+2. Press every face button, bumper, Start, Select, L3 and R3. Confirm that each
+   logical button appears only while held and that no button remains stuck.
+3. Press all eight D-pad directions and release it. Confirm the direction and
+   final `NEUTRAL` state.
+4. Move both sticks through their full range. Confirm values near `-1.000` and
+   `1.000`, and confirm they settle at `0.000` without visible drift.
+5. Press each trigger independently. Confirm each moves from `0.000` to near
+   `1.000` and does not move the other trigger.
+6. Disconnect the controller while holding a button or stick. Confirm the
+   device disappears and its controls are neutralized.
+7. Reconnect it without restarting BridgePad and repeat one button and one axis
+   check.
+
+If any control is missing or incorrect, record the **Last event**, axis names,
+raw values, normalized values, vendor/product IDs and descriptor shown by the
+app. A second USB gamepad should be checked when one is available, but its
+absence does not prevent validating the primary GameSir mapping.

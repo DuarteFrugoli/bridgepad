@@ -37,6 +37,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 - JVM fixtures and unit tests for logical controls, source removal, merging and
   HID report bytes.
 - Public specification for the logical gamepad pipeline and report layout.
+- USB/USB-C gamepad discovery and hot-plug handling using Android input APIs.
+- Physical gamepad mapping for buttons, D-pad, sticks and separate triggers.
+- On-device diagnostic view with device identity, raw axes and normalized state.
 
 ### Changed
 

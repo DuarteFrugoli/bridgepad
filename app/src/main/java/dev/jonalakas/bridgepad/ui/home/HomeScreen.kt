@@ -27,9 +27,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import kotlin.math.roundToInt
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.diagnostics.DeviceInfo
+import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.output.hid.HidSessionState
 import dev.jonalakas.bridgepad.output.hid.HidSessionStatus
 import dev.jonalakas.bridgepad.output.hid.HidFeedbackLevel
@@ -44,6 +46,7 @@ fun HomeScreen(
     deviceInfo: DeviceInfo,
     bluetoothPermissionGranted: Boolean,
     hidState: HidSessionState,
+    physicalGamepadState: PhysicalGamepadState,
     onRequestPermissions: () -> Unit,
     onStartHid: () -> Unit,
     onConnect: (String) -> Unit,
@@ -77,6 +80,9 @@ fun HomeScreen(
                     text = stringResource(R.string.hid_spike_description),
                     style = MaterialTheme.typography.bodyLarge,
                 )
+            }
+            item {
+                PhysicalGamepadDiagnostic(physicalGamepadState)
             }
             item {
                 InfoCard(
@@ -228,6 +234,7 @@ private fun HomeScreenPreview() {
                 bluetoothEnabled = true,
                 message = "HID gamepad registered. Select a paired PC.",
             ),
+            physicalGamepadState = PhysicalGamepadState(),
             onRequestPermissions = {},
             onStartHid = {},
             onConnect = {},
@@ -238,6 +245,59 @@ private fun HomeScreenPreview() {
         )
     }
 }
+
+@Composable
+private fun PhysicalGamepadDiagnostic(
+    state: PhysicalGamepadState,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.physical_gamepad_diagnostic),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            if (state.devices.isEmpty()) {
+                Text(stringResource(R.string.no_physical_gamepad))
+            } else {
+                state.devices.forEach { device ->
+                    val gamepad = state.sourceStates[device.sourceId]
+                    Text(device.name, style = MaterialTheme.typography.titleSmall)
+                    Text("Vendor/Product: ${device.vendorId}/${device.productId}")
+                    Text("Descriptor: ${device.descriptor}")
+                    Text("Axes: ${device.axes.joinToString().ifEmpty { "None reported" }}")
+                    Text("Buttons: ${gamepad?.pressedButtons?.joinToString()?.ifEmpty { "None" } ?: "None"}")
+                    Text("D-pad: ${gamepad?.dpad ?: "NEUTRAL"}")
+                    gamepad?.let {
+                        Text(
+                            "Sticks: L(${formatAxis(it.leftStickX)}, ${formatAxis(it.leftStickY)}) " +
+                                "R(${formatAxis(it.rightStickX)}, ${formatAxis(it.rightStickY)})",
+                        )
+                        Text(
+                            "Triggers: L=${formatAxis(it.leftTrigger)} " +
+                                "R=${formatAxis(it.rightTrigger)}",
+                        )
+                    }
+                    state.axisDiagnostics
+                        .filterKeys { it.startsWith("${device.sourceId.value}:") }
+                        .forEach { (key, value) ->
+                            Text(
+                                "${key.substringAfterLast(':')}: raw=${formatAxis(value.rawValue)}, " +
+                                    "normalized=${formatAxis(value.normalizedValue)}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                }
+            }
+            Text("Last event: ${state.lastRawEvent}", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+private fun formatAxis(value: Float): String = String.format(Locale.ROOT, "%.3f", value)
 
 @Composable
 private fun AxisTestControl(
