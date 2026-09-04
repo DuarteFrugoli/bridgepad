@@ -130,6 +130,7 @@ USB / USB-C Gamepad
 
 - Android 9+ (API 28+)
 - Touchscreen controller
+- Relative mouse touchpad with tap-to-left-click
 - USB / USB-C gamepads recognized by Android
 - Direct USB HID capture with saved per-controller mapping
 - Bluetooth HID gamepad output
@@ -420,8 +421,7 @@ Planned future work includes:
 - Android TV
 - Advanced touchscreen layouts with saved user presets
 - Configurable analog touchscreen triggers using touch position or drag distance
-- Configurable touchscreen touchpad with relative mouse movement, click and
-  gestures
+- Touchpad scrolling, additional mouse buttons and configurable gestures
 - Research into a PlayStation-style high-resolution touch surface with a
   clickable pad and left/right regions for Steam Input
 - Gyroscope controls

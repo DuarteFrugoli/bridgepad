@@ -306,3 +306,20 @@ that explicitly supports background use blocks the MVP release.
 4. Switch back to Touchscreen, open its controls and verify them again.
 5. During every transition, confirm in `joy.cpl` that all controls briefly
    return to neutral and that the inactive source cannot affect the PC.
+
+### Mouse touchpad
+
+Because this feature changes the HID report descriptor, remove the existing
+BridgePad/phone pairing from Windows and Android, then pair it again before the
+first test.
+
+1. Connect with Touchscreen selected and open the touchscreen controller.
+2. Drag across the center touchpad and confirm that the Windows pointer follows
+   the relative movement in every direction.
+3. Lift and place the finger elsewhere without dragging; the pointer must not
+   jump to an absolute screen position.
+4. Tap the touchpad and confirm exactly one left click.
+5. Drag and release; the release must not produce an accidental click.
+6. Use the touchpad simultaneously with a gamepad stick and buttons.
+7. Switch to Physical gamepad input and confirm that touching the old surface
+   cannot move or click the pointer.

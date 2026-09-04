@@ -49,6 +49,7 @@ import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
+import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.output.hid.HidSessionState
 import dev.jonalakas.bridgepad.output.hid.HidSessionStatus
 import java.util.Locale
@@ -164,7 +165,11 @@ private fun CenterControls(
             color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.labelMedium,
         )
-        Spacer(Modifier.weight(1f))
+        MouseTouchpad(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GamepadButton("Select", VirtualControl.SELECT)
             GamepadButton("Start", VirtualControl.START)
@@ -175,6 +180,49 @@ private fun CenterControls(
         }
         Spacer(Modifier.weight(1f))
         TouchButton(label = "Menu", onPressedChange = { pressed -> if (pressed) onExit() })
+    }
+}
+
+@Composable
+private fun MouseTouchpad(modifier: Modifier = Modifier) {
+    val container = MaterialTheme.colorScheme.surfaceVariant
+    val outline = MaterialTheme.colorScheme.outline
+    Surface(
+        modifier = modifier
+            .semantics {
+                contentDescription = "Mouse touchpad"
+                stateDescription = "Drag to move the pointer; tap for left click"
+            }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val pointerId = down.id
+                    var previous = down.position
+                    var distance = 0f
+                    while (true) {
+                        val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
+                            ?: break
+                        if (!change.pressed) break
+                        val delta = change.position - previous
+                        distance += hypot(delta.x, delta.y)
+                        if (delta != Offset.Zero) TouchMouseStore.move(delta.x, delta.y)
+                        previous = change.position
+                        change.consume()
+                    }
+                    if (distance <= 12.dp.toPx()) TouchMouseStore.click()
+                }
+            },
+        shape = RoundedCornerShape(18.dp),
+        color = container,
+        border = androidx.compose.foundation.BorderStroke(2.dp, outline),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = "Mouse\nDrag to move · Tap to click",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 

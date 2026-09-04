@@ -36,6 +36,7 @@ import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadSnapshot
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
+import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadController
 import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
@@ -76,6 +77,7 @@ class BluetoothHidService : Service() {
         override fun run() {
             if (shuttingDown) return
             sendScheduledReport()
+            sendMouseReport()
             handler.postDelayed(this, OUTPUT_INTERVAL_MS)
         }
     }
@@ -294,6 +296,7 @@ class BluetoothHidService : Service() {
     }
 
     private fun selectInput(touchSelected: Boolean) {
+        TouchMouseStore.clear()
         connectedDevice?.let { device ->
             hidDevice?.sendReport(
                 device,
@@ -564,10 +567,28 @@ class BluetoothHidService : Service() {
         }
     }
 
+    private fun sendMouseReport() {
+        val device = connectedDevice ?: return
+        if (!HidSessionStore.state.value.touchInputSelected) {
+            TouchMouseStore.clear()
+            return
+        }
+        val report = TouchMouseStore.consume() ?: return
+        val sent = hidDevice?.sendReport(
+            device,
+            GamepadHidDescriptor.MOUSE_REPORT_ID,
+            GamepadHidDescriptor.mouseReport(report.buttons, report.deltaX, report.deltaY),
+        ) == true
+        if (!sent) {
+            SessionLog.record("MOUSE", "A mouse report could not be sent")
+        }
+    }
+
     private fun stopOutputPipeline() {
         handler.removeCallbacks(outputTick)
         outputScheduler.stop()
         pendingInputTimestampNanos = null
+        TouchMouseStore.clear()
     }
 
     private fun monotonicNanos(): Long = SystemClock.uptimeMillis() * 1_000_000L

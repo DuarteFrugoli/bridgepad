@@ -5,6 +5,7 @@ import dev.jonalakas.bridgepad.core.output.HidReportEncoder
 
 object GamepadHidDescriptor {
     const val REPORT_ID = 1
+    const val MOUSE_REPORT_ID = 2
 
     val bytes = byteArrayOf(
         0x05, 0x01,       // Usage Page (Generic Desktop)
@@ -50,7 +51,41 @@ object GamepadHidDescriptor {
         0x95.toByte(), 0x02,
         0x81.toByte(), 0x02,
         0xC0.toByte(),
+
+        0x05, 0x01,       // Usage Page (Generic Desktop)
+        0x09, 0x02,       // Usage (Mouse)
+        0xA1.toByte(), 0x01, // Collection (Application)
+        0x85.toByte(), MOUSE_REPORT_ID.toByte(),
+        0x09, 0x01,       // Usage (Pointer)
+        0xA1.toByte(), 0x00, // Collection (Physical)
+        0x05, 0x09,       // Usage Page (Button)
+        0x19, 0x01,
+        0x29, 0x03,
+        0x15, 0x00,
+        0x25, 0x01,
+        0x75, 0x01,
+        0x95.toByte(), 0x03,
+        0x81.toByte(), 0x02,
+        0x75, 0x05,
+        0x95.toByte(), 0x01,
+        0x81.toByte(), 0x03,
+        0x05, 0x01,
+        0x09, 0x30,       // Usage (X)
+        0x09, 0x31,       // Usage (Y)
+        0x15, 0x81.toByte(),
+        0x25, 0x7F,
+        0x75, 0x08,
+        0x95.toByte(), 0x02,
+        0x81.toByte(), 0x06, // Data, Variable, Relative
+        0xC0.toByte(),
+        0xC0.toByte(),
     )
 
     fun neutralReport(): ByteArray = HidReportEncoder.encode(VirtualGamepadState())
+
+    fun mouseReport(buttons: Int, deltaX: Int, deltaY: Int): ByteArray = byteArrayOf(
+        (buttons and 0x07).toByte(),
+        deltaX.coerceIn(-127, 127).toByte(),
+        deltaY.coerceIn(-127, 127).toByte(),
+    )
 }

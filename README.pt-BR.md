@@ -30,9 +30,10 @@ O primeiro MVP permitirá:
 - conectar um aparelho Android 9 ou mais recente a um PC Windows;
 - apresentar o celular como um gamepad Bluetooth HID genérico;
 - jogar por meio do Steam Input;
-- consultar informações básicas de diagnóstico.
+- consultar informações básicas de diagnóstico;
 - escolher entre captura de maior compatibilidade e captura USB persistente;
-- salvar um mapeamento por modelo/descriptor de controle USB.
+- salvar um mapeamento por modelo/descriptor de controle USB;
+- controlar o mouse do PC com um touchpad relativo e toque para clique esquerdo.
 
 O MVP não inclui LAN, aplicativo desktop, XInput nativo, rumble, layouts
 editáveis, macros, consoles ou compatibilidade garantida com todos os
@@ -40,8 +41,8 @@ aparelhos Android.
 
 Depois do MVP, o roadmap inclui layouts touchscreen editáveis com presets
 personalizados e gatilhos L2/R2 analógicos cuja intensidade pode ser definida
-pela posição do toque ou pelo deslocamento do dedo. Também estão previstos um
-touchpad configurável para controlar o mouse, clicar e executar gestos, além da
+pela posição do toque ou pelo deslocamento do dedo. Também estão previstas
+expansões do touchpad para rolagem, botões adicionais e gestos, além da
 pesquisa de um modo semelhante ao touchpad do PlayStation para a Steam Input.
 Depois do aplicativo Android, o plano é criar o BridgePad Desktop primeiro para
 Windows e depois Linux. PlayStation e Xbox são objetivos posteriores, começando
