@@ -15,6 +15,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Mouse and gamepad axes now declare their own physical ranges instead of
+  inheriting the D-pad's 0-to-315-degree range from the HID descriptor.
 - Newly paired computers are now authorized and connected as HID hosts in the
   current session instead of requiring BridgePad to be restarted and selected
   from the paired-device list.
