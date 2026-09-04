@@ -13,6 +13,12 @@ The project follows [Semantic Versioning](https://semver.org/).
 - The Bluetooth HID service now advertises both mouse and gamepad capabilities
   so hosts recognize reports from the touchscreen touchpads.
 
+### Fixed
+
+- Newly paired computers are now authorized and connected as HID hosts in the
+  current session instead of requiring BridgePad to be restarted and selected
+  from the paired-device list.
+
 ### Added
 
 - A large, dedicated mouse touchpad that can be used alongside a physical

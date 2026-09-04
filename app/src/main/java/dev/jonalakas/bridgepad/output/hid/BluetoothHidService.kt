@@ -94,16 +94,35 @@ class BluetoothHidService : Service() {
                 }
                 BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
                     if (!shuttingDown) {
+                        val pairingWasActive = HidSessionStore.state.value.pairingModeActive
                         refreshPairedHosts()
                         if (intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR) ==
                             BluetoothDevice.BOND_BONDED
                         ) {
+                            @Suppress("DEPRECATION")
+                            val pairedDevice = intent.getParcelableExtra<BluetoothDevice>(
+                                BluetoothDevice.EXTRA_DEVICE,
+                            )
+                            val newlyPairedComputer = pairedDevice?.takeIf {
+                                pairingWasActive &&
+                                    it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER
+                            }
                             cancelDiscoverabilityMessage()
                             HidSessionStore.update {
                                 it.copy(
                                     pairingModeActive = false,
-                                    message = "Computer paired. Select it from the list to connect HID.",
+                                    message = if (newlyPairedComputer != null) {
+                                        "Computer paired. Connecting HID…"
+                                    } else {
+                                        "Computer paired. Select it from the list to connect HID."
+                                    },
                                     feedbackLevel = HidFeedbackLevel.INFO,
+                                )
+                            }
+                            if (newlyPairedComputer != null) {
+                                handler.postDelayed(
+                                    { connect(newlyPairedComputer.address) },
+                                    POST_PAIR_CONNECTION_DELAY_MS,
                                 )
                             }
                         }
@@ -754,6 +773,7 @@ class BluetoothHidService : Service() {
         private const val CHANNEL_ID = "bluetooth_hid_session"
         private const val NOTIFICATION_ID = 1001
         private const val AUTOMATIC_CONNECTION_GRACE_PERIOD_MS = 1_500L
+        private const val POST_PAIR_CONNECTION_DELAY_MS = 500L
         private const val OUTPUT_RATE_HZ = 100
         private const val OUTPUT_INTERVAL_MS = 10L
         private const val METRICS_UPDATE_INTERVAL_NANOS = 500_000_000L
