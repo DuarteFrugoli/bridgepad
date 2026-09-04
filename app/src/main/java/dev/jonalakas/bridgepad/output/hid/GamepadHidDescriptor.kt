@@ -1,6 +1,5 @@
 package dev.jonalakas.bridgepad.output.hid
 
-import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.output.HidReportEncoder
 
@@ -54,11 +53,4 @@ object GamepadHidDescriptor {
     )
 
     fun neutralReport(): ByteArray = HidReportEncoder.encode(VirtualGamepadState())
-
-    fun gamepadReport(southPressed: Boolean, xAxis: Int): ByteArray = HidReportEncoder.encode(
-        VirtualGamepadState(
-            pressedButtons = if (southPressed) setOf(VirtualControl.FACE_SOUTH) else emptySet(),
-            leftStickX = xAxis.coerceIn(-127, 127) / 127f,
-        ),
-    )
 }

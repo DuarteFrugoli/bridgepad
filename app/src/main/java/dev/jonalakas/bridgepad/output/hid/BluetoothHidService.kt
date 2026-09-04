@@ -21,9 +21,25 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import dev.jonalakas.bridgepad.MainActivity
 import dev.jonalakas.bridgepad.R
+import dev.jonalakas.bridgepad.core.gamepad.SourceGamepadState
+import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
+import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
+import dev.jonalakas.bridgepad.core.mapping.InputMerger
+import dev.jonalakas.bridgepad.core.mapping.InputOwnership
+import dev.jonalakas.bridgepad.core.output.HidReportEncoder
+import dev.jonalakas.bridgepad.core.output.OutputScheduler
+import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
+import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 @SuppressLint("MissingPermission")
 class BluetoothHidService : Service() {
@@ -31,11 +47,26 @@ class BluetoothHidService : Service() {
     private var hidDevice: BluetoothHidDevice? = null
     private var connectedDevice: BluetoothDevice? = null
     private var requestedHostAddress: String? = null
-    private var testAxisValue = 0
     private var shuttingDown = false
     private val handler = Handler(Looper.getMainLooper())
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val outputScheduler = OutputScheduler(OUTPUT_RATE_HZ)
     private var discoverabilityTimeout: Runnable? = null
     private var pendingConnection: Runnable? = null
+    private var latestPhysicalState = PhysicalGamepadState()
+    private var lastObservedInputCount = 0L
+    private var pendingInputTimestampNanos: Long? = null
+    private var metricsStartedNanos = 0L
+    private var inputEventsSinceConnection = 0L
+    private var reportsSinceConnection = 0L
+    private var lastMetricsUpdateNanos = 0L
+    private val outputTick = object : Runnable {
+        override fun run() {
+            if (shuttingDown) return
+            sendScheduledReport()
+            handler.postDelayed(this, OUTPUT_INTERVAL_MS)
+        }
+    }
 
     private val bluetoothStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -120,6 +151,7 @@ class BluetoothHidService : Service() {
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     if (!wasRequested && connectedDevice == null) return
+                    stopOutputPipeline()
                     requestedHostAddress = null
                     connectedDevice = null
                     HidSessionStore.update {
@@ -156,15 +188,13 @@ class BluetoothHidService : Service() {
             startForeground(NOTIFICATION_ID, buildNotification())
         }
         adapter = getSystemService(BluetoothManager::class.java)?.adapter
+        observePhysicalGamepad()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startHid()
             ACTION_CONNECT -> connect(intent.getStringExtra(EXTRA_ADDRESS))
-            ACTION_TEST_PRESS -> sendTestReport(pressed = true)
-            ACTION_TEST_RELEASE -> sendTestReport(pressed = false)
-            ACTION_TEST_AXIS -> sendAxisReport(intent.getIntExtra(EXTRA_AXIS_VALUE, 0))
             ACTION_REFRESH_HOSTS -> if (!shuttingDown) refreshPairedHosts()
             ACTION_DISCOVERABILITY_STARTED -> showDiscoverabilityMessage(
                 intent.getIntExtra(EXTRA_DISCOVERABLE_DURATION, 120),
@@ -181,6 +211,8 @@ class BluetoothHidService : Service() {
         shuttingDown = true
         cancelDiscoverabilityMessage()
         cancelPendingConnection()
+        stopOutputPipeline()
+        serviceScope.cancel()
         releaseProfile()
         runCatching { unregisterReceiver(bluetoothStateReceiver) }
         if (!stateWasFinalized) {
@@ -214,7 +246,7 @@ class BluetoothHidService : Service() {
         update(HidSessionStatus.REGISTERING, "Registering the BridgePad HID gamepad…")
         val settings = BluetoothHidDeviceAppSdpSettings(
             "BridgePad",
-            "BridgePad Bluetooth HID gamepad spike",
+            "BridgePad Bluetooth HID gamepad bridge",
             "BridgePad",
             0x02,
             GamepadHidDescriptor.bytes,
@@ -288,36 +320,102 @@ class BluetoothHidService : Service() {
             it.copy(
                 status = HidSessionStatus.CONNECTED,
                 connectedHost = device.safeName(),
-                message = "Connected. The test button can now send HID reports.",
+                message = "Connected. Physical gamepad input is being sent to the PC.",
                 feedbackLevel = HidFeedbackLevel.INFO,
             )
         }
+        startOutputPipeline()
     }
 
-    private fun sendTestReport(pressed: Boolean) {
-        val device = connectedDevice ?: return
-        val report = GamepadHidDescriptor.gamepadReport(pressed, testAxisValue)
-        if (hidDevice?.sendReport(device, GamepadHidDescriptor.REPORT_ID, report) != true) {
-            update(HidSessionStatus.ERROR, "The HID test report could not be sent.")
+    private fun observePhysicalGamepad() {
+        latestPhysicalState = PhysicalGamepadStore.state.value
+        outputScheduler.submit(mergePhysicalSources(latestPhysicalState))
+        serviceScope.launch {
+            PhysicalGamepadStore.updates.collect { state ->
+                latestPhysicalState = state
+                outputScheduler.submit(mergePhysicalSources(state))
+                if (state.inputEventCount != lastObservedInputCount) {
+                    if (connectedDevice != null) inputEventsSinceConnection++
+                    lastObservedInputCount = state.inputEventCount
+                    pendingInputTimestampNanos = state.lastInputTimestampNanos
+                }
+            }
         }
     }
 
-    private fun sendAxisReport(value: Int) {
+    private fun mergePhysicalSources(state: PhysicalGamepadState): VirtualGamepadState {
+        val primary = state.devices.firstOrNull()?.sourceId
+        val ownership = if (primary == null) {
+            InputOwnership()
+        } else {
+            InputOwnership(
+                axes = VirtualAxis.entries.associateWith { primary },
+                dpad = primary,
+            )
+        }
+        val sources = state.sourceStates.map { (sourceId, gamepad) ->
+            SourceGamepadState(sourceId, gamepad)
+        }
+        return InputMerger.merge(sources, ownership)
+    }
+
+    private fun startOutputPipeline() {
+        handler.removeCallbacks(outputTick)
+        outputScheduler.stop()
+        outputScheduler.submit(mergePhysicalSources(latestPhysicalState))
+        metricsStartedNanos = monotonicNanos()
+        lastMetricsUpdateNanos = metricsStartedNanos
+        inputEventsSinceConnection = 0
+        reportsSinceConnection = 0
+        pendingInputTimestampNanos = null
+        handler.post(outputTick)
+    }
+
+    private fun sendScheduledReport() {
         val device = connectedDevice ?: return
-        testAxisValue = value.coerceIn(-127, 127)
-        val report = GamepadHidDescriptor.gamepadReport(
-            southPressed = false,
-            xAxis = testAxisValue,
-        )
-        if (hidDevice?.sendReport(device, GamepadHidDescriptor.REPORT_ID, report) != true) {
-            update(HidSessionStatus.ERROR, "The HID axis report could not be sent.")
+        val now = monotonicNanos()
+        val state = outputScheduler.poll(now) ?: return
+        val sent = hidDevice?.sendReport(
+            device,
+            GamepadHidDescriptor.REPORT_ID,
+            HidReportEncoder.encode(state),
+        ) == true
+        if (!sent) {
+            update(HidSessionStatus.ERROR, "A physical gamepad report could not be sent.")
+            return
+        }
+        reportsSinceConnection++
+        val latency = pendingInputTimestampNanos?.let { timestamp ->
+            ((now - timestamp).coerceAtLeast(0L) / 1_000_000f).also {
+                pendingInputTimestampNanos = null
+            }
+        }
+        if (now - lastMetricsUpdateNanos >= METRICS_UPDATE_INTERVAL_NANOS || latency != null) {
+            val elapsedSeconds = ((now - metricsStartedNanos).coerceAtLeast(1L)) / 1_000_000_000f
+            HidSessionStore.update {
+                it.copy(
+                    inputRateHz = inputEventsSinceConnection / elapsedSeconds,
+                    outputRateHz = reportsSinceConnection / elapsedSeconds,
+                    lastLatencyMs = latency ?: it.lastLatencyMs,
+                )
+            }
+            lastMetricsUpdateNanos = now
         }
     }
+
+    private fun stopOutputPipeline() {
+        handler.removeCallbacks(outputTick)
+        outputScheduler.stop()
+        pendingInputTimestampNanos = null
+    }
+
+    private fun monotonicNanos(): Long = SystemClock.uptimeMillis() * 1_000_000L
 
     private fun stopHid() {
         if (shuttingDown) return
         shuttingDown = true
         cancelPendingConnection()
+        stopOutputPipeline()
         connectedDevice?.let { device ->
             hidDevice?.sendReport(device, GamepadHidDescriptor.REPORT_ID, GamepadHidDescriptor.neutralReport())
             hidDevice?.disconnect(device)
@@ -354,7 +452,6 @@ class BluetoothHidService : Service() {
         hidDevice = null
         connectedDevice = null
         requestedHostAddress = null
-        testAxisValue = 0
     }
 
     private fun showDiscoverabilityMessage(durationSeconds: Int) {
@@ -427,8 +524,8 @@ class BluetoothHidService : Service() {
 
     private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_launcher_foreground)
-        .setContentTitle("BridgePad HID spike")
-        .setContentText("Bluetooth HID session is active")
+        .setContentTitle("BridgePad gamepad bridge")
+        .setContentText("USB gamepad forwarding is active")
         .setOngoing(true)
         .setContentIntent(
             PendingIntent.getActivity(
@@ -443,19 +540,18 @@ class BluetoothHidService : Service() {
     companion object {
         const val ACTION_START = "dev.jonalakas.bridgepad.hid.START"
         const val ACTION_CONNECT = "dev.jonalakas.bridgepad.hid.CONNECT"
-        const val ACTION_TEST_PRESS = "dev.jonalakas.bridgepad.hid.TEST_PRESS"
-        const val ACTION_TEST_RELEASE = "dev.jonalakas.bridgepad.hid.TEST_RELEASE"
-        const val ACTION_TEST_AXIS = "dev.jonalakas.bridgepad.hid.TEST_AXIS"
         const val ACTION_REFRESH_HOSTS = "dev.jonalakas.bridgepad.hid.REFRESH_HOSTS"
         const val ACTION_DISCOVERABILITY_STARTED = "dev.jonalakas.bridgepad.hid.DISCOVERABILITY_STARTED"
         const val ACTION_STOP = "dev.jonalakas.bridgepad.hid.STOP"
         const val EXTRA_ADDRESS = "host_address"
         const val EXTRA_DISCOVERABLE_DURATION = "discoverable_duration"
-        const val EXTRA_AXIS_VALUE = "axis_value"
 
         private const val CHANNEL_ID = "bluetooth_hid_session"
         private const val NOTIFICATION_ID = 1001
         private const val AUTOMATIC_CONNECTION_GRACE_PERIOD_MS = 1_500L
+        private const val OUTPUT_RATE_HZ = 100
+        private const val OUTPUT_INTERVAL_MS = 10L
+        private const val METRICS_UPDATE_INTERVAL_NANOS = 500_000_000L
 
         fun intent(context: Context, action: String) =
             Intent(context, BluetoothHidService::class.java).setAction(action)

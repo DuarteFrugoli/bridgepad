@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad.input.android
 
 import android.content.Context
 import android.hardware.input.InputManager
+import android.os.SystemClock
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -21,6 +22,8 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
     private val diagnostics = linkedMapOf<String, AxisDiagnostic>()
     private val pressedDpadKeys = mutableMapOf<SourceId, MutableSet<Int>>()
     private var lastRawEvent = "Connect a USB gamepad and press a control."
+    private var inputEventCount = 0L
+    private var lastInputTimestampNanos: Long? = null
     private var listening = false
 
     fun start() {
@@ -37,6 +40,12 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
         if (!listening) return
         listening = false
         inputManager.unregisterInputDeviceListener(this)
+        registry.clear()
+        pressedDpadKeys.clear()
+        inputEventCount++
+        lastInputTimestampNanos = SystemClock.uptimeMillis() * NANOS_PER_MILLISECOND
+        lastRawEvent = "Input capture paused; all controls were neutralized."
+        publish()
     }
 
     fun handleKeyEvent(event: KeyEvent): Boolean {
@@ -65,6 +74,8 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
 
         lastRawEvent = "Key ${KeyEvent.keyCodeToString(event.keyCode)}: " +
             if (pressed) "pressed" else "released"
+        inputEventCount++
+        lastInputTimestampNanos = timestamp
         publish()
         return true
     }
@@ -93,6 +104,8 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
         } else {
             "Motion: ${updatedAxes.joinToString()}"
         }
+        inputEventCount++
+        lastInputTimestampNanos = timestamp
         publish()
         return true
     }
@@ -205,6 +218,8 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
                 sourceStates = registry.snapshots().associate { it.sourceId to it.gamepad },
                 axisDiagnostics = diagnostics.toMap(),
                 lastRawEvent = lastRawEvent,
+                inputEventCount = inputEventCount,
+                lastInputTimestampNanos = lastInputTimestampNanos,
             ),
         )
     }

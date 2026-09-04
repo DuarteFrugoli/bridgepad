@@ -30,8 +30,11 @@ data class HidSessionState(
     val pairedHosts: List<PairedHost> = emptyList(),
     val pairingModeActive: Boolean = false,
     val connectedHost: String? = null,
-    val message: String = "Start the HID spike to check this device.",
+    val message: String = "Start the gamepad bridge to connect to a PC.",
     val feedbackLevel: HidFeedbackLevel = HidFeedbackLevel.INFO,
+    val inputRateHz: Float = 0f,
+    val outputRateHz: Float = 0f,
+    val lastLatencyMs: Float? = null,
 )
 
 object HidSessionStore {

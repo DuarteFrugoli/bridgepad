@@ -36,3 +36,14 @@ its evidence recorded here.
 - Known behavior: Windows may retain the paired controller and display cached
   connection state after the Android HID session ends. No HID reports are sent
   while the BridgePad session is inactive.
+
+### 2026-09-03 — Phase 3 USB gamepad input
+
+- Android device: Samsung Galaxy A35, Android 16 (API 36)
+- Input device: GameSir X5 Lite over USB-C
+- Device detection and reconnection without restarting the app: PASS
+- Face buttons, bumpers, Start, Select, L3 and R3: PASS
+- D-pad directions and neutral state: PASS
+- Both sticks, range, center and deadzone: PASS
+- Independent triggers: PASS
+- Removal while controls are active and state neutralization: PASS

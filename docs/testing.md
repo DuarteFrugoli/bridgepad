@@ -156,3 +156,69 @@ If any control is missing or incorrect, record the **Last event**, axis names,
 raw values, normalized values, vendor/product IDs and descriptor shown by the
 app. A second USB gamepad should be checked when one is available, but its
 absence does not prevent validating the primary GameSir mapping.
+
+## Phase 4 end-to-end gamepad bridge
+
+Prerequisites:
+
+- complete the Phase 3 checks with the GameSir connected over USB-C;
+- connect BridgePad to the Windows PC as a Bluetooth HID gamepad;
+- open controller properties through `joy.cpl`.
+
+Procedure:
+
+1. Start the gamepad bridge, select the paired PC and wait for `CONNECTED`.
+2. Confirm the output rate settles close to `100 Hz` while connected.
+3. Test every face button, bumper, Start, Select, L3 and R3 in `joy.cpl`.
+4. Test all D-pad directions, including diagonals and neutral.
+5. Move both sticks to their extremes and center, then press both triggers
+   independently and together.
+6. Hold multiple buttons while moving both sticks and pressing a trigger.
+   Confirm all fields update without stuck inputs.
+7. Disconnect the GameSir during active input. Confirm the Windows controller
+   returns to neutral.
+8. Reconnect the GameSir, then disconnect and reconnect Bluetooth during active
+   input. Confirm the new session starts from the current logical state without
+   stale controls.
+9. Configure the generic controller in Steam Input and test a game through
+   Steam Input.
+10. When available, test a second game that accepts the HID/DirectInput device
+    without Steam Input.
+11. Keep the bridge connected and actively use it for at least one hour.
+
+Record the displayed input rate, output rate and typical last-event latency.
+Gate B is approved only after every required control is correct and the
+one-hour session completes without stuck input or an app-caused disconnect.
+
+## Phase 4 end-to-end gamepad bridge
+
+Prerequisites:
+
+- complete the Phase 3 checks with the GameSir connected over USB-C;
+- connect BridgePad to the Windows PC as a Bluetooth HID gamepad;
+- open controller properties through `joy.cpl`.
+
+Procedure:
+
+1. Start the gamepad bridge, select the paired PC and wait for `CONNECTED`.
+2. Confirm the output rate settles close to `100 Hz` while connected.
+3. Test every face button, bumper, Start, Select, L3 and R3 in `joy.cpl`.
+4. Test all D-pad directions, including diagonals and neutral.
+5. Move both sticks to their extremes and center, then press both triggers
+   independently and together.
+6. Hold multiple buttons while moving both sticks and pressing a trigger.
+   Confirm all fields update without stuck inputs.
+7. Disconnect the GameSir during active input. Confirm the Windows controller
+   returns to neutral.
+8. Reconnect the GameSir, then disconnect and reconnect Bluetooth during active
+   input. Confirm the new session starts from the current logical state without
+   stale controls.
+9. Configure the generic controller in Steam Input and test a game through
+   Steam Input.
+10. When available, test a second game that accepts the HID/DirectInput device
+    without Steam Input.
+11. Keep the bridge connected and actively use it for at least one hour.
+
+Record the displayed input rate, output rate and typical last-event latency.
+Gate B is approved only after every required control is correct and the
+one-hour session completes without stuck input or an app-caused disconnect.

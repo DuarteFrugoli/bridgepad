@@ -40,10 +40,14 @@ The project follows [Semantic Versioning](https://semver.org/).
 - USB/USB-C gamepad discovery and hot-plug handling using Android input APIs.
 - Physical gamepad mapping for buttons, D-pad, sticks and separate triggers.
 - On-device diagnostic view with device identity, raw axes and normalized state.
+- End-to-end forwarding from a USB gamepad to the connected Bluetooth HID host.
+- Live input rate, HID output rate and approximate event-to-report latency.
 
 ### Changed
 
 - Product planning documents are now kept in the private documentation area.
+- The Phase 1 artificial button and axis controls were replaced by physical
+  gamepad input.
 
 ## [0.1.0]
 

@@ -6,8 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
@@ -90,23 +88,6 @@ class MainActivity : ComponentActivity() {
                                 BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,
                                 120,
                             ),
-                        )
-                    },
-                    onSendTestButton = {
-                        startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_TEST_PRESS))
-                        Handler(Looper.getMainLooper()).postDelayed(
-                            {
-                                startService(
-                                    BluetoothHidService.intent(this, BluetoothHidService.ACTION_TEST_RELEASE),
-                                )
-                            },
-                            100,
-                        )
-                    },
-                    onSendTestAxis = { value ->
-                        startService(
-                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_TEST_AXIS)
-                                .putExtra(BluetoothHidService.EXTRA_AXIS_VALUE, value),
                         )
                     },
                     onStopHid = {
