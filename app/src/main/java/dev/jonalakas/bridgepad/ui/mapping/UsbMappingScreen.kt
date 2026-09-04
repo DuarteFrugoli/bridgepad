@@ -132,17 +132,23 @@ fun UsbMappingScreen(
                     axis to (usbState.rawGamepad.valueOf(axis) - baseline.valueOf(axis))
                 }.maxByOrNull { kotlin.math.abs(it.second) }
                 if (movement != null && kotlin.math.abs(movement.second) >= 0.45f) {
+                    val observedSign = if (movement.second < 0f) -1 else 1
+                    val candidate = AxisBinding(
+                        source = movement.first,
+                        inverted = observedSign != currentStep.expectedSign,
+                    )
+                    val existingForTarget = axes[currentStep.target]
                     val usedBy = axes.entries.firstOrNull {
                         it.value.source == movement.first && it.key != currentStep.target
                     }?.key
-                    if (usedBy != null) {
+                    if (existingForTarget != null && existingForTarget.source != movement.first) {
+                        instruction = "Both directions must use the same physical axis. Move the requested direction on the same stick as the previous step."
+                    } else if (existingForTarget != null && existingForTarget.inverted != candidate.inverted) {
+                        instruction = "That was the opposite direction. Move the stick in the direction shown by the prompt."
+                    } else if (usedBy != null) {
                         instruction = "That physical axis is already used by ${usedBy.displayName()}. Move another axis."
                     } else {
-                        val observedSign = if (movement.second < 0f) -1 else 1
-                        axes[currentStep.target] = AxisBinding(
-                            source = movement.first,
-                            inverted = observedSign != currentStep.expectedSign,
-                        )
+                        axes[currentStep.target] = candidate
                         armed = false
                         stepIndex++
                     }

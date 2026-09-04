@@ -83,6 +83,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   of resetting the current empty step.
 - The USB mapping wizard rejects physical buttons, D-pad directions and axes
   already assigned to a different logical control and identifies the conflict.
+- Opposite directions of one logical stick axis must now come from the same
+  physical axis with a consistent orientation.
 - Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
   A35 through Steam Input.
 
