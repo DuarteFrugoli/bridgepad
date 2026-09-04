@@ -61,5 +61,8 @@
     <string name="background_usb_description">Reads a standard USB HID controller directly so you can leave the app or turn off the screen.</string>
     <string name="compatibility_input_active">Compatibility input is active. Keep BridgePad visible and the screen on while playing.</string>
     <string name="background_usb_active">Background USB input is active. You can leave BridgePad or turn off the screen.</string>
+    <string name="notification_touchscreen_active">Touchscreen controls active. Keep BridgePad open to use the virtual gamepad.</string>
+    <string name="notification_physical_gamepad_active">Physical gamepad active. Keep BridgePad open while using your connected controller.</string>
+    <string name="notification_background_usb_active">Background USB active. You can keep playing with the app minimized or the screen off.</string>
     <string name="configure_usb_mapping">Configure USB gamepad mapping</string>
 </resources>

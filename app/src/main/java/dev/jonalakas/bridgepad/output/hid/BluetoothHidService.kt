@@ -213,6 +213,7 @@ class BluetoothHidService : Service() {
                     feedbackLevel = if (error) HidFeedbackLevel.WARNING else HidFeedbackLevel.INFO,
                 )
             }
+            updateNotification()
         }
         directUsbController.register()
         observePhysicalGamepad()
@@ -225,6 +226,7 @@ class BluetoothHidService : Service() {
             ACTION_START -> {
                 val touchSelected = intent.getBooleanExtra(EXTRA_TOUCH_INPUT_SELECTED, true)
                 HidSessionStore.update { it.copy(touchInputSelected = touchSelected) }
+                updateNotification()
                 startHid()
             }
             ACTION_CONNECT -> connect(intent.getStringExtra(EXTRA_ADDRESS))
@@ -242,6 +244,7 @@ class BluetoothHidService : Service() {
                         feedbackLevel = HidFeedbackLevel.INFO,
                     )
                 }
+                updateNotification()
             }
             ACTION_SELECT_INPUT -> selectInput(
                 intent.getBooleanExtra(EXTRA_TOUCH_INPUT_SELECTED, true),
@@ -315,6 +318,7 @@ class BluetoothHidService : Service() {
                 feedbackLevel = HidFeedbackLevel.INFO,
             )
         }
+        updateNotification()
         outputScheduler.submit(mergeInputSources())
         SessionLog.record("INPUT", if (touchSelected) "Touchscreen input selected" else "Physical gamepad input selected")
     }
@@ -706,10 +710,18 @@ class BluetoothHidService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
+    private fun buildNotification(): android.app.Notification {
+        val state = HidSessionStore.state.value
+        val message = when {
+            state.touchInputSelected -> getString(R.string.notification_touchscreen_active)
+            state.directUsbActive -> getString(R.string.notification_background_usb_active)
+            else -> getString(R.string.notification_physical_gamepad_active)
+        }
+        return NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_launcher_foreground)
-        .setContentTitle("BridgePad gamepad bridge")
-        .setContentText("Gamepad forwarding is active")
+        .setContentTitle(getString(R.string.app_name))
+        .setContentText(message)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(message))
         .setOngoing(true)
         .setContentIntent(
             PendingIntent.getActivity(
@@ -720,6 +732,11 @@ class BluetoothHidService : Service() {
             ),
         )
         .build()
+    }
+
+    private fun updateNotification() {
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
+    }
 
     companion object {
         const val ACTION_START = "dev.jonalakas.bridgepad.hid.START"

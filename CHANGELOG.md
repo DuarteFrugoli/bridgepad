@@ -6,6 +6,11 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Foreground-service notifications now explain the capabilities and limitations
+  of the selected touchscreen, physical gamepad or Background USB input mode.
+
 ### Added
 
 - Initial Android project using Kotlin and Jetpack Compose.
