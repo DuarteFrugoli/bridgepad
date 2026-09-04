@@ -14,6 +14,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.SystemClock
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
+import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import java.util.concurrent.atomic.AtomicBoolean
 
 class DirectUsbGamepadController(
@@ -93,6 +94,7 @@ class DirectUsbGamepadController(
     private fun readLoop(connection: UsbDeviceConnection, endpoint: UsbEndpoint, parser: UsbHidReportParser, deviceId: Int, name: String) {
         val buffer = ByteArray(endpoint.maxPacketSize.coerceAtLeast(64))
         var count = 0L
+        var previous = VirtualGamepadState()
         while (running.get()) {
             val length = connection.bulkTransfer(endpoint, buffer, buffer.size, 1000)
             if (length < 0 && manager.deviceList.values.none { it.deviceId == deviceId }) {
@@ -100,8 +102,19 @@ class DirectUsbGamepadController(
                 return
             }
             if (length > 0) runCatching { parser.decode(buffer.copyOf(length)) }.onSuccess { gamepad ->
-                count++
-                DirectUsbGamepadStore.set(DirectUsbState(true, name, gamepad, count, SystemClock.uptimeMillis() * 1_000_000L))
+                if (gamepad != previous) {
+                    previous = gamepad
+                    count++
+                    DirectUsbGamepadStore.set(
+                        DirectUsbState(
+                            active = true,
+                            deviceName = name,
+                            gamepad = gamepad,
+                            inputEventCount = count,
+                            lastInputTimestampNanos = SystemClock.uptimeMillis() * 1_000_000L,
+                        ),
+                    )
+                }
             }.onFailure { fail("USB report parsing failed; returning to Compatibility mode.") }
         }
     }

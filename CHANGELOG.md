@@ -62,6 +62,11 @@ The project follows [Semantic Versioning](https://semver.org/).
   direct USB HID background mode.
 - Generic USB HID report-descriptor parsing for buttons, sticks, D-pad and
   common trigger usages while the screen is off or BridgePad is backgrounded.
+
+### Fixed
+
+- Direct USB polling no longer counts unchanged periodic HID reports as user
+  input in the live bridge metrics.
 - Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
   A35 through Steam Input.
 
