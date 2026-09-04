@@ -36,6 +36,7 @@ fun HomeScreen(
     onConfigureUsbMapping: () -> Unit,
     onPairNewPc: () -> Unit,
     onOpenTouchController: () -> Unit,
+    onOpenMouseTouchpad: () -> Unit,
     onStopHid: () -> Unit,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
@@ -127,16 +128,19 @@ fun HomeScreen(
                     if (inputMode == InputMode.TOUCHSCREEN) {
                         FullWidthButton(onOpenTouchController, R.string.open_touch_controller)
                     } else {
-                        NoticeCard(
-                            message = stringResource(
-                                if (hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
-                                    R.string.background_usb_active
-                                } else {
-                                    R.string.compatibility_input_active
-                                },
-                            ),
-                            tone = NoticeTone.SUCCESS,
-                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            FullWidthButton(onOpenMouseTouchpad, R.string.open_mouse_touchpad)
+                            NoticeCard(
+                                message = stringResource(
+                                    if (hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
+                                        R.string.background_usb_active
+                                    } else {
+                                        R.string.compatibility_input_active
+                                    },
+                                ),
+                                tone = NoticeTone.SUCCESS,
+                            )
+                        }
                     }
                 }
                 item {

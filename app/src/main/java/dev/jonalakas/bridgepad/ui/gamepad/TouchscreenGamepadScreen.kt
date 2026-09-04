@@ -45,6 +45,8 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
@@ -83,6 +85,41 @@ fun TouchscreenGamepadScreen(
             LeftControls(Modifier.weight(1f).fillMaxHeight())
             CenterControls(hidState, onExit, Modifier.weight(0.9f).fillMaxHeight())
             RightControls(Modifier.weight(1f).fillMaxHeight())
+        }
+    }
+}
+
+@Composable
+fun MouseTouchpadScreen(
+    onExit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BackHandler(onBack = onExit)
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .padding(12.dp),
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.mouse_touchpad_instructions),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            MouseTouchpad(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+            )
+            TouchButton(
+                label = stringResource(R.string.close_touchpad),
+                onPressedChange = { pressed -> if (pressed) onExit() },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

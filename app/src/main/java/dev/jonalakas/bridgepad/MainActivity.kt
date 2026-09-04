@@ -44,6 +44,7 @@ import dev.jonalakas.bridgepad.output.hid.HidFeedbackLevel
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
 import dev.jonalakas.bridgepad.ui.home.InputMode
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
+import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
 import dev.jonalakas.bridgepad.ui.mapping.UsbMappingScreen
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
             BridgePadTheme {
                 var bluetoothPermissionGranted by remember { mutableStateOf(hasBluetoothPermission()) }
                 var showTouchController by rememberSaveable { mutableStateOf(false) }
+                var showMouseTouchpad by rememberSaveable { mutableStateOf(false) }
                 var showUsbMapping by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
@@ -138,6 +140,14 @@ class MainActivity : ComponentActivity() {
                             exitGamepadMode()
                         },
                     )
+                } else if (showMouseTouchpad) {
+                    LaunchedEffect(Unit) { enterGamepadMode() }
+                    MouseTouchpadScreen(
+                        onExit = {
+                            showMouseTouchpad = false
+                            exitGamepadMode()
+                        },
+                    )
                 } else HomeScreen(
                     appVersion = BuildConfig.VERSION_NAME,
                     deviceInfo = deviceInfo,
@@ -198,6 +208,9 @@ class MainActivity : ComponentActivity() {
                     },
                     onOpenTouchController = {
                         showTouchController = true
+                    },
+                    onOpenMouseTouchpad = {
+                        showMouseTouchpad = true
                     },
                     onStopHid = {
                         startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_STOP))

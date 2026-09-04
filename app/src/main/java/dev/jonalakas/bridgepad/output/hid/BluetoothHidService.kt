@@ -573,10 +573,6 @@ class BluetoothHidService : Service() {
 
     private fun sendMouseReport() {
         val device = connectedDevice ?: return
-        if (!HidSessionStore.state.value.touchInputSelected) {
-            TouchMouseStore.clear()
-            return
-        }
         val report = TouchMouseStore.consume() ?: return
         val sent = hidDevice?.sendReport(
             device,

@@ -29,6 +29,9 @@
     <string name="output_rate_label">Output rate</string>
     <string name="latency_label">Last event latency</string>
     <string name="open_touch_controller">Open touchscreen controller</string>
+    <string name="open_mouse_touchpad">Open mouse touchpad</string>
+    <string name="mouse_touchpad_instructions">Drag anywhere to move the PC pointer. Tap for a left click.</string>
+    <string name="close_touchpad">Close touchpad</string>
     <string name="onboarding_title">Use your phone as a gamepad bridge</string>
     <string name="onboarding_description">BridgePad sends touchscreen or physical gamepad input to a paired Windows PC through Bluetooth HID.</string>
     <string name="before_you_start">Before you start</string>

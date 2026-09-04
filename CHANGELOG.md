@@ -13,6 +13,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A large, dedicated mouse touchpad that can be used alongside a physical
+  gamepad without changing the active gamepad input source.
 - Initial Android project using Kotlin and Jetpack Compose.
 - GitHub Actions checks for unit tests, lint and debug builds.
 - Device baseline screen with app and Android system information.
