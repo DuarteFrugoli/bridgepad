@@ -8,7 +8,7 @@ its evidence recorded here.
 
 | Manufacturer | Model | Android version | Role | Status |
 | --- | --- | --- | --- | --- |
-| Samsung | Galaxy A35 | Android 16 (API 36) | Primary device for Gate A | Gate A passed |
+| Samsung | Galaxy A35 | Android 16 (API 36) | Primary Android test device | Gates A and B passed |
 
 ## Test results
 
@@ -47,3 +47,19 @@ its evidence recorded here.
 - Both sticks, range, center and deadzone: PASS
 - Independent triggers: PASS
 - Removal while controls are active and state neutralization: PASS
+
+### 2026-09-03 — Phase 4 end-to-end Gate B
+
+- Result: GO
+- Pipeline from GameSir X5 Lite through the Galaxy A35 to Windows: PASS
+- All buttons, D-pad directions, sticks and independent triggers in `joy.cpl`: PASS
+- Simultaneous sticks, triggers, diagonals and multiple buttons: PASS
+- GameSir removal and Bluetooth disconnection during active input: PASS; the
+  controller returned to neutral without stuck inputs
+- Steam Input generic-controller configuration and gameplay: PASS
+- Continuous gameplay session of at least one hour: PASS
+- Observed HID output rate: approximately 73 Hz
+- Observed event-to-report latency: at most approximately 26 ms
+- DirectInput game outside Steam Input: not available for this test
+- Known limitation: Steam recognizes BridgePad as a generic controller and
+  requires initial manual button configuration before gameplay

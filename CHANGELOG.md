@@ -42,6 +42,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 - On-device diagnostic view with device identity, raw axes and normalized state.
 - End-to-end forwarding from a USB gamepad to the connected Bluetooth HID host.
 - Live input rate, HID output rate and approximate event-to-report latency.
+- Gate B approval evidence for the complete GameSir-to-Steam Input pipeline.
 
 ### Changed
 
