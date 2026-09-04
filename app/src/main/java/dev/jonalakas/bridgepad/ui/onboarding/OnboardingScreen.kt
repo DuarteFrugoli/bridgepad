@@ -36,7 +36,10 @@ fun OnboardingScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                Text(stringResource(R.string.onboarding_title), MaterialTheme.typography.headlineMedium)
+                Text(
+                    text = stringResource(R.string.onboarding_title),
+                    style = MaterialTheme.typography.headlineMedium,
+                )
             }
             item { Text(stringResource(R.string.onboarding_description), style = MaterialTheme.typography.bodyLarge) }
             item {
