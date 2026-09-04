@@ -64,3 +64,31 @@ its evidence recorded here.
 - DirectInput game outside Steam Input: not available for this test
 - Known limitation: Steam recognizes BridgePad as a generic controller and
   requires initial manual button configuration before gameplay
+
+### 2026-09-04 — Phase 5 touchscreen gamepad
+
+- Result: PASS
+- Android device: Samsung Galaxy A35, Android 16 (API 36)
+- Steam Input gameplay using only the touchscreen: PASS
+- Continuous touchscreen gameplay session of at least 30 minutes: PASS
+- Five or more simultaneous touches: PASS
+- Stick held while alternating buttons and D-pad directions: PASS
+- Rapid pointer changes without cross-control interference: PASS
+- Menu, background, screen lock and gesture cancellation neutralization: PASS
+- No stuck input or inaccessible control was observed
+- The fixed layout is accepted for the MVP; editable layouts, presets and
+  analog touchscreen triggers remain post-MVP roadmap items
+
+### 2026-09-04 — Phase 5 touchscreen gamepad
+
+- Result: PASS
+- Android device: Samsung Galaxy A35, Android 16 (API 36)
+- Steam Input gameplay using only the touchscreen: PASS
+- Continuous touchscreen gameplay session of at least 30 minutes: PASS
+- Five or more simultaneous touches: PASS
+- Stick held while alternating buttons and D-pad directions: PASS
+- Rapid pointer changes without cross-control interference: PASS
+- Menu, background, screen lock and gesture cancellation neutralization: PASS
+- No stuck input or inaccessible control was observed
+- The fixed layout is accepted for the MVP; editable layouts, presets and
+  analog touchscreen triggers remain post-MVP roadmap items

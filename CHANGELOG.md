@@ -49,6 +49,10 @@ The project follows [Semantic Versioning](https://semver.org/).
   navigation or loss of focus.
 - Touchscreen input integration with the existing gamepad merger and Bluetooth
   HID output pipeline.
+- Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
+  A35 through Steam Input.
+- Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
+  A35 through Steam Input.
 
 ### Changed
 
