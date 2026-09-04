@@ -35,6 +35,7 @@ data class HidSessionState(
     val canReconnect: Boolean = false,
     val physicalCaptureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
     val directUsbActive: Boolean = false,
+    val touchInputSelected: Boolean = true,
     val message: String = "Start the gamepad bridge to connect to a PC.",
     val feedbackLevel: HidFeedbackLevel = HidFeedbackLevel.INFO,
     val inputRateHz: Float = 0f,

@@ -220,7 +220,11 @@ class BluetoothHidService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START -> startHid()
+            ACTION_START -> {
+                val touchSelected = intent.getBooleanExtra(EXTRA_TOUCH_INPUT_SELECTED, true)
+                HidSessionStore.update { it.copy(touchInputSelected = touchSelected) }
+                startHid()
+            }
             ACTION_CONNECT -> connect(intent.getStringExtra(EXTRA_ADDRESS))
             ACTION_RECONNECT -> reconnect()
             ACTION_ENABLE_BACKGROUND_USB -> directUsbController.start()
@@ -237,6 +241,9 @@ class BluetoothHidService : Service() {
                     )
                 }
             }
+            ACTION_SELECT_INPUT -> selectInput(
+                intent.getBooleanExtra(EXTRA_TOUCH_INPUT_SELECTED, true),
+            )
             ACTION_REFRESH_HOSTS -> if (!shuttingDown) refreshPairedHosts()
             ACTION_DISCOVERABILITY_STARTED -> showDiscoverabilityMessage(
                 intent.getIntExtra(EXTRA_DISCOVERABLE_DURATION, 120),
@@ -284,6 +291,29 @@ class BluetoothHidService : Service() {
         }
         val requested = currentAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HID_DEVICE)
         if (!requested) finishSession(HidSessionStatus.ERROR, "HID Device profile is unavailable.")
+    }
+
+    private fun selectInput(touchSelected: Boolean) {
+        connectedDevice?.let { device ->
+            hidDevice?.sendReport(
+                device,
+                GamepadHidDescriptor.REPORT_ID,
+                GamepadHidDescriptor.neutralReport(),
+            )
+        }
+        HidSessionStore.update {
+            it.copy(
+                touchInputSelected = touchSelected,
+                message = if (touchSelected) {
+                    "Touchscreen input selected. Open the touchscreen controller to play."
+                } else {
+                    "Physical gamepad input selected. Choose a capture mode below."
+                },
+                feedbackLevel = HidFeedbackLevel.INFO,
+            )
+        }
+        outputScheduler.submit(mergeInputSources())
+        SessionLog.record("INPUT", if (touchSelected) "Touchscreen input selected" else "Physical gamepad input selected")
     }
 
     private fun registerHidApp() {
@@ -411,7 +441,11 @@ class BluetoothHidService : Service() {
                 latestPhysicalState = state
                 outputScheduler.submit(mergeInputSources())
                 if (state.inputEventCount != lastObservedInputCount) {
-                    if (connectedDevice != null) inputEventsSinceConnection++
+                    if (
+                        connectedDevice != null &&
+                        !HidSessionStore.state.value.touchInputSelected &&
+                        !latestDirectUsbState.active
+                    ) inputEventsSinceConnection++
                     lastObservedInputCount = state.inputEventCount
                     pendingInputTimestampNanos = state.lastInputTimestampNanos
                 }
@@ -428,7 +462,9 @@ class BluetoothHidService : Service() {
                 latestTouchState = state
                 outputScheduler.submit(mergeInputSources())
                 if (state.inputEventCount != lastObservedTouchInputCount) {
-                    if (connectedDevice != null) inputEventsSinceConnection++
+                    if (connectedDevice != null && HidSessionStore.state.value.touchInputSelected) {
+                        inputEventsSinceConnection++
+                    }
                     lastObservedTouchInputCount = state.inputEventCount
                     pendingInputTimestampNanos = state.lastInputTimestampNanos
                 }
@@ -442,7 +478,9 @@ class BluetoothHidService : Service() {
                 latestDirectUsbState = state
                 outputScheduler.submit(mergeInputSources())
                 if (state.inputEventCount != lastObservedDirectUsbInputCount) {
-                    if (connectedDevice != null) inputEventsSinceConnection++
+                    if (connectedDevice != null && !HidSessionStore.state.value.touchInputSelected) {
+                        inputEventsSinceConnection++
+                    }
                     lastObservedDirectUsbInputCount = state.inputEventCount
                     pendingInputTimestampNanos = state.lastInputTimestampNanos
                 }
@@ -451,7 +489,8 @@ class BluetoothHidService : Service() {
     }
 
     private fun mergeInputSources(): VirtualGamepadState {
-        val primary = if (latestTouchState.active) {
+        val touchSelected = HidSessionStore.state.value.touchInputSelected
+        val primary = if (touchSelected) {
             TouchGamepadStore.sourceId
         } else if (latestDirectUsbState.active) {
             DIRECT_USB_SOURCE_ID
@@ -466,11 +505,18 @@ class BluetoothHidService : Service() {
                 dpad = primary,
             )
         }
-        val physicalSources = if (latestDirectUsbState.active) emptyList() else {
+        val physicalSources = if (touchSelected || latestDirectUsbState.active) emptyList() else {
             latestPhysicalState.sourceStates.map { (sourceId, gamepad) -> SourceGamepadState(sourceId, gamepad) }
         }
-        val sources = physicalSources + SourceGamepadState(TouchGamepadStore.sourceId, latestTouchState.gamepad) +
-            SourceGamepadState(DIRECT_USB_SOURCE_ID, latestDirectUsbState.gamepad)
+        val touchSource = SourceGamepadState(
+            TouchGamepadStore.sourceId,
+            if (touchSelected) latestTouchState.gamepad else VirtualGamepadState(),
+        )
+        val directSource = SourceGamepadState(
+            DIRECT_USB_SOURCE_ID,
+            if (!touchSelected) latestDirectUsbState.gamepad else VirtualGamepadState(),
+        )
+        val sources = physicalSources + touchSource + directSource
         return InputMerger.merge(sources, ownership)
     }
 
@@ -660,11 +706,13 @@ class BluetoothHidService : Service() {
         const val ACTION_RECONNECT = "dev.jonalakas.bridgepad.hid.RECONNECT"
         const val ACTION_ENABLE_BACKGROUND_USB = "dev.jonalakas.bridgepad.hid.ENABLE_BACKGROUND_USB"
         const val ACTION_ENABLE_COMPATIBILITY_INPUT = "dev.jonalakas.bridgepad.hid.ENABLE_COMPATIBILITY_INPUT"
+        const val ACTION_SELECT_INPUT = "dev.jonalakas.bridgepad.hid.SELECT_INPUT"
         const val ACTION_REFRESH_HOSTS = "dev.jonalakas.bridgepad.hid.REFRESH_HOSTS"
         const val ACTION_DISCOVERABILITY_STARTED = "dev.jonalakas.bridgepad.hid.DISCOVERABILITY_STARTED"
         const val ACTION_STOP = "dev.jonalakas.bridgepad.hid.STOP"
         const val EXTRA_ADDRESS = "host_address"
         const val EXTRA_DISCOVERABLE_DURATION = "discoverable_duration"
+        const val EXTRA_TOUCH_INPUT_SELECTED = "touch_input_selected"
 
         private const val CHANNEL_ID = "bluetooth_hid_session"
         private const val NOTIFICATION_ID = 1001

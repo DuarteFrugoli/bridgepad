@@ -53,7 +53,13 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item { Text(stringResource(R.string.session_setup), style = MaterialTheme.typography.headlineMedium) }
-            item { InputSelector(inputMode, onInputModeChanged, enabled = !hidState.sessionActive) }
+            item {
+                InputSelector(
+                    inputMode,
+                    onInputModeChanged,
+                    enabled = hidState.status != HidSessionStatus.CONNECTING,
+                )
+            }
             if (inputMode == InputMode.PHYSICAL_GAMEPAD && physicalGamepadState.devices.isEmpty()) {
                 item { NoticeCard(stringResource(R.string.physical_input_missing), NoticeTone.WARNING) }
             }

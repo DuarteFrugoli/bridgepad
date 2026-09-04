@@ -146,12 +146,28 @@ class MainActivity : ComponentActivity() {
                     hidState = hidState,
                     physicalGamepadState = physicalGamepadState,
                     inputMode = inputMode,
-                    onInputModeChanged = { inputModeName = it.name },
+                    onInputModeChanged = { mode ->
+                        inputModeName = mode.name
+                        if (mode == InputMode.PHYSICAL_GAMEPAD) TouchGamepadStore.deactivate()
+                        if (hidState.sessionActive) {
+                            startService(
+                                BluetoothHidService.intent(this, BluetoothHidService.ACTION_SELECT_INPUT)
+                                    .putExtra(
+                                        BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED,
+                                        mode == InputMode.TOUCHSCREEN,
+                                    ),
+                            )
+                        }
+                    },
                     onRequestPermissions = { permissionLauncher.launch(requiredPermissions()) },
                     onStartHid = {
                         ContextCompat.startForegroundService(
                             this,
-                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_START),
+                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_START)
+                                .putExtra(
+                                    BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED,
+                                    inputMode == InputMode.TOUCHSCREEN,
+                                ),
                         )
                     },
                     onConnect = { address ->

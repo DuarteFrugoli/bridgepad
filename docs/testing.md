@@ -296,3 +296,13 @@ matrix entries explicitly, and add the observed results to
 Any crash, stuck input, unrecoverable pairing/reconnection failure, incorrect
 required control on supported hardware, or unexpected termination of a mode
 that explicitly supports background use blocks the MVP release.
+
+### Switching input during a session
+
+1. Connect BridgePad to the PC with Touchscreen selected and verify an input.
+2. Exit the touchscreen controls without ending the HID session.
+3. Select Physical gamepad and verify that physical input works without a new
+   Bluetooth connection.
+4. Switch back to Touchscreen, open its controls and verify them again.
+5. During every transition, confirm in `joy.cpl` that all controls briefly
+   return to neutral and that the inactive source cannot affect the PC.
