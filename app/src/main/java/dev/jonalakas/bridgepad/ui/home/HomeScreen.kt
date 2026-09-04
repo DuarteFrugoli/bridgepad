@@ -109,7 +109,16 @@ fun HomeScreen(
                     if (inputMode == InputMode.TOUCHSCREEN) {
                         FullWidthButton(onOpenTouchController, R.string.open_touch_controller)
                     } else {
-                        NoticeCard("Physical gamepad forwarding is active. You can leave BridgePad in the background.", NoticeTone.SUCCESS)
+                        NoticeCard(
+                            message = stringResource(
+                                if (hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
+                                    R.string.background_usb_active
+                                } else {
+                                    R.string.compatibility_input_active
+                                },
+                            ),
+                            tone = NoticeTone.SUCCESS,
+                        )
                     }
                 }
                 item {

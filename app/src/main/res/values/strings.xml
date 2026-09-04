@@ -59,4 +59,6 @@
     <string name="background_usb_mode">Background USB</string>
     <string name="compatibility_mode_description">Works with more controllers. Keep BridgePad visible and the screen on.</string>
     <string name="background_usb_description">Reads a standard USB HID controller directly so you can leave the app or turn off the screen.</string>
+    <string name="compatibility_input_active">Compatibility input is active. Keep BridgePad visible and the screen on while playing.</string>
+    <string name="background_usb_active">Background USB input is active. You can leave BridgePad or turn off the screen.</string>
 </resources>
