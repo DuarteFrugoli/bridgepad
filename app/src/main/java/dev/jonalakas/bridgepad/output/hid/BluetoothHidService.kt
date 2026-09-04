@@ -37,6 +37,9 @@ import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadSnapshot
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
+import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadController
+import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
+import dev.jonalakas.bridgepad.input.usb.DirectUsbState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -59,8 +62,11 @@ class BluetoothHidService : Service() {
     private var pendingConnection: Runnable? = null
     private var latestPhysicalState = PhysicalGamepadState()
     private var latestTouchState = TouchGamepadSnapshot()
+    private var latestDirectUsbState = DirectUsbState()
+    private lateinit var directUsbController: DirectUsbGamepadController
     private var lastObservedInputCount = 0L
     private var lastObservedTouchInputCount = 0L
+    private var lastObservedDirectUsbInputCount = 0L
     private var pendingInputTimestampNanos: Long? = null
     private var metricsStartedNanos = 0L
     private var inputEventsSinceConnection = 0L
@@ -196,8 +202,20 @@ class BluetoothHidService : Service() {
             startForeground(NOTIFICATION_ID, buildNotification())
         }
         adapter = getSystemService(BluetoothManager::class.java)?.adapter
+        directUsbController = DirectUsbGamepadController(this) { active, message, error ->
+            HidSessionStore.update {
+                it.copy(
+                    physicalCaptureMode = if (active) PhysicalCaptureMode.BACKGROUND_USB else PhysicalCaptureMode.COMPATIBILITY,
+                    directUsbActive = active,
+                    message = message,
+                    feedbackLevel = if (error) HidFeedbackLevel.WARNING else HidFeedbackLevel.INFO,
+                )
+            }
+        }
+        directUsbController.register()
         observePhysicalGamepad()
         observeTouchGamepad()
+        observeDirectUsbGamepad()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -205,6 +223,20 @@ class BluetoothHidService : Service() {
             ACTION_START -> startHid()
             ACTION_CONNECT -> connect(intent.getStringExtra(EXTRA_ADDRESS))
             ACTION_RECONNECT -> reconnect()
+            ACTION_ENABLE_BACKGROUND_USB -> directUsbController.start()
+            ACTION_ENABLE_COMPATIBILITY_INPUT -> {
+                latestDirectUsbState = DirectUsbState()
+                directUsbController.stop()
+                outputScheduler.submit(mergeInputSources())
+                HidSessionStore.update {
+                    it.copy(
+                        physicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
+                        directUsbActive = false,
+                        message = "Compatibility input is active. Keep BridgePad visible and the screen on.",
+                        feedbackLevel = HidFeedbackLevel.INFO,
+                    )
+                }
+            }
             ACTION_REFRESH_HOSTS -> if (!shuttingDown) refreshPairedHosts()
             ACTION_DISCOVERABILITY_STARTED -> showDiscoverabilityMessage(
                 intent.getIntExtra(EXTRA_DISCOVERABLE_DURATION, 120),
@@ -222,6 +254,7 @@ class BluetoothHidService : Service() {
         cancelDiscoverabilityMessage()
         cancelPendingConnection()
         stopOutputPipeline()
+        if (::directUsbController.isInitialized) directUsbController.unregister()
         serviceScope.cancel()
         releaseProfile()
         runCatching { unregisterReceiver(bluetoothStateReceiver) }
@@ -403,9 +436,25 @@ class BluetoothHidService : Service() {
         }
     }
 
+    private fun observeDirectUsbGamepad() {
+        serviceScope.launch {
+            DirectUsbGamepadStore.state.collect { state ->
+                latestDirectUsbState = state
+                outputScheduler.submit(mergeInputSources())
+                if (state.inputEventCount != lastObservedDirectUsbInputCount) {
+                    if (connectedDevice != null) inputEventsSinceConnection++
+                    lastObservedDirectUsbInputCount = state.inputEventCount
+                    pendingInputTimestampNanos = state.lastInputTimestampNanos
+                }
+            }
+        }
+    }
+
     private fun mergeInputSources(): VirtualGamepadState {
         val primary = if (latestTouchState.active) {
             TouchGamepadStore.sourceId
+        } else if (latestDirectUsbState.active) {
+            DIRECT_USB_SOURCE_ID
         } else {
             latestPhysicalState.devices.firstOrNull()?.sourceId
         }
@@ -417,9 +466,11 @@ class BluetoothHidService : Service() {
                 dpad = primary,
             )
         }
-        val sources = latestPhysicalState.sourceStates.map { (sourceId, gamepad) ->
-            SourceGamepadState(sourceId, gamepad)
-        } + SourceGamepadState(TouchGamepadStore.sourceId, latestTouchState.gamepad)
+        val physicalSources = if (latestDirectUsbState.active) emptyList() else {
+            latestPhysicalState.sourceStates.map { (sourceId, gamepad) -> SourceGamepadState(sourceId, gamepad) }
+        }
+        val sources = physicalSources + SourceGamepadState(TouchGamepadStore.sourceId, latestTouchState.gamepad) +
+            SourceGamepadState(DIRECT_USB_SOURCE_ID, latestDirectUsbState.gamepad)
         return InputMerger.merge(sources, ownership)
     }
 
@@ -607,6 +658,8 @@ class BluetoothHidService : Service() {
         const val ACTION_START = "dev.jonalakas.bridgepad.hid.START"
         const val ACTION_CONNECT = "dev.jonalakas.bridgepad.hid.CONNECT"
         const val ACTION_RECONNECT = "dev.jonalakas.bridgepad.hid.RECONNECT"
+        const val ACTION_ENABLE_BACKGROUND_USB = "dev.jonalakas.bridgepad.hid.ENABLE_BACKGROUND_USB"
+        const val ACTION_ENABLE_COMPATIBILITY_INPUT = "dev.jonalakas.bridgepad.hid.ENABLE_COMPATIBILITY_INPUT"
         const val ACTION_REFRESH_HOSTS = "dev.jonalakas.bridgepad.hid.REFRESH_HOSTS"
         const val ACTION_DISCOVERABILITY_STARTED = "dev.jonalakas.bridgepad.hid.DISCOVERABILITY_STARTED"
         const val ACTION_STOP = "dev.jonalakas.bridgepad.hid.STOP"
@@ -619,6 +672,7 @@ class BluetoothHidService : Service() {
         private const val OUTPUT_RATE_HZ = 100
         private const val OUTPUT_INTERVAL_MS = 10L
         private const val METRICS_UPDATE_INTERVAL_NANOS = 500_000_000L
+        private val DIRECT_USB_SOURCE_ID = dev.jonalakas.bridgepad.core.gamepad.SourceId("direct-usb")
 
         fun intent(context: Context, action: String) =
             Intent(context, BluetoothHidService::class.java).setAction(action)

@@ -147,6 +147,12 @@ class MainActivity : ComponentActivity() {
                             BluetoothHidService.intent(this, BluetoothHidService.ACTION_RECONNECT),
                         )
                     },
+                    onEnableCompatibilityInput = {
+                        startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_ENABLE_COMPATIBILITY_INPUT))
+                    },
+                    onEnableBackgroundUsb = {
+                        startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_ENABLE_BACKGROUND_USB))
+                    },
                     onPairNewPc = {
                         discoverableLauncher.launch(
                             Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(

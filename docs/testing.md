@@ -254,3 +254,22 @@ first-run flow.
 Record the phone, Android version, PC version and gamepad used. Phase 6 passes
 when a new user can complete the flow from the app guidance and all failures
 above remain recoverable without clearing app data.
+
+### Background USB capture
+
+With a physical USB gamepad selected and an active PC connection:
+
+1. Confirm Compatibility mode still forwards every control while BridgePad is
+   visible.
+2. Select Background USB and approve the one-time Android USB permission.
+3. Confirm that BridgePad reports that background capture is active.
+4. Verify every button, D-pad direction, stick and trigger in `joy.cpl` and
+   Steam Input.
+5. Leave BridgePad, then repeat the input check from the Android home screen.
+6. Turn the phone screen off and repeat the input check.
+7. Return to BridgePad and switch back to Compatibility mode during gameplay;
+   no control may remain pressed during the transition.
+8. Remove the USB cable while holding controls and confirm that the PC returns
+   to a neutral state.
+9. If the descriptor is unsupported, confirm that BridgePad returns to
+   Compatibility mode and presents an actionable warning.

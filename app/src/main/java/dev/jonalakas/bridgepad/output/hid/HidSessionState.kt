@@ -21,6 +21,8 @@ enum class HidFeedbackLevel {
     ERROR,
 }
 
+enum class PhysicalCaptureMode { COMPATIBILITY, BACKGROUND_USB }
+
 data class PairedHost(val address: String, val name: String)
 
 data class HidSessionState(
@@ -31,6 +33,8 @@ data class HidSessionState(
     val pairingModeActive: Boolean = false,
     val connectedHost: String? = null,
     val canReconnect: Boolean = false,
+    val physicalCaptureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
+    val directUsbActive: Boolean = false,
     val message: String = "Start the gamepad bridge to connect to a PC.",
     val feedbackLevel: HidFeedbackLevel = HidFeedbackLevel.INFO,
     val inputRateHz: Float = 0f,

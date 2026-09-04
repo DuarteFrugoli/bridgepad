@@ -31,6 +31,8 @@ fun HomeScreen(
     onStartHid: () -> Unit,
     onConnect: (String) -> Unit,
     onReconnect: () -> Unit,
+    onEnableCompatibilityInput: () -> Unit,
+    onEnableBackgroundUsb: () -> Unit,
     onPairNewPc: () -> Unit,
     onOpenTouchController: () -> Unit,
     onStopHid: () -> Unit,
@@ -94,6 +96,15 @@ fun HomeScreen(
             }
 
             if (hidState.status == HidSessionStatus.CONNECTED) {
+                if (inputMode == InputMode.PHYSICAL_GAMEPAD) {
+                    item {
+                        CaptureModeSelector(
+                            mode = hidState.physicalCaptureMode,
+                            onCompatibility = onEnableCompatibilityInput,
+                            onBackgroundUsb = onEnableBackgroundUsb,
+                        )
+                    }
+                }
                 item {
                     if (inputMode == InputMode.TOUCHSCREEN) {
                         FullWidthButton(onOpenTouchController, R.string.open_touch_controller)
@@ -155,6 +166,27 @@ private fun InputSelector(mode: InputMode, onChanged: (InputMode) -> Unit, enabl
                 FilterChip(mode == InputMode.TOUCHSCREEN, { onChanged(InputMode.TOUCHSCREEN) }, { Text(stringResource(R.string.touchscreen_input)) }, enabled = enabled)
                 FilterChip(mode == InputMode.PHYSICAL_GAMEPAD, { onChanged(InputMode.PHYSICAL_GAMEPAD) }, { Text(stringResource(R.string.physical_input)) }, enabled = enabled)
             }
+        }
+    }
+}
+
+@Composable
+private fun CaptureModeSelector(
+    mode: PhysicalCaptureMode,
+    onCompatibility: () -> Unit,
+    onBackgroundUsb: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(mode == PhysicalCaptureMode.COMPATIBILITY, onCompatibility, { Text(stringResource(R.string.compatibility_mode)) })
+                FilterChip(mode == PhysicalCaptureMode.BACKGROUND_USB, onBackgroundUsb, { Text(stringResource(R.string.background_usb_mode)) })
+            }
+            Text(
+                stringResource(if (mode == PhysicalCaptureMode.BACKGROUND_USB) R.string.background_usb_description else R.string.compatibility_mode_description),
+                style = MaterialTheme.typography.bodyMedium,
+            )
         }
     }
 }

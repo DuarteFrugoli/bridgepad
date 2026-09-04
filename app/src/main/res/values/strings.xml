@@ -54,4 +54,9 @@
     <string name="show_technical_details">Show technical details</string>
     <string name="hide_technical_details">Hide technical details</string>
     <string name="end_session">End session</string>
+    <string name="capture_mode">Physical gamepad capture</string>
+    <string name="compatibility_mode">Compatibility</string>
+    <string name="background_usb_mode">Background USB</string>
+    <string name="compatibility_mode_description">Works with more controllers. Keep BridgePad visible and the screen on.</string>
+    <string name="background_usb_description">Reads a standard USB HID controller directly so you can leave the app or turn off the screen.</string>
 </resources>
