@@ -225,3 +225,32 @@ Procedure:
 Record any inaccessible control, missed pointer, stuck state or uncomfortable
 placement. Visual polish and editable presets are intentionally outside the MVP
 phase; this check validates the fixed default layout and touch behavior.
+
+## Phase 6 session UX and resilience
+
+Use a clean installation, or clear BridgePad app storage, before checking the
+first-run flow.
+
+1. Open BridgePad and confirm that the onboarding explains Bluetooth, PC
+   pairing, input choices and the Steam Input limitation.
+2. Continue, deny the Bluetooth permission, and confirm that the app remains
+   usable and offers the permission action again.
+3. Grant permission and confirm that the home shows input, HID compatibility,
+   session state and host state without exposing the full technical diagnostic.
+4. Select touchscreen and complete a session through a paired Windows PC.
+5. End the session and confirm that the PC receives no stuck controls.
+6. Select physical gamepad and confirm that a missing-controller warning is
+   shown until a gamepad is connected.
+7. Disconnect the PC during an active session and use the explicit reconnect
+   action. Repeated taps must not start concurrent connection attempts.
+8. Cancel phone discoverability and confirm that BridgePad explains how to try
+   again.
+9. Open technical details, copy the diagnostic report, and share it to a local
+   text destination. Confirm that it contains the app/device/controller data
+   and recent categorized events, but no Bluetooth addresses.
+10. Repeat start, connect, disconnect and stop after putting the app in the
+    background and returning to it.
+
+Record the phone, Android version, PC version and gamepad used. Phase 6 passes
+when a new user can complete the flow from the app guidance and all failures
+above remain recoverable without clearing app data.

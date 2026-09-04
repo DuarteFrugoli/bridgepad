@@ -30,6 +30,7 @@ data class HidSessionState(
     val pairedHosts: List<PairedHost> = emptyList(),
     val pairingModeActive: Boolean = false,
     val connectedHost: String? = null,
+    val canReconnect: Boolean = false,
     val message: String = "Start the gamepad bridge to connect to a PC.",
     val feedbackLevel: HidFeedbackLevel = HidFeedbackLevel.INFO,
     val inputRateHz: Float = 0f,

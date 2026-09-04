@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 enum class NoticeTone {
+    SUCCESS,
     WARNING,
     ERROR,
 }
@@ -28,6 +29,11 @@ fun NoticeCard(
     val title: String
 
     when (tone) {
+        NoticeTone.SUCCESS -> {
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            title = "Status"
+        }
         NoticeTone.WARNING -> {
             containerColor = MaterialTheme.colorScheme.tertiaryContainer
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer

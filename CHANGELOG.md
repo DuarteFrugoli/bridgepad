@@ -51,6 +51,13 @@ The project follows [Semantic Versioning](https://semver.org/).
   HID output pipeline.
 - Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
   A35 through Steam Input.
+- Persistent first-run onboarding with Bluetooth, pairing and input guidance.
+- Task-oriented session home with touchscreen/physical-input selection and
+  device HID preflight information.
+- Explicit controlled reconnection and protection against concurrent connection
+  attempts.
+- Privacy-conscious structured session logs and copy/share diagnostic reports.
+- Actionable permission, discoverability, connection and shutdown feedback.
 - Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
   A35 through Steam Input.
 

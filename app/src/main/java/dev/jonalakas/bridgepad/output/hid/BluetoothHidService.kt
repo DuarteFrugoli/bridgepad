@@ -36,6 +36,7 @@ import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadSnapshot
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
+import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,6 +50,7 @@ class BluetoothHidService : Service() {
     private var hidDevice: BluetoothHidDevice? = null
     private var connectedDevice: BluetoothDevice? = null
     private var requestedHostAddress: String? = null
+    private var lastHostAddress: String? = null
     private var shuttingDown = false
     private val handler = Handler(Looper.getMainLooper())
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -78,6 +80,7 @@ class BluetoothHidService : Service() {
                 BluetoothAdapter.ACTION_STATE_CHANGED -> {
                     val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                     if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
+                        SessionLog.record("BLUETOOTH", "Bluetooth was turned off")
                         finishSession(HidSessionStatus.IDLE, "Bluetooth is off. Turn it on and try again.")
                     }
                 }
@@ -162,6 +165,7 @@ class BluetoothHidService : Service() {
                         it.copy(
                             status = HidSessionStatus.READY,
                             connectedHost = null,
+                            canReconnect = lastHostAddress != null,
                             message = "Host disconnected. Select it to reconnect.",
                         )
                     }
@@ -200,6 +204,7 @@ class BluetoothHidService : Service() {
         when (intent?.action) {
             ACTION_START -> startHid()
             ACTION_CONNECT -> connect(intent.getStringExtra(EXTRA_ADDRESS))
+            ACTION_RECONNECT -> reconnect()
             ACTION_REFRESH_HOSTS -> if (!shuttingDown) refreshPairedHosts()
             ACTION_DISCOVERABILITY_STARTED -> showDiscoverabilityMessage(
                 intent.getIntExtra(EXTRA_DISCOVERABLE_DURATION, 120),
@@ -227,6 +232,7 @@ class BluetoothHidService : Service() {
     }
 
     private fun startHid() {
+        SessionLog.record("SESSION", "Bluetooth HID session start requested")
         val currentAdapter = adapter
         if (currentAdapter == null) {
             finishSession(HidSessionStatus.ERROR, "This device has no Bluetooth adapter.")
@@ -274,8 +280,23 @@ class BluetoothHidService : Service() {
 
     private fun connect(address: String?) {
         if (address.isNullOrBlank() || hidDevice == null) return
+        if (connectedDevice != null || pendingConnection != null || requestedHostAddress != null) {
+            HidSessionStore.update {
+                it.copy(
+                    message = if (connectedDevice != null) {
+                        "A PC is already connected. End the session before choosing another one."
+                    } else {
+                        "A connection attempt is already in progress."
+                    },
+                    feedbackLevel = HidFeedbackLevel.WARNING,
+                )
+            }
+            return
+        }
         val device = adapter?.getRemoteDevice(address) ?: return
         requestedHostAddress = address
+        lastHostAddress = address
+        SessionLog.record("CONNECTION", "Connection requested for a paired computer")
         when (hidDevice?.getConnectionState(device)) {
             BluetoothProfile.STATE_CONNECTED -> {
                 acceptConnectedDevice(device)
@@ -297,6 +318,20 @@ class BluetoothHidService : Service() {
         val request = Runnable { connectAfterAutomaticAttempt(device) }
         pendingConnection = request
         handler.postDelayed(request, AUTOMATIC_CONNECTION_GRACE_PERIOD_MS)
+    }
+
+    private fun reconnect() {
+        val address = lastHostAddress
+        if (address == null) {
+            HidSessionStore.update {
+                it.copy(
+                    message = "No previous PC is available. Select a paired PC instead.",
+                    feedbackLevel = HidFeedbackLevel.WARNING,
+                )
+            }
+            return
+        }
+        connect(address)
     }
 
     private fun connectAfterAutomaticAttempt(device: BluetoothDevice) {
@@ -321,10 +356,13 @@ class BluetoothHidService : Service() {
     private fun acceptConnectedDevice(device: BluetoothDevice) {
         connectedDevice = device
         requestedHostAddress = device.address
+        lastHostAddress = device.address
+        SessionLog.record("CONNECTION", "HID connection established")
         HidSessionStore.update {
             it.copy(
                 status = HidSessionStatus.CONNECTED,
                 connectedHost = device.safeName(),
+                canReconnect = false,
                 message = "Connected. Gamepad input is being sent to the PC.",
                 feedbackLevel = HidFeedbackLevel.INFO,
             )
@@ -446,6 +484,7 @@ class BluetoothHidService : Service() {
             hidDevice?.sendReport(device, GamepadHidDescriptor.REPORT_ID, GamepadHidDescriptor.neutralReport())
             hidDevice?.disconnect(device)
         }
+        SessionLog.record("SESSION", "Session ended safely with a neutral report")
         releaseProfile()
         HidSessionStore.update { HidSessionState(message = "HID session stopped.") }
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -455,6 +494,7 @@ class BluetoothHidService : Service() {
     private fun finishSession(status: HidSessionStatus, message: String) {
         if (shuttingDown) return
         shuttingDown = true
+        SessionLog.record(if (status == HidSessionStatus.ERROR) "ERROR" else "SESSION", message)
         HidSessionStore.update {
             HidSessionState(
                 status = status,
@@ -566,6 +606,7 @@ class BluetoothHidService : Service() {
     companion object {
         const val ACTION_START = "dev.jonalakas.bridgepad.hid.START"
         const val ACTION_CONNECT = "dev.jonalakas.bridgepad.hid.CONNECT"
+        const val ACTION_RECONNECT = "dev.jonalakas.bridgepad.hid.RECONNECT"
         const val ACTION_REFRESH_HOSTS = "dev.jonalakas.bridgepad.hid.REFRESH_HOSTS"
         const val ACTION_DISCOVERABILITY_STARTED = "dev.jonalakas.bridgepad.hid.DISCOVERABILITY_STARTED"
         const val ACTION_STOP = "dev.jonalakas.bridgepad.hid.STOP"
