@@ -12,6 +12,8 @@ import android.hardware.usb.UsbEndpoint
 import android.hardware.usb.UsbInterface
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
@@ -26,15 +28,21 @@ class DirectUsbGamepadController(
     private var connection: UsbDeviceConnection? = null
     private var claimedInterface: UsbInterface? = null
     private var worker: Thread? = null
+    private var pendingPermissionDevice: UsbDevice? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     init { UsbGamepadMappingStore.initialize(context) }
 
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_USB_PERMISSION) return
-            val device = usbDeviceFrom(intent)
-            if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false) && device != null) open(device)
-            else onStatus(false, "USB permission was denied. Compatibility mode is still available.", true)
+            val device = usbDeviceFrom(intent) ?: pendingPermissionDevice
+            if (device != null && intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                pendingPermissionDevice = null
+                open(device)
+            } else {
+                mainHandler.postDelayed({ finishPermissionRequest(device) }, PERMISSION_CONFIRMATION_DELAY_MS)
+            }
         }
     }
 
@@ -54,6 +62,7 @@ class DirectUsbGamepadController(
             return
         }
         if (manager.hasPermission(candidate)) open(candidate) else {
+            pendingPermissionDevice = candidate
             onStatus(false, "Approve USB access to enable background input.", false)
             val intent = PendingIntent.getBroadcast(
                 context, 0, Intent(ACTION_USB_PERMISSION).setPackage(context.packageName),
@@ -139,7 +148,12 @@ class DirectUsbGamepadController(
         DirectUsbGamepadStore.clear()
     }
 
-    fun unregister() { stop(); runCatching { context.unregisterReceiver(permissionReceiver) } }
+    fun unregister() {
+        mainHandler.removeCallbacksAndMessages(null)
+        pendingPermissionDevice = null
+        stop()
+        runCatching { context.unregisterReceiver(permissionReceiver) }
+    }
 
     private fun fail(message: String) { stop(); SessionLog.record("USB_ERROR", message); onStatus(false, message, true) }
 
@@ -151,5 +165,18 @@ class DirectUsbGamepadController(
             intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
         }
 
-    companion object { private const val ACTION_USB_PERMISSION = "dev.jonalakas.bridgepad.USB_PERMISSION" }
+    private fun finishPermissionRequest(device: UsbDevice?) {
+        if (device != null && manager.hasPermission(device)) {
+            pendingPermissionDevice = null
+            open(device)
+        } else {
+            pendingPermissionDevice = null
+            onStatus(false, "USB permission was denied. Compatibility mode is still available.", true)
+        }
+    }
+
+    companion object {
+        private const val ACTION_USB_PERMISSION = "dev.jonalakas.bridgepad.USB_PERMISSION"
+        private const val PERMISSION_CONFIRMATION_DELAY_MS = 250L
+    }
 }

@@ -60,7 +60,11 @@ fun HomeScreen(
                     enabled = hidState.status != HidSessionStatus.CONNECTING,
                 )
             }
-            if (inputMode == InputMode.PHYSICAL_GAMEPAD && physicalGamepadState.devices.isEmpty()) {
+            if (
+                inputMode == InputMode.PHYSICAL_GAMEPAD &&
+                physicalGamepadState.devices.isEmpty() &&
+                !hidState.directUsbActive
+            ) {
                 item { NoticeCard(stringResource(R.string.physical_input_missing), NoticeTone.WARNING) }
             }
             item {

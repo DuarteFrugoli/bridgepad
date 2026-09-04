@@ -89,6 +89,10 @@ The project follows [Semantic Versioning](https://semver.org/).
   session without reconnecting the controller seen by Windows.
 - Input-source transitions send a neutral HID report and exclude the inactive
   source from merging to prevent duplicate or stuck controls.
+- USB permission results retain the requested device and confirm the effective
+  grant before reporting denial, avoiding a false warning and second mode tap.
+- Background USB capture no longer shows a missing-gamepad warning when
+  claiming the HID interface removes it from Android's `InputDevice` list.
 - Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
   A35 through Steam Input.
 
