@@ -217,10 +217,15 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
         "${device.descriptor}:${device.vendorId}:${device.productId}",
     )
 
-    private fun InputDevice.firstRange(candidates: IntArray): InputDevice.MotionRange? =
-        candidates.firstNotNullOfOrNull { axis ->
-            motionRanges.firstOrNull { it.axis == axis && it.source.isGamepadSource() }
+    private fun InputDevice.firstRange(candidates: IntArray): InputDevice.MotionRange? {
+        for (axis in candidates) {
+            val range = motionRanges.firstOrNull {
+                it.axis == axis && it.source.isGamepadSource()
+            }
+            if (range != null) return range
         }
+        return null
+    }
 
     private fun Int.isGamepadSource(): Boolean =
         this and InputDevice.SOURCE_GAMEPAD == InputDevice.SOURCE_GAMEPAD ||
