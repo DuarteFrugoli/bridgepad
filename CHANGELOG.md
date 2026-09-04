@@ -32,6 +32,11 @@ The project follows [Semantic Versioning](https://semver.org/).
   or new-pairing choice instead of reconnecting automatically.
 - Gate A approval evidence for Bluetooth HID on the Galaxy A35, Windows and
   Steam Input.
+- Platform-independent gamepad state, input reducer, multi-source merger,
+  radial deadzone, HID report encoder and rate-controlled output scheduler.
+- JVM fixtures and unit tests for logical controls, source removal, merging and
+  HID report bytes.
+- Public specification for the logical gamepad pipeline and report layout.
 
 ### Changed
 
