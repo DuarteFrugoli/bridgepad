@@ -23,9 +23,10 @@ Windows. The following checks passed:
 - Steam Input configuration and gameplay;
 - a continuous gameplay session lasting at least one hour.
 
-The observed output rate was approximately 73 Hz and the observed event-to-
-report latency did not exceed approximately 26 ms. These measurements produced
-responsive gameplay during the validation session.
+The observed output rate was approximately 73 Hz. Event-to-report latency was
+typically around 10 ms, generally ranged from 4 ms to 20 ms and reached a
+maximum observed value of 26 ms. These measurements produced responsive
+gameplay during the validation session.
 
 ## Decision
 

@@ -59,7 +59,8 @@ its evidence recorded here.
 - Steam Input generic-controller configuration and gameplay: PASS
 - Continuous gameplay session of at least one hour: PASS
 - Observed HID output rate: approximately 73 Hz
-- Observed event-to-report latency: at most approximately 26 ms
+- Observed event-to-report latency: typically around 10 ms, generally between
+  4 ms and 20 ms, with a maximum observed value of 26 ms
 - DirectInput game outside Steam Input: not available for this test
 - Known limitation: Steam recognizes BridgePad as a generic controller and
   requires initial manual button configuration before gameplay
