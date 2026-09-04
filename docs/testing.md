@@ -273,3 +273,9 @@ With a physical USB gamepad selected and an active PC connection:
    to a neutral state.
 9. If the descriptor is unsupported, confirm that BridgePad returns to
    Compatibility mode and presents an actionable warning.
+10. Open the USB mapping wizard and follow every prompt without relying on the
+    labels initially inferred by BridgePad.
+11. Save the mapping and verify the complete controller in `joy.cpl` and Steam
+    Input.
+12. End and restart the session, enable Background USB again, and confirm that
+    the saved mapping is restored without running the wizard again.

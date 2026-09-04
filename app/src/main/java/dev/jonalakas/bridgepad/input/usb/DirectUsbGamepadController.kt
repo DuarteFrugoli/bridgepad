@@ -27,6 +27,8 @@ class DirectUsbGamepadController(
     private var claimedInterface: UsbInterface? = null
     private var worker: Thread? = null
 
+    init { UsbGamepadMappingStore.initialize(context) }
+
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_USB_PERMISSION) return
@@ -82,16 +84,23 @@ class DirectUsbGamepadController(
         connection = opened
         claimedInterface = hidInterface
         running.set(true)
-        DirectUsbGamepadStore.set(DirectUsbState(active = true, deviceName = device.productName ?: "USB gamepad"))
+        val deviceKey = "${device.vendorId}:${device.productId}:${descriptor.copyOf(descriptorSize).contentHashCode()}"
+        DirectUsbGamepadStore.set(
+            DirectUsbState(
+                active = true,
+                deviceName = device.productName ?: "USB gamepad",
+                deviceKey = deviceKey,
+            ),
+        )
         onStatus(true, "Background USB input is active. You can turn off the screen or leave BridgePad.", false)
         SessionLog.record("USB", "Direct USB HID capture started")
         worker = Thread(
-            { readLoop(opened, endpoint, parser, device.deviceId, device.productName ?: "USB gamepad") },
+            { readLoop(opened, endpoint, parser, device.deviceId, deviceKey, device.productName ?: "USB gamepad") },
             "BridgePad-USB-HID",
         ).also { it.start() }
     }
 
-    private fun readLoop(connection: UsbDeviceConnection, endpoint: UsbEndpoint, parser: UsbHidReportParser, deviceId: Int, name: String) {
+    private fun readLoop(connection: UsbDeviceConnection, endpoint: UsbEndpoint, parser: UsbHidReportParser, deviceId: Int, deviceKey: String, name: String) {
         val buffer = ByteArray(endpoint.maxPacketSize.coerceAtLeast(64))
         var count = 0L
         var previous = VirtualGamepadState()
@@ -101,14 +110,17 @@ class DirectUsbGamepadController(
                 fail("USB gamepad disconnected. All controls were released.")
                 return
             }
-            if (length > 0) runCatching { parser.decode(buffer.copyOf(length)) }.onSuccess { gamepad ->
-                if (gamepad != previous) {
-                    previous = gamepad
+            if (length > 0) runCatching { parser.decode(buffer.copyOf(length)) }.onSuccess { rawGamepad ->
+                val gamepad = UsbGamepadMappingStore.load(deviceKey).apply(rawGamepad)
+                if (rawGamepad != previous) {
+                    previous = rawGamepad
                     count++
                     DirectUsbGamepadStore.set(
                         DirectUsbState(
                             active = true,
                             deviceName = name,
+                            deviceKey = deviceKey,
+                            rawGamepad = rawGamepad,
                             gamepad = gamepad,
                             inputEventCount = count,
                             lastInputTimestampNanos = SystemClock.uptimeMillis() * 1_000_000L,

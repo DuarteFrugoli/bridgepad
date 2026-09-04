@@ -69,6 +69,10 @@ The project follows [Semantic Versioning](https://semver.org/).
   input in the live bridge metrics.
 - Physical-gamepad status now states that background and screen-off operation
   is available only in Background USB mode.
+- Direct USB gamepad mapping wizard for face buttons, shoulders, system
+  buttons, stick clicks, stick axes and triggers.
+- Persistent per-controller USB mappings keyed by vendor, product and HID
+  report descriptor, automatically restored on later connections.
 - Phase 5 hardware validation for multitouch touchscreen gameplay on the Galaxy
   A35 through Steam Input.
 

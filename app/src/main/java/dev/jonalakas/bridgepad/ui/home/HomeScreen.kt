@@ -33,6 +33,7 @@ fun HomeScreen(
     onReconnect: () -> Unit,
     onEnableCompatibilityInput: () -> Unit,
     onEnableBackgroundUsb: () -> Unit,
+    onConfigureUsbMapping: () -> Unit,
     onPairNewPc: () -> Unit,
     onOpenTouchController: () -> Unit,
     onStopHid: () -> Unit,
@@ -103,6 +104,13 @@ fun HomeScreen(
                             onCompatibility = onEnableCompatibilityInput,
                             onBackgroundUsb = onEnableBackgroundUsb,
                         )
+                    }
+                    if (hidState.directUsbActive) {
+                        item {
+                            OutlinedButton(onClick = onConfigureUsbMapping, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.configure_usb_mapping))
+                            }
+                        }
                     }
                 }
                 item {

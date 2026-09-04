@@ -36,6 +36,8 @@ import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import dev.jonalakas.bridgepad.input.android.AndroidGamepadController
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
+import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
+import dev.jonalakas.bridgepad.input.usb.UsbGamepadMappingStore
 import dev.jonalakas.bridgepad.output.hid.BluetoothHidService
 import dev.jonalakas.bridgepad.output.hid.HidSessionStore
 import dev.jonalakas.bridgepad.output.hid.HidFeedbackLevel
@@ -43,6 +45,7 @@ import dev.jonalakas.bridgepad.ui.home.HomeScreen
 import dev.jonalakas.bridgepad.ui.home.InputMode
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
+import dev.jonalakas.bridgepad.ui.mapping.UsbMappingScreen
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 class MainActivity : ComponentActivity() {
@@ -60,6 +63,7 @@ class MainActivity : ComponentActivity() {
             BridgePadTheme {
                 var bluetoothPermissionGranted by remember { mutableStateOf(hasBluetoothPermission()) }
                 var showTouchController by rememberSaveable { mutableStateOf(false) }
+                var showUsbMapping by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
@@ -103,6 +107,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val hidState by HidSessionStore.state.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
+                val directUsbState by DirectUsbGamepadStore.state.collectAsState()
 
                 if (!onboardingComplete) {
                     OnboardingScreen(
@@ -110,6 +115,19 @@ class MainActivity : ComponentActivity() {
                             preferences.edit().putBoolean(KEY_ONBOARDING_COMPLETE, true).apply()
                             onboardingComplete = true
                         },
+                    )
+                } else if (showUsbMapping) {
+                    UsbMappingScreen(
+                        usbState = directUsbState,
+                        onSave = { mapping ->
+                            directUsbState.deviceKey?.let { key ->
+                                UsbGamepadMappingStore.initialize(this)
+                                UsbGamepadMappingStore.save(key, mapping)
+                                DirectUsbGamepadStore.applyMapping(mapping)
+                            }
+                            showUsbMapping = false
+                        },
+                        onCancel = { showUsbMapping = false },
                     )
                 } else if (showTouchController) {
                     LaunchedEffect(Unit) { enterGamepadMode() }
@@ -153,6 +171,7 @@ class MainActivity : ComponentActivity() {
                     onEnableBackgroundUsb = {
                         startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_ENABLE_BACKGROUND_USB))
                     },
+                    onConfigureUsbMapping = { showUsbMapping = true },
                     onPairNewPc = {
                         discoverableLauncher.launch(
                             Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(
