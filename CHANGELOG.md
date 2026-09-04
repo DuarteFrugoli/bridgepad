@@ -18,6 +18,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Newly paired computers are now authorized and connected as HID hosts in the
   current session instead of requiring BridgePad to be restarted and selected
   from the paired-device list.
+- Incoming HID connections are accepted while explicit PC pairing is active,
+  avoiding a race where Windows connects before Android reports bonding complete.
 
 ### Added
 

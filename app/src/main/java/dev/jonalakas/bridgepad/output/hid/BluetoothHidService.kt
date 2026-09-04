@@ -164,6 +164,19 @@ class BluetoothHidService : Service() {
 
         override fun onConnectionStateChanged(device: BluetoothDevice, state: Int) {
             if (shuttingDown) return
+            val pairingConnection =
+                requestedHostAddress == null &&
+                    HidSessionStore.state.value.pairingModeActive &&
+                    state in setOf(BluetoothProfile.STATE_CONNECTING, BluetoothProfile.STATE_CONNECTED) &&
+                    device.bondState != BluetoothDevice.BOND_NONE
+            if (pairingConnection) {
+                requestedHostAddress = device.address
+                lastHostAddress = device.address
+                cancelDiscoverabilityMessage()
+                refreshPairedHosts()
+                HidSessionStore.update { it.copy(pairingModeActive = false) }
+                SessionLog.record("CONNECTION", "Incoming HID host authorized during explicit pairing")
+            }
             val wasRequested = device.address == requestedHostAddress
             when (state) {
                 BluetoothProfile.STATE_CONNECTING -> if (wasRequested) {
