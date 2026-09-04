@@ -39,6 +39,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -234,16 +235,22 @@ private fun MouseTouchpad(modifier: Modifier = Modifier) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val pointerId = down.id
-                    var previous = down.position
                     var distance = 0f
                     while (true) {
                         val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
                             ?: break
                         if (!change.pressed) break
-                        val delta = change.position - previous
+                        val delta = change.positionChange()
                         distance += hypot(delta.x, delta.y)
-                        if (delta != Offset.Zero) TouchMouseStore.move(delta.x, delta.y)
-                        previous = change.position
+                        if (
+                            delta != Offset.Zero &&
+                            delta.x.isFinite() &&
+                            delta.y.isFinite() &&
+                            kotlin.math.abs(delta.x) <= size.width &&
+                            kotlin.math.abs(delta.y) <= size.height
+                        ) {
+                            TouchMouseStore.move(delta.x, delta.y)
+                        }
                         change.consume()
                     }
                     if (distance <= 12.dp.toPx()) TouchMouseStore.click()
