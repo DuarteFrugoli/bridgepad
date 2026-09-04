@@ -5,8 +5,8 @@ the result is recorded. A code-complete feature is not sufficient evidence.
 
 ## Repository
 
-- [ ] CI unit-test and lint job passes.
-- [ ] CI APK build job passes independently.
+- [x] CI unit-test and lint job passes.
+- [x] CI APK build job passes independently.
 - [ ] The release commit contains no secrets, local SDK paths or private notes.
 - [ ] Version name/code and changelog match the intended release.
 - [ ] License, privacy policy and third-party dependency notices are present.
