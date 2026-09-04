@@ -399,7 +399,8 @@ Potential future work includes:
 - Linux support
 - macOS support
 - Android TV
-- Advanced touchscreen layouts
+- Advanced touchscreen layouts with saved user presets
+- Configurable analog touchscreen triggers using touch position or drag distance
 - Gyroscope controls
 - Controller profiles
 - Advanced remapping

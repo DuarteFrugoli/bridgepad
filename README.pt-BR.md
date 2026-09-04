@@ -36,6 +36,10 @@ O MVP não inclui LAN, aplicativo desktop, XInput nativo, rumble, layouts
 editáveis, macros, iOS, consoles ou compatibilidade garantida com todos os
 aparelhos Android.
 
+Depois do MVP, o roadmap inclui layouts touchscreen editáveis com presets
+personalizados e gatilhos L2/R2 analógicos cuja intensidade pode ser definida
+pela posição do toque ou pelo deslocamento do dedo.
+
 ## Arquitetura
 
 ```text

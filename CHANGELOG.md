@@ -55,6 +55,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 - Product planning documents are now kept in the private documentation area.
 - The Phase 1 artificial button and axis controls were replaced by physical
   gamepad input.
+- The post-MVP roadmap now includes configurable analog touchscreen triggers
+  driven by touch position or drag distance.
 
 ## [0.1.0]
 
