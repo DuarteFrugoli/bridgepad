@@ -99,18 +99,32 @@ fun UsbMappingScreen(
             is MappingStep.Button -> {
                 val source = (usbState.rawGamepad.pressedButtons - baseline.pressedButtons).firstOrNull()
                 if (source != null) {
-                    buttons[currentStep.target] = source
-                    armed = false
-                    stepIndex++
+                    val usedBy = buttons.entries.firstOrNull {
+                        it.value == source && it.key != currentStep.target
+                    }?.key
+                    if (usedBy != null) {
+                        instruction = "That physical button is already used by ${usedBy.displayName()}. Choose another button."
+                    } else {
+                        buttons[currentStep.target] = source
+                        armed = false
+                        stepIndex++
+                    }
                 }
             }
             is MappingStep.Dpad -> {
                 if (usbState.rawGamepad.dpad != DpadDirection.NEUTRAL &&
                     usbState.rawGamepad.dpad != baseline.dpad
                 ) {
-                    dpad[currentStep.target] = usbState.rawGamepad.dpad
-                    armed = false
-                    stepIndex++
+                    val usedBy = dpad.entries.firstOrNull {
+                        it.value == usbState.rawGamepad.dpad && it.key != currentStep.target
+                    }?.key
+                    if (usedBy != null) {
+                        instruction = "That D-pad direction is already used by ${usedBy.name.replace('_', ' ')}. Choose another direction."
+                    } else {
+                        dpad[currentStep.target] = usbState.rawGamepad.dpad
+                        armed = false
+                        stepIndex++
+                    }
                 }
             }
             is MappingStep.Axis -> {
@@ -118,13 +132,20 @@ fun UsbMappingScreen(
                     axis to (usbState.rawGamepad.valueOf(axis) - baseline.valueOf(axis))
                 }.maxByOrNull { kotlin.math.abs(it.second) }
                 if (movement != null && kotlin.math.abs(movement.second) >= 0.45f) {
-                    val observedSign = if (movement.second < 0f) -1 else 1
-                    axes[currentStep.target] = AxisBinding(
-                        source = movement.first,
-                        inverted = observedSign != currentStep.expectedSign,
-                    )
-                    armed = false
-                    stepIndex++
+                    val usedBy = axes.entries.firstOrNull {
+                        it.value.source == movement.first && it.key != currentStep.target
+                    }?.key
+                    if (usedBy != null) {
+                        instruction = "That physical axis is already used by ${usedBy.displayName()}. Move another axis."
+                    } else {
+                        val observedSign = if (movement.second < 0f) -1 else 1
+                        axes[currentStep.target] = AxisBinding(
+                            source = movement.first,
+                            inverted = observedSign != currentStep.expectedSign,
+                        )
+                        armed = false
+                        stepIndex++
+                    }
                 }
             }
         }
@@ -200,3 +221,21 @@ fun UsbMappingScreen(
 private fun VirtualGamepadState.isNeutral(): Boolean =
     pressedButtons.isEmpty() && dpad == DpadDirection.NEUTRAL &&
         VirtualAxis.entries.all { kotlin.math.abs(valueOf(it)) < 0.2f }
+
+private fun VirtualControl.displayName(): String = when (this) {
+    VirtualControl.FACE_SOUTH -> "A"
+    VirtualControl.FACE_EAST -> "B"
+    VirtualControl.FACE_WEST -> "X"
+    VirtualControl.FACE_NORTH -> "Y"
+    VirtualControl.LEFT_BUMPER -> "L1"
+    VirtualControl.RIGHT_BUMPER -> "R1"
+    VirtualControl.START -> "Start / Options / Menu"
+    VirtualControl.SELECT -> "Back / Select / Share"
+    VirtualControl.LEFT_STICK_BUTTON -> "L3"
+    VirtualControl.RIGHT_STICK_BUTTON -> "R3"
+    VirtualControl.EXTRA_1 -> "Guide / PS / Home"
+    VirtualControl.EXTRA_2 -> "Share / Capture"
+    else -> name.replace('_', ' ')
+}
+
+private fun VirtualAxis.displayName(): String = name.replace('_', ' ')
