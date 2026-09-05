@@ -80,6 +80,12 @@ checklist. These checks are pending hardware validation for the UI redesign.
   state and no hidden new-pairing selection or automatic visibility remains.
 - Deny or cancel permissions/discoverability. Confirm there is actionable
   localized feedback, no false connected state and no automatic retry loop.
+- With an already paired PC selected, turn off Bluetooth on the PC and try to
+  connect. The app must say it is trying to connect and suggest checking power/
+  range, then report that it could not connect. It must not claim that Windows
+  is connecting or that an established connection was lost. Next connect
+  successfully, turn off PC Bluetooth and confirm the distinct connection-lost
+  message is shown.
 - With no saved destination and an already paired PC, select it in Destination
   or the picker shown after Bluetooth preparation. No session or visibility prompt
   should start until **Connect and play** is pressed with all choices complete.

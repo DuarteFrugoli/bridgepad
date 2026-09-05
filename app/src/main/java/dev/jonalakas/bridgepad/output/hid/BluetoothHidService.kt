@@ -199,19 +199,9 @@ class BluetoothHidService : Service() {
                     }
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    if (!wasRequested && connectedDevice == null) return
-                    stopOutputPipeline()
-                    requestedHostAddress = null
-                    connectedDevice = null
-                    HidSessionStore.update {
-                        it.copy(
-                            status = HidSessionStatus.READY,
-                            connectedHost = null,
-                            connectedHostAddress = null,
-                            canReconnect = lastHostAddress != null,
-                            message = LocalizedMessage(R.string.hid_host_disconnected),
-                        )
-                    }
+                    val wasConnected = connectedDevice?.address == device.address
+                    if (!wasRequested && !wasConnected) return
+                    if (wasConnected) connectionLost(device) else connectionFailed(device)
                 }
             }
         }
@@ -418,14 +408,14 @@ class BluetoothHidService : Service() {
             BluetoothProfile.STATE_CONNECTING -> {
                 update(
                     HidSessionStatus.CONNECTING,
-                    LocalizedMessage(R.string.hid_windows_connecting, device.safeName()),
+                    LocalizedMessage(R.string.hid_connecting, device.safeName()),
                 )
                 return
             }
         }
         update(
             HidSessionStatus.CONNECTING,
-            LocalizedMessage(R.string.hid_windows_waiting, device.safeName()),
+            LocalizedMessage(R.string.hid_connecting, device.safeName()),
         )
         cancelPendingConnection()
         val request = Runnable { connectAfterAutomaticAttempt(device) }
@@ -454,15 +444,49 @@ class BluetoothHidService : Service() {
             BluetoothProfile.STATE_CONNECTED -> acceptConnectedDevice(device)
             BluetoothProfile.STATE_CONNECTING -> update(
                 HidSessionStatus.CONNECTING,
-                LocalizedMessage(R.string.hid_windows_connecting, device.safeName()),
+                LocalizedMessage(R.string.hid_connecting, device.safeName()),
             )
             else -> {
-                update(HidSessionStatus.CONNECTING, LocalizedMessage(R.string.hid_requesting_connection, device.safeName()))
+                update(HidSessionStatus.CONNECTING, LocalizedMessage(R.string.hid_connecting, device.safeName()))
                 if (hidDevice?.connect(device) != true) {
-                    requestedHostAddress = null
-                    update(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_connection_rejected))
+                    connectionFailed(device)
                 }
             }
+        }
+    }
+
+    private fun connectionFailed(device: BluetoothDevice) {
+        cancelPendingConnection()
+        requestedHostAddress = null
+        connectedDevice = null
+        SessionLog.record("CONNECTION", "HID connection attempt did not reach CONNECTED")
+        HidSessionStore.update {
+            it.copy(
+                status = HidSessionStatus.READY,
+                connectedHost = null,
+                connectedHostAddress = null,
+                canReconnect = lastHostAddress != null,
+                message = LocalizedMessage(R.string.hid_connection_failed, device.safeName()),
+                feedbackLevel = HidFeedbackLevel.WARNING,
+            )
+        }
+    }
+
+    private fun connectionLost(device: BluetoothDevice) {
+        cancelPendingConnection()
+        stopOutputPipeline()
+        requestedHostAddress = null
+        connectedDevice = null
+        SessionLog.record("CONNECTION", "Established HID connection was lost")
+        HidSessionStore.update {
+            it.copy(
+                status = HidSessionStatus.READY,
+                connectedHost = null,
+                connectedHostAddress = null,
+                canReconnect = lastHostAddress != null,
+                message = LocalizedMessage(R.string.hid_connection_lost, device.safeName()),
+                feedbackLevel = HidFeedbackLevel.WARNING,
+            )
         }
     }
 

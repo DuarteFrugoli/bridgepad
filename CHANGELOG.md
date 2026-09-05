@@ -33,6 +33,11 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Bluetooth notices no longer expose the internal Windows connection grace
+  period or report a failed attempt as a lost connection. Failed attempts now
+  suggest checking PC Bluetooth and range, while established disconnects use a
+  distinct connection-lost message.
+
 - End session no longer appears during Bluetooth preparation before an HID
   session has started.
 

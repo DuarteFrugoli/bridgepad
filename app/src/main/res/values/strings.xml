@@ -138,9 +138,8 @@
     <string name="hid_profile_disconnected">Android disconnected the HID Device profile.</string>
     <string name="hid_ready">HID gamepad registered. Choose a paired PC or pair a new one.</string>
     <string name="hid_registration_lost">Android did not keep the HID registration.</string>
-    <string name="hid_connecting">Connecting to %1$s…</string>
+    <string name="hid_connecting">Trying to connect to %1$s… Make sure the PC\'s Bluetooth is on and it is nearby.</string>
     <string name="hid_choose_pc">Choose a paired PC before connecting.</string>
-    <string name="hid_host_disconnected">Host disconnected. Select it to reconnect.</string>
     <string name="hid_starting">Starting the Bluetooth HID session…</string>
     <string name="hid_ended">HID session ended.</string>
     <string name="hid_no_adapter">This device has no Bluetooth adapter.</string>
@@ -151,11 +150,9 @@
     <string name="hid_registering">Registering the BridgePad HID gamepad…</string>
     <string name="hid_registration_rejected">Android rejected the HID registration request.</string>
     <string name="hid_already_connected">A PC is already connected. End the session before choosing another one.</string>
-    <string name="hid_windows_connecting">Windows is connecting to %1$s…</string>
-    <string name="hid_windows_waiting">Waiting for Windows to connect to %1$s…</string>
     <string name="hid_no_previous">No previous PC is available. Select a paired PC instead.</string>
-    <string name="hid_requesting_connection">Requesting connection to %1$s…</string>
-    <string name="hid_connection_rejected">Android rejected the connection request.</string>
+    <string name="hid_connection_failed">Could not connect to %1$s. Make sure the PC\'s Bluetooth is on and it is nearby, then try again.</string>
+    <string name="hid_connection_lost">The connection to %1$s was lost. Check the PC\'s Bluetooth and try again.</string>
     <string name="hid_connected">Connected. Gamepad input is being sent to the PC.</string>
     <string name="hid_report_failed">A physical gamepad report could not be sent.</string>
     <string name="hid_stopped">HID session stopped.</string>

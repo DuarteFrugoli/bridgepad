@@ -138,9 +138,8 @@
     <string name="hid_profile_disconnected">O Android desconectou o perfil de controle Bluetooth. Encerre a sessão e tente novamente.</string>
     <string name="hid_ready">Controle Bluetooth pronto. Escolha um PC pareado ou faça um novo pareamento.</string>
     <string name="hid_registration_lost">O Android encerrou o registro do controle Bluetooth. Tente iniciar outra sessão.</string>
-    <string name="hid_connecting">Conectando a %1$s…</string>
+    <string name="hid_connecting">Tentando conectar a %1$s… Verifique se o Bluetooth do PC está ligado e se ele está próximo.</string>
     <string name="hid_choose_pc">Escolha um PC pareado antes de conectar.</string>
-    <string name="hid_host_disconnected">O PC desconectou. Selecione-o para reconectar.</string>
     <string name="hid_starting">Iniciando a sessão Bluetooth…</string>
     <string name="hid_ended">Sessão encerrada.</string>
     <string name="hid_no_adapter">Este dispositivo não tem um adaptador Bluetooth.</string>
@@ -151,11 +150,9 @@
     <string name="hid_registering">Registrando o controle Bluetooth do BridgePad…</string>
     <string name="hid_registration_rejected">O Android recusou o registro do controle Bluetooth. Encerre a sessão e tente novamente.</string>
     <string name="hid_already_connected">Um PC já está conectado. Encerre a sessão antes de escolher outro.</string>
-    <string name="hid_windows_connecting">O Windows está conectando a %1$s…</string>
-    <string name="hid_windows_waiting">Aguardando o Windows conectar a %1$s…</string>
     <string name="hid_no_previous">Nenhum PC anterior disponível. Selecione um PC pareado.</string>
-    <string name="hid_requesting_connection">Solicitando conexão a %1$s…</string>
-    <string name="hid_connection_rejected">O Android recusou a conexão. Verifique o Bluetooth do PC e tente novamente.</string>
+    <string name="hid_connection_failed">Não foi possível conectar a %1$s. Verifique se o Bluetooth do PC está ligado e se ele está próximo, depois tente novamente.</string>
+    <string name="hid_connection_lost">A conexão com %1$s foi perdida. Verifique o Bluetooth do PC e tente novamente.</string>
     <string name="hid_connected">Conectado. Os comandos estão sendo enviados para o PC.</string>
     <string name="hid_report_failed">Não foi possível enviar um comando do controle. Verifique a conexão com o PC.</string>
     <string name="hid_stopped">Sessão encerrada.</string>
