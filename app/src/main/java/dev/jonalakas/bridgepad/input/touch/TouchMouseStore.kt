@@ -1,8 +1,7 @@
 package dev.jonalakas.bridgepad.input.touch
 
+import dev.jonalakas.bridgepad.core.ports.PointerReport
 import kotlin.math.roundToInt
-
-data class MouseReport(val buttons: Int, val deltaX: Int, val deltaY: Int)
 
 object TouchMouseStore {
     private var accumulatedX = 0f
@@ -20,18 +19,18 @@ object TouchMouseStore {
     fun click() { clickPending = true }
 
     @Synchronized
-    fun consume(): MouseReport? {
+    fun consume(): PointerReport? {
         if (clickPending) {
             clickPending = false
             releasePending = true
-            return MouseReport(LEFT_BUTTON, takeX(), takeY())
+            return PointerReport(LEFT_BUTTON, takeX(), takeY())
         }
         if (releasePending) {
             releasePending = false
-            return MouseReport(0, takeX(), takeY())
+            return PointerReport(0, takeX(), takeY())
         }
         if (accumulatedX.roundToInt() == 0 && accumulatedY.roundToInt() == 0) return null
-        return MouseReport(0, takeX(), takeY())
+        return PointerReport(0, takeX(), takeY())
     }
 
     @Synchronized

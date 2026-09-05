@@ -13,6 +13,8 @@ import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.mapping.AxisMath
 import dev.jonalakas.bridgepad.core.mapping.SourceStateRegistry
+import dev.jonalakas.bridgepad.input.mapping.GamepadMappingStore
+import dev.jonalakas.bridgepad.core.mapping.GamepadMapping
 import java.util.Locale
 
 class AndroidGamepadController(context: Context) : InputManager.InputDeviceListener {
@@ -21,10 +23,13 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
     private val devices = linkedMapOf<Int, PhysicalGamepadInfo>()
     private val diagnostics = linkedMapOf<String, AxisDiagnostic>()
     private val pressedDpadKeys = mutableMapOf<SourceId, MutableSet<Int>>()
+    private val mappings = mutableMapOf<SourceId, GamepadMapping>()
     private var lastRawEvent = "Connect a USB gamepad and press a control."
     private var inputEventCount = 0L
     private var lastInputTimestampNanos: Long? = null
     private var listening = false
+
+    init { GamepadMappingStore.initialize(context) }
 
     fun start() {
         if (listening) return
@@ -45,6 +50,11 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
         inputEventCount++
         lastInputTimestampNanos = SystemClock.uptimeMillis() * NANOS_PER_MILLISECOND
         lastRawEvent = "Input capture paused; all controls were neutralized."
+        publish()
+    }
+
+    fun reloadMappings() {
+        mappings.clear()
         publish()
     }
 
@@ -117,6 +127,7 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
     override fun onInputDeviceRemoved(deviceId: Int) {
         val removed = devices.remove(deviceId) ?: return
         registry.remove(removed.sourceId)
+        mappings.remove(removed.sourceId)
         pressedDpadKeys.remove(removed.sourceId)
         diagnostics.keys.removeAll { it.startsWith("${removed.sourceId.value}:") }
         lastRawEvent = "Disconnected ${removed.name}; its controls were neutralized."
@@ -212,10 +223,16 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
     }
 
     private fun publish() {
+        val rawStates = registry.snapshots().associate { it.sourceId to it.gamepad }
         PhysicalGamepadStore.set(
             PhysicalGamepadState(
                 devices = devices.values.toList(),
-                sourceStates = registry.snapshots().associate { it.sourceId to it.gamepad },
+                rawSourceStates = rawStates,
+                sourceStates = rawStates.mapValues { (sourceId, rawState) ->
+                    mappings.getOrPut(sourceId) {
+                        GamepadMappingStore.load("android:${sourceId.value}")
+                    }.apply(rawState)
+                },
                 axisDiagnostics = diagnostics.toMap(),
                 lastRawEvent = lastRawEvent,
                 inputEventCount = inputEventCount,

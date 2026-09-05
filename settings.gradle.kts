@@ -23,4 +23,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "BridgePad"
+include(":domain")
+include(":protocol")
 include(":app")

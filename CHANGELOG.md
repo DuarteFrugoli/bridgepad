@@ -8,6 +8,19 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Split the project into pure Kotlin domain, platform-independent protocol and
+  Android application modules with enforced inward dependencies.
+- Bluetooth HID now implements a generic output-transport contract and consumes
+  normalized input from an Android input router instead of concrete input stores.
+- Session and input-selection models no longer belong to UI or Bluetooth output
+  packages, and HID encoding is isolated inside the Bluetooth adapter.
+
+- Physical-controller capture is now independent from the Bluetooth HID output
+  service. Compatibility or Background USB can be selected and prepared in the
+  Input step before connecting to a PC.
+- Controller mapping is now available to Compatibility and Background USB
+  instead of being tied to direct USB capture.
+
 - New session setups no longer preselect input, connection or destination from
   saved preferences. Ending a session clears the choices; rotation and active
   sessions retain their current state.

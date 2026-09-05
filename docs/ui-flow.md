@@ -13,10 +13,17 @@ Each new setup starts with no input, transport or destination selected, includin
 after explicitly ending a session. Previously saved setup preferences are ignored.
 Choices survive rotation while configuring the current session, and reopening an
 active session reflects its actual input/connection without interrupting it.
-Onboarding completion and USB controller mappings remain persistent.
-**Connect and play** remains disabled until all three choices are valid, Bluetooth
-is on and access permission is granted. A selected PC that is no longer paired
-does not count as a valid destination. The button then
+Onboarding completion and per-controller mappings remain persistent.
+For physical input, the Input step also requires an explicit capture choice:
+**Compatibility** reads Android game-controller events while BridgePad is visible;
+**Background USB** claims a USB HID controller directly and can keep reading it
+outside the app or with the screen off. This capture choice is independent from
+the Bluetooth output transport and may be prepared before a PC session exists.
+
+**Connect and play** remains disabled until the three steps and, when applicable,
+the physical capture choice are valid, Bluetooth is on and access permission is
+granted. A selected PC that is no longer paired does not count as a valid
+destination. The button then
 starts HID registration and connects to the chosen PC, or requests temporary
 discoverability if **Pair a new PC** was explicitly selected. Picking a destination
 only fills the setup; it never starts a session on its own.
@@ -38,11 +45,12 @@ input screen, and **End session** explicitly releases the connection.
 
 - **Virtual gamepad layout** describes the current standard layout. Alternative
   presets and a layout editor are future features, not implemented settings.
-- **Controller options** contains Compatibility and Background USB capture modes.
-  A connection must be active before changing capture mode.
-- **Configure controller buttons** is optional and currently requires an active
-  Background USB controller. Compatibility-mode custom mapping remains future
-  work. Do not label it as supported until both capture paths apply mappings.
+- Physical-controller capture is selected directly inside the Input step, before
+  connecting. It can also be changed during an active session without reconnecting
+  the Bluetooth HID output.
+- **Configure controller buttons** is optional and becomes available when the
+  selected capture path detects a controller. The same mapping workflow and
+  logical layout apply to Compatibility and Background USB.
 - Only Background USB supports physical controller input with BridgePad hidden
   or the screen off. USB here is controller-to-phone input; output stays Bluetooth.
 - **Settings** contains language guidance, connection metrics, physical-input

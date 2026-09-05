@@ -49,14 +49,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.ui.home.labelResource
-import dev.jonalakas.bridgepad.output.hid.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
-import dev.jonalakas.bridgepad.output.hid.HidSessionState
-import dev.jonalakas.bridgepad.output.hid.HidSessionStatus
+import dev.jonalakas.bridgepad.session.SessionState as HidSessionState
+import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot

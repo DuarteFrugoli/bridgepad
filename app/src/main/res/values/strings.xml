@@ -55,6 +55,8 @@
     <string name="touchscreen_input">Virtual gamepad</string>
     <string name="physical_input">Physical gamepad</string>
     <string name="physical_input_missing">Connect a USB or Bluetooth gamepad to the phone before playing.</string>
+    <string name="physical_input_missing_usb">Connect a USB gamepad to the phone to use Background USB.</string>
+    <string name="choose_capture_mode">Choose how BridgePad should read the physical controller.</string>
     <string name="session_setup">Session setup</string>
     <string name="hid_compatibility_label">HID compatibility</string>
     <string name="hid_compatibility_available">Available for validation</string>
@@ -78,7 +80,8 @@
     <string name="notification_touchscreen_active">Touchscreen controls active. Keep BridgePad open to use the virtual gamepad.</string>
     <string name="notification_physical_gamepad_active">Physical gamepad active. Keep BridgePad open and the screen on while playing.</string>
     <string name="notification_background_usb_active">Background USB active. You can keep playing with the app minimized or the screen off.</string>
-    <string name="configure_usb_mapping">Configure controller buttons</string>
+    <string name="configure_gamepad_mapping">Configure controller buttons</string>
+    <string name="mapping_optional_both_modes">Optional. Custom button mapping works with Compatibility and Background USB.</string>
     <string name="settings">Settings</string>
     <string name="session_active">Session in progress</string>
     <string name="home_title">Ready to play?</string>
@@ -87,7 +90,6 @@
     <string name="step_transport">2 · Connection</string>
     <string name="step_destination">3 · Destination</string>
     <string name="controller_layout">Virtual gamepad layout</string>
-    <string name="controller_options">Controller options</string>
     <string name="transport_description">Sends gamepad and mouse commands from this phone to your PC.</string>
     <string name="future_transports">Wi-Fi and USB output are planned, but not available in this version.</string>
     <string name="connected_to">Connected to %1$s</string>
@@ -103,9 +105,6 @@
     <string name="close_action">Close</string>
     <string name="default_layout">Current layout: Standard</string>
     <string name="layout_description">Two sticks, a D-pad, face buttons, triggers and a mouse touchpad. More layouts and a custom layout editor are planned; there are no alternate layouts in this version.</string>
-    <string name="capture_requires_session">Connect to the PC first to switch capture modes.</string>
-    <string name="mapping_optional">Button mapping is optional. Use it only if your controls need adjustment.</string>
-    <string name="mapping_scope">Custom mapping currently applies only to Background USB. Activate that mode with a compatible USB controller to configure it.</string>
     <string name="language_title">Language</string>
     <string name="language_description">BridgePad follows your Android language: English or Brazilian Portuguese. On Android 13 or later you can choose a language just for this app.</string>
     <string name="change_language">Change app language</string>
@@ -204,7 +203,7 @@
     <string name="mapping_same_axis">Both directions must use the same physical axis. Move the requested direction on the same stick as the previous step.</string>
     <string name="mapping_opposite">That was the opposite direction. Move the stick in the direction shown by the prompt.</string>
     <string name="mapping_axis_used">That physical axis is already mapped to another control. Move another axis.</string>
-    <string name="mapping_title">Configure USB gamepad</string>
+    <string name="mapping_title">Configure controller</string>
     <string name="mapping_progress">Step %1$d of %2$d</string>
     <string name="mapping_skip">Press the mapped A button to skip this control.</string>
     <string name="mapping_previous">Previous step</string>

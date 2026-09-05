@@ -55,6 +55,8 @@
     <string name="touchscreen_input">Controle virtual</string>
     <string name="physical_input">Controle físico</string>
     <string name="physical_input_missing">Conecte um controle USB ou Bluetooth ao celular antes de jogar.</string>
+    <string name="physical_input_missing_usb">Conecte um controle USB ao celular para usar USB em segundo plano.</string>
+    <string name="choose_capture_mode">Escolha como o BridgePad deve ler o controle físico.</string>
     <string name="session_setup">Configurar sessão</string>
     <string name="hid_compatibility_label">Compatibilidade HID</string>
     <string name="hid_compatibility_available">Disponível para validação</string>
@@ -78,7 +80,8 @@
     <string name="notification_touchscreen_active">Controle virtual ativo. Mantenha o BridgePad aberto para usar os botões na tela.</string>
     <string name="notification_physical_gamepad_active">Controle físico ativo. Mantenha o BridgePad aberto e a tela ligada enquanto joga.</string>
     <string name="notification_background_usb_active">USB em segundo plano ativo. Você pode jogar com o app minimizado ou a tela apagada.</string>
-    <string name="configure_usb_mapping">Configurar botões do controle</string>
+    <string name="configure_gamepad_mapping">Configurar botões do controle</string>
+    <string name="mapping_optional_both_modes">Opcional. O mapeamento personalizado funciona em Compatibilidade e USB em segundo plano.</string>
     <string name="settings">Configurações</string>
     <string name="session_active">Sessão em andamento</string>
     <string name="home_title">Vamos jogar?</string>
@@ -87,7 +90,6 @@
     <string name="step_transport">2 · Conexão</string>
     <string name="step_destination">3 · Destino</string>
     <string name="controller_layout">Layout do controle virtual</string>
-    <string name="controller_options">Opções do controle</string>
     <string name="transport_description">Envia os comandos do controle e do mouse deste celular para o PC.</string>
     <string name="future_transports">As saídas por Wi-Fi e USB estão planejadas, mas não estão disponíveis nesta versão.</string>
     <string name="connected_to">Conectado a %1$s</string>
@@ -103,9 +105,6 @@
     <string name="close_action">Fechar</string>
     <string name="default_layout">Layout atual: Padrão</string>
     <string name="layout_description">Dois analógicos, um direcional, botões, gatilhos e um touchpad de mouse. Outros layouts e um editor de layouts estão planejados; esta versão ainda não possui layouts alternativos.</string>
-    <string name="capture_requires_session">Conecte ao PC primeiro para trocar o modo de leitura.</string>
-    <string name="mapping_optional">O mapeamento dos botões é opcional. Use apenas se os comandos precisarem de ajuste.</string>
-    <string name="mapping_scope">O mapeamento personalizado se aplica apenas ao USB em segundo plano por enquanto. Ative esse modo com um controle USB compatível para configurá-lo.</string>
     <string name="language_title">Idioma</string>
     <string name="language_description">O BridgePad acompanha o idioma do Android: inglês ou português brasileiro. No Android 13 ou superior, você pode escolher um idioma só para este app.</string>
     <string name="change_language">Alterar idioma do app</string>
@@ -204,7 +203,7 @@
     <string name="mapping_same_axis">As duas direções devem usar o mesmo eixo físico. Mova o mesmo analógico da etapa anterior na direção solicitada.</string>
     <string name="mapping_opposite">Essa foi a direção oposta. Mova o analógico na direção indicada.</string>
     <string name="mapping_axis_used">Esse eixo físico já está mapeado para outro comando. Mova outro eixo.</string>
-    <string name="mapping_title">Configurar controle USB</string>
+    <string name="mapping_title">Configurar controle</string>
     <string name="mapping_progress">Etapa %1$d de %2$d</string>
     <string name="mapping_skip">Pressione o botão mapeado como A para pular este comando.</string>
     <string name="mapping_previous">Etapa anterior</string>

@@ -1,8 +1,8 @@
 # Gamepad core specification
 
-The BridgePad gamepad core is independent of Android and Bluetooth. It converts
-input events into an immutable logical state and then into the nine-byte HID
-input report defined by the initial descriptor.
+The BridgePad gamepad core is independent of Android and every output transport.
+It converts input events into an immutable logical state. Transport adapters
+then encode that state for Bluetooth HID, the desktop bridge or another target.
 
 ## Pipeline
 
@@ -12,8 +12,10 @@ RawInputEvent
     -> SourceGamepadState
     -> InputMerger
     -> VirtualGamepadState
-    -> OutputScheduler
-    -> HidReportEncoder
+    -> GamepadOutputTransport
+       -> Bluetooth HID encoder
+       -> Bridge protocol encoder
+       -> future output adapter
 ```
 
 Each input source has a stable, non-empty `SourceId`. Buttons from active
@@ -28,7 +30,14 @@ the remaining range so full travel is retained.
 Session lifecycle is represented separately from controller input. Stopping a
 session clears pending output and produces a neutral gamepad state.
 
-## HID input report
+`InputRouter` is the Android composition point for touchscreen, Android
+`InputDevice` and direct USB sources. An output adapter consumes only the routed
+logical state and cannot import those concrete input implementations.
+
+`OutputScheduler` is transport-neutral timing policy. An output transport may
+use it to preserve short button transitions while rate-limiting analog updates.
+
+## Bluetooth HID input report
 
 The report ID is passed separately to the Android HID API and is not present in
 the payload below.
@@ -47,6 +56,5 @@ the payload below.
 The neutral fixture is `00 00 08 00 00 00 00 00 00`. Unit tests also preserve
 known fixtures for button, D-pad, stick and trigger extremes.
 
-The output scheduler consolidates analog updates to the newest state at its
-configured rate. Button and D-pad transitions are queued so a press followed by
-a release between two output ticks is still emitted as two distinct reports.
+The HID descriptor and encoder belong to the Android Bluetooth adapter, not to
+the domain module. The neutral fixture is retained as a Bluetooth protocol test.

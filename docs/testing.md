@@ -8,9 +8,9 @@ phase is complete only when its automated and hardware evidence is recorded.
 Run from the repository root on Windows:
 
 ```powershell
-.\gradlew.bat testDebugUnitTest
-.\gradlew.bat lintDebug
-.\gradlew.bat assembleDebug
+.\gradlew.bat :domain:test :protocol:test :app:testDebugUnitTest
+.\gradlew.bat :app:lintDebug
+.\gradlew.bat :app:assembleDebug
 ```
 
 The debug APK is generated at:
@@ -100,9 +100,13 @@ checklist. These checks are pending hardware validation for the UI redesign.
 - Open **Session menu**, switch virtual/physical input and **Resume game**.
   Confirm the PC remains connected, inactive controls are released, and both
   mouse touchpads still move/click correctly.
-- Under **Controller options**, switch to Background USB, approve access and
-  optionally configure buttons. Verify cancellation and rotation preserve the
-  existing mapping behavior. Compatibility mode must not imply custom mapping.
+- Select physical input and confirm **Connect and play** remains disabled until
+  either Compatibility or Background USB is selected. Choose each capture mode
+  before connecting, then configure buttons in both modes. Verify cancellation,
+  controller removal and rotation leave Home usable and preserve saved mappings.
+- For Background USB, approve access before connecting the PC and confirm this
+  does not start a Bluetooth session or show its foreground notification. Switch
+  back to virtual input before connecting and confirm the USB device is released.
 - Test the physical controller with the app visible in Compatibility mode and
   with the screen off in Background USB mode. Check the notification wording.
 - Rotate Home and the controller screens, reopen the app, turn Bluetooth off
@@ -320,35 +324,38 @@ Record the phone, Android version, PC version and gamepad used. Phase 6 passes
 when a new user can complete the flow from the app guidance and all failures
 above remain recoverable without clearing app data.
 
-### Background USB capture
+### Physical controller capture and mapping
 
-With a physical USB gamepad selected and an active PC connection:
+Start with no PC session. Connect a physical USB gamepad to the phone:
 
-1. Confirm Compatibility mode still forwards every control while BridgePad is
-   visible.
-2. Select Background USB and approve the one-time Android USB permission.
-3. Confirm that BridgePad reports that background capture is active.
-4. Verify every button, D-pad direction, stick and trigger in `joy.cpl` and
+1. Select physical input and confirm a capture mode is required before connecting.
+2. Select Compatibility, open the mapping wizard and save a mapping. Connect the
+   PC and confirm every mapped control is forwarded while BridgePad is visible.
+3. End the session, select Background USB and approve the one-time Android USB
+   permission before connecting the PC. Confirm no Bluetooth session starts yet.
+4. Open the same mapping workflow, save it and confirm BridgePad reports that
+   background capture is active.
+5. Connect and verify every button, D-pad direction, stick and trigger in `joy.cpl` and
    Steam Input.
-5. Leave BridgePad, then repeat the input check from the Android home screen.
-6. Turn the phone screen off and repeat the input check.
-7. Return to BridgePad and switch back to Compatibility mode during gameplay;
+6. Leave BridgePad, then repeat the input check from the Android home screen.
+7. Turn the phone screen off and repeat the input check.
+8. Return to BridgePad and switch back to Compatibility mode during gameplay;
    no control may remain pressed during the transition.
-8. Remove the USB cable while holding controls and confirm that the PC returns
+9. Remove the USB cable while holding controls and confirm that the PC returns
    to a neutral state.
-9. If the descriptor is unsupported, confirm that BridgePad returns to
-   Compatibility mode and presents an actionable warning.
-10. Open the USB mapping wizard and follow every prompt without relying on the
+10. If the descriptor is unsupported, confirm that BridgePad presents an
+    actionable warning and still allows Compatibility to be selected.
+11. Open the mapping wizard and follow every prompt without relying on the
     labels initially inferred by BridgePad.
-11. Save the mapping and verify the complete controller in `joy.cpl` and Steam
+12. Save the mapping and verify the complete controller in `joy.cpl` and Steam
     Input.
-12. End and restart the session, enable Background USB again, and confirm that
+13. End and restart the session, enable Background USB again, and confirm that
     the saved mapping is restored without running the wizard again.
-13. Run the wizard again and verify its order: A/B/X/Y; D-pad left/right/up/down;
+14. Run the wizard again and verify its order: A/B/X/Y; D-pad left/right/up/down;
     left stick left/right/up/down and L3; right stick left/right/up/down and R3;
     L1/L2/R1/R2; Back/Select/Share; Start/Options/Menu; Guide/PS/Home; and
     Share/Capture.
-14. On a nonessential step, press the physical button mapped as A and confirm
+15. On a nonessential step, press the physical button mapped as A and confirm
     that the step is skipped without assigning A to that control.
 
 ## Phase 7 MVP stabilization

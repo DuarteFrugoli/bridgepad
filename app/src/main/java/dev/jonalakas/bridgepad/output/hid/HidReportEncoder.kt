@@ -1,4 +1,4 @@
-package dev.jonalakas.bridgepad.core.output
+package dev.jonalakas.bridgepad.output.hid
 
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState

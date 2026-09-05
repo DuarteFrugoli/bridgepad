@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad.input.usb
 
 import dev.jonalakas.bridgepad.localization.LocalizedMessage
 import dev.jonalakas.bridgepad.R
+import dev.jonalakas.bridgepad.input.mapping.GamepadMappingStore
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -28,18 +29,21 @@ class DirectUsbGamepadController(
 ) {
     private val manager = context.getSystemService(UsbManager::class.java)
     private val running = AtomicBoolean(false)
+    private val captureRequested = AtomicBoolean(false)
     private var connection: UsbDeviceConnection? = null
     private var claimedInterface: UsbInterface? = null
     private var worker: Thread? = null
     private var pendingPermissionDevice: UsbDevice? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    init { UsbGamepadMappingStore.initialize(context) }
-
     private val permissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != ACTION_USB_PERMISSION) return
             val device = usbDeviceFrom(intent) ?: pendingPermissionDevice
+            if (!captureRequested.get()) {
+                pendingPermissionDevice = null
+                return
+            }
             if (device != null && intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
                 pendingPermissionDevice = null
                 open(device)
@@ -60,7 +64,8 @@ class DirectUsbGamepadController(
     }
 
     fun start() {
-        if (running.get()) return
+        captureRequested.set(true)
+        if (running.get() || pendingPermissionDevice != null) return
         val candidate = manager.deviceList.values.firstOrNull { device ->
             (0 until device.interfaceCount).any { device.getInterface(it).interfaceClass == UsbConstants.USB_CLASS_HID }
         }
@@ -80,7 +85,8 @@ class DirectUsbGamepadController(
     }
 
     private fun open(device: UsbDevice) {
-        stop()
+        if (!captureRequested.get()) return
+        closeConnection()
         val hidInterface = (0 until device.interfaceCount).map(device::getInterface)
             .firstOrNull { it.interfaceClass == UsbConstants.USB_CLASS_HID }
         val endpoint = hidInterface?.let { intf ->
@@ -106,6 +112,7 @@ class DirectUsbGamepadController(
                 active = true,
                 deviceName = device.productName ?: context.getString(R.string.usb_gamepad),
                 deviceKey = deviceKey,
+                statusMessage = LocalizedMessage(R.string.background_usb_active),
             ),
         )
         onStatus(true, LocalizedMessage(R.string.background_usb_active), false)
@@ -127,7 +134,7 @@ class DirectUsbGamepadController(
                 return
             }
             if (length > 0) runCatching { parser.decode(buffer.copyOf(length)) }.onSuccess { rawGamepad ->
-                val gamepad = UsbGamepadMappingStore.load(deviceKey).apply(rawGamepad)
+                val gamepad = GamepadMappingStore.load(deviceKey).apply(rawGamepad)
                 if (rawGamepad != previous) {
                     previous = rawGamepad
                     count++
@@ -140,6 +147,7 @@ class DirectUsbGamepadController(
                             gamepad = gamepad,
                             inputEventCount = count,
                             lastInputTimestampNanos = SystemClock.uptimeMillis() * 1_000_000L,
+                            statusMessage = LocalizedMessage(R.string.background_usb_active),
                         ),
                     )
                 }
@@ -148,6 +156,12 @@ class DirectUsbGamepadController(
     }
 
     fun stop() {
+        captureRequested.set(false)
+        pendingPermissionDevice = null
+        closeConnection()
+    }
+
+    private fun closeConnection() {
         running.set(false)
         worker?.interrupt(); worker = null
         claimedInterface?.let { connection?.releaseInterface(it) }
@@ -173,7 +187,9 @@ class DirectUsbGamepadController(
         }
 
     private fun finishPermissionRequest(device: UsbDevice?) {
-        if (device != null && manager.hasPermission(device)) {
+        if (!captureRequested.get()) {
+            pendingPermissionDevice = null
+        } else if (device != null && manager.hasPermission(device)) {
             pendingPermissionDevice = null
             open(device)
         } else {

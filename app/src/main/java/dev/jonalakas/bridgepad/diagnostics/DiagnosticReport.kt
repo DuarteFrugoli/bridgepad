@@ -1,7 +1,7 @@
 package dev.jonalakas.bridgepad.diagnostics
 
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
-import dev.jonalakas.bridgepad.output.hid.HidSessionState
+import dev.jonalakas.bridgepad.session.SessionState as HidSessionState
 
 object DiagnosticReport {
     fun create(

@@ -13,9 +13,16 @@ import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.diagnostics.DeviceInfo
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
-import dev.jonalakas.bridgepad.output.hid.*
+import dev.jonalakas.bridgepad.input.usb.DirectUsbState
+import dev.jonalakas.bridgepad.core.session.InputMode
+import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
+import dev.jonalakas.bridgepad.session.FeedbackLevel as HidFeedbackLevel
+import dev.jonalakas.bridgepad.session.PairedHost
+import dev.jonalakas.bridgepad.session.SessionState as HidSessionState
 import dev.jonalakas.bridgepad.ui.components.NoticeCard
 import dev.jonalakas.bridgepad.ui.components.NoticeTone
+import dev.jonalakas.bridgepad.session.SessionSetup
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,6 +36,9 @@ fun HomeScreen(
     hidState: HidSessionState,
     physicalGamepadState: PhysicalGamepadState,
     inputMode: InputMode?,
+    physicalCaptureMode: PhysicalCaptureMode?,
+    directUsbState: DirectUsbState,
+    mappingAvailable: Boolean,
     bluetoothSelected: Boolean,
     onSelectBluetooth: () -> Unit,
     pairedHosts: List<PairedHost>,
@@ -40,11 +50,10 @@ fun HomeScreen(
     preparingConnection: Boolean,
     onSelectHost: (String?) -> Unit,
     onInputModeChanged: (InputMode) -> Unit,
+    onPhysicalCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
     onPrepareBluetooth: () -> Unit,
     onPlay: () -> Unit,
-    onEnableCompatibilityInput: () -> Unit,
-    onEnableBackgroundUsb: () -> Unit,
-    onConfigureUsbMapping: () -> Unit,
+    onConfigureGamepadMapping: () -> Unit,
     onOpenTouchController: () -> Unit,
     onOpenMouseTouchpad: () -> Unit,
     onStopHid: () -> Unit,
@@ -56,7 +65,8 @@ fun HomeScreen(
     var panel by rememberSaveable { mutableStateOf<String?>(null) }
     val connected = hidState.status == HidSessionStatus.CONNECTED
     val setupComplete = SessionSetup.canConnect(
-        inputMode, bluetoothSelected, bluetoothEnabled && bluetoothPermissionGranted,
+        inputMode, physicalCaptureMode, bluetoothSelected,
+        bluetoothEnabled && bluetoothPermissionGranted,
         selectedAddress, pairNewPcSelected, pairedHosts.map { it.address },
     )
     val busy = preparingConnection || hidState.status in listOf(
@@ -88,11 +98,44 @@ fun HomeScreen(
                         TextButton(onClick = { panel = "layout" }) { Text(stringResource(R.string.controller_layout)) }
                     } else if (inputMode == InputMode.PHYSICAL_GAMEPAD) {
                         val deviceNames = physicalGamepadState.devices.joinToString { it.name }
+                        Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleSmall)
+                        Choice(
+                            physicalCaptureMode == PhysicalCaptureMode.COMPATIBILITY,
+                            R.string.compatibility_mode,
+                            !busy,
+                        ) { onPhysicalCaptureModeChanged(PhysicalCaptureMode.COMPATIBILITY) }
+                        Text(stringResource(R.string.compatibility_mode_description), style = MaterialTheme.typography.bodySmall)
+                        Choice(
+                            physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB,
+                            R.string.background_usb_mode,
+                            !busy,
+                        ) { onPhysicalCaptureModeChanged(PhysicalCaptureMode.BACKGROUND_USB) }
+                        Text(stringResource(R.string.background_usb_description), style = MaterialTheme.typography.bodySmall)
                         Text(
-                            if (hidState.directUsbActive) stringResource(R.string.background_usb_mode)
-                            else deviceNames.ifEmpty { stringResource(R.string.physical_input_missing) },
+                            when (physicalCaptureMode) {
+                                PhysicalCaptureMode.BACKGROUND_USB -> directUsbState.deviceName
+                                    ?: stringResource(R.string.physical_input_missing_usb)
+                                PhysicalCaptureMode.COMPATIBILITY -> deviceNames.ifEmpty {
+                                    stringResource(R.string.physical_input_missing)
+                                }
+                                null -> stringResource(R.string.choose_capture_mode)
+                            },
                         )
-                        TextButton(onClick = { panel = "controller" }) { Text(stringResource(R.string.controller_options)) }
+                        if (physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB && directUsbState.statusMessage != null) {
+                            NoticeCard(
+                                stringResource(
+                                    directUsbState.statusMessage.resourceId,
+                                    *directUsbState.statusMessage.arguments.toTypedArray(),
+                                ),
+                                if (directUsbState.statusIsError) NoticeTone.WARNING else NoticeTone.SUCCESS,
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = onConfigureGamepadMapping,
+                            enabled = mappingAvailable && !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(stringResource(R.string.configure_gamepad_mapping)) }
+                        Text(stringResource(R.string.mapping_optional_both_modes), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
@@ -200,7 +243,6 @@ fun HomeScreen(
             onDismissRequest = { panel = null },
             title = { Text(stringResource(when (panel) {
                 "layout" -> R.string.controller_layout
-                "controller" -> R.string.controller_options
                 else -> R.string.settings
             })) },
             confirmButton = { TextButton(onClick = { panel = null }) { Text(stringResource(R.string.close_action)) } },
@@ -210,21 +252,6 @@ fun HomeScreen(
                         "layout" -> {
                             Text(stringResource(R.string.default_layout))
                             Text(stringResource(R.string.layout_description))
-                        }
-                        "controller" -> {
-                            Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleMedium)
-                            Choice(hidState.physicalCaptureMode == PhysicalCaptureMode.COMPATIBILITY, R.string.compatibility_mode, connected, onEnableCompatibilityInput)
-                            Text(stringResource(R.string.compatibility_mode_description))
-                            Choice(hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB, R.string.background_usb_mode, connected, onEnableBackgroundUsb)
-                            Text(stringResource(R.string.background_usb_description))
-                            if (!connected) Text(stringResource(R.string.capture_requires_session))
-                            HorizontalDivider()
-                            Text(stringResource(R.string.mapping_optional))
-                            OutlinedButton(
-                                onClick = { panel = null; onConfigureUsbMapping() },
-                                enabled = connected && hidState.directUsbActive,
-                            ) { Text(stringResource(R.string.configure_usb_mapping)) }
-                            Text(stringResource(R.string.mapping_scope), style = MaterialTheme.typography.bodySmall)
                         }
                         else -> {
                             Text(stringResource(R.string.language_title), style = MaterialTheme.typography.titleMedium)
@@ -275,7 +302,7 @@ private fun Choice(selected: Boolean, label: Int, enabled: Boolean, onClick: () 
 
 fun HidSessionStatus.labelResource(): Int = when (this) {
     HidSessionStatus.IDLE -> R.string.state_idle
-    HidSessionStatus.STARTING, HidSessionStatus.REGISTERING -> R.string.preparing_connection
+    HidSessionStatus.STARTING, HidSessionStatus.REGISTERING, HidSessionStatus.STOPPING -> R.string.preparing_connection
     HidSessionStatus.READY -> R.string.state_ready
     HidSessionStatus.CONNECTING -> R.string.state_connecting
     HidSessionStatus.CONNECTED -> R.string.state_connected

@@ -1,7 +1,6 @@
 package dev.jonalakas.bridgepad.output.hid
 
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
-import dev.jonalakas.bridgepad.core.output.HidReportEncoder
 
 object GamepadHidDescriptor {
     const val REPORT_ID = 1

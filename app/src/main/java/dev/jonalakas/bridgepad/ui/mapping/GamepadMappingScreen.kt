@@ -16,9 +16,8 @@ import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
-import dev.jonalakas.bridgepad.input.usb.AxisBinding
-import dev.jonalakas.bridgepad.input.usb.DirectUsbState
-import dev.jonalakas.bridgepad.input.usb.UsbGamepadMapping
+import dev.jonalakas.bridgepad.core.mapping.AxisBinding
+import dev.jonalakas.bridgepad.core.mapping.GamepadMapping
 
 private sealed interface MappingStep {
     val prompt: Int
@@ -60,17 +59,24 @@ private val steps = listOf(
     MappingStep.Button(VirtualControl.EXTRA_2, R.string.mapping_prompt_26),
 )
 
+data class GamepadMappingInput(
+    val deviceName: String,
+    val deviceKey: String,
+    val rawGamepad: VirtualGamepadState,
+    val inputEventCount: Long,
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UsbMappingScreen(
-    usbState: DirectUsbState,
-    onSave: (UsbGamepadMapping) -> Unit,
+fun GamepadMappingScreen(
+    input: GamepadMappingInput,
+    onSave: (GamepadMapping) -> Unit,
     onCancel: () -> Unit,
 ) {
     val context = LocalContext.current
     androidx.activity.compose.BackHandler(onBack = onCancel)
     var stepIndex by rememberSaveable { mutableIntStateOf(0) }
-    var baseline by remember { mutableStateOf(usbState.rawGamepad) }
+    var baseline by remember { mutableStateOf(input.rawGamepad) }
     var armed by remember { mutableStateOf(false) }
     val buttons = rememberSaveable(
         saver = buttonMappingSaver(),
@@ -85,21 +91,21 @@ fun UsbMappingScreen(
     val step = steps.getOrNull(stepIndex)
 
     LaunchedEffect(stepIndex) {
-        baseline = usbState.rawGamepad
-        armed = usbState.rawGamepad.isNeutral()
+        baseline = input.rawGamepad
+        armed = input.rawGamepad.isNeutral()
         instruction = if (armed) context.getString(R.string.mapping_ready) else context.getString(R.string.mapping_release_first)
     }
-    LaunchedEffect(usbState.inputEventCount, stepIndex) {
+    LaunchedEffect(input.inputEventCount, stepIndex) {
         val currentStep = steps.getOrNull(stepIndex) ?: return@LaunchedEffect
         if (!armed) {
-            if (usbState.rawGamepad.isNeutral()) {
-                baseline = usbState.rawGamepad
+            if (input.rawGamepad.isNeutral()) {
+                baseline = input.rawGamepad
                 armed = true
                 instruction = context.getString(R.string.mapping_ready)
             }
             return@LaunchedEffect
         }
-        val pressedNow = usbState.rawGamepad.pressedButtons - baseline.pressedButtons
+        val pressedNow = input.rawGamepad.pressedButtons - baseline.pressedButtons
         val skipSource = buttons[VirtualControl.FACE_SOUTH]
         if (currentStep !is MappingStep.Button || currentStep.target != VirtualControl.FACE_SOUTH) {
             if (skipSource != null && skipSource in pressedNow) {
@@ -110,7 +116,7 @@ fun UsbMappingScreen(
         }
         when (currentStep) {
             is MappingStep.Button -> {
-                val source = (usbState.rawGamepad.pressedButtons - baseline.pressedButtons).firstOrNull()
+                val source = (input.rawGamepad.pressedButtons - baseline.pressedButtons).firstOrNull()
                 if (source != null) {
                     val usedBy = buttons.entries.firstOrNull {
                         it.value == source && it.key != currentStep.target
@@ -125,16 +131,16 @@ fun UsbMappingScreen(
                 }
             }
             is MappingStep.Dpad -> {
-                if (usbState.rawGamepad.dpad != DpadDirection.NEUTRAL &&
-                    usbState.rawGamepad.dpad != baseline.dpad
+                if (input.rawGamepad.dpad != DpadDirection.NEUTRAL &&
+                    input.rawGamepad.dpad != baseline.dpad
                 ) {
                     val usedBy = dpad.entries.firstOrNull {
-                        it.value == usbState.rawGamepad.dpad && it.key != currentStep.target
+                        it.value == input.rawGamepad.dpad && it.key != currentStep.target
                     }?.key
                     if (usedBy != null) {
                         instruction = context.getString(R.string.mapping_dpad_used)
                     } else {
-                        dpad[currentStep.target] = usbState.rawGamepad.dpad
+                        dpad[currentStep.target] = input.rawGamepad.dpad
                         armed = false
                         stepIndex++
                     }
@@ -142,7 +148,7 @@ fun UsbMappingScreen(
             }
             is MappingStep.Axis -> {
                 val movement = VirtualAxis.entries.map { axis ->
-                    axis to (usbState.rawGamepad.valueOf(axis) - baseline.valueOf(axis))
+                    axis to (input.rawGamepad.valueOf(axis) - baseline.valueOf(axis))
                 }.maxByOrNull { kotlin.math.abs(it.second) }
                 if (movement != null && kotlin.math.abs(movement.second) >= 0.45f) {
                     val observedSign = if (movement.second < 0f) -1 else 1
@@ -175,7 +181,7 @@ fun UsbMappingScreen(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Text(usbState.deviceName ?: stringResource(R.string.usb_gamepad), style = MaterialTheme.typography.titleMedium)
+            Text(input.deviceName, style = MaterialTheme.typography.titleMedium)
             LinearProgressIndicator(
                 progress = { stepIndex.toFloat() / steps.size },
                 modifier = Modifier.fillMaxWidth(),
@@ -210,7 +216,7 @@ fun UsbMappingScreen(
                 Button(
                     onClick = {
                         onSave(
-                            UsbGamepadMapping(
+                            GamepadMapping(
                                 buttons = buttons.toMap(),
                                 axes = axes.toMap(),
                                 dpad = dpad.toMap(),

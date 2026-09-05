@@ -17,7 +17,7 @@ introducing a cross-platform abstraction before the core behavior is proven.
 - Use semantic version names and monotonically increasing integer version
   codes. Initial development starts at version name `0.1.0`, version code `1`.
 - Keep a single Gradle application module until isolation or reuse justifies
-  additional modules.
+  additional modules. This temporary constraint was superseded by ADR 0006.
 
 ## Consequences
 

@@ -17,7 +17,10 @@ data class PhysicalGamepadInfo(
     val vendorId: Int,
     val productId: Int,
     val axes: List<String>,
-)
+) {
+    val mappingKey: String
+        get() = "android:${sourceId.value}"
+}
 
 data class AxisDiagnostic(
     val rawValue: Float,
@@ -27,6 +30,7 @@ data class AxisDiagnostic(
 data class PhysicalGamepadState(
     val devices: List<PhysicalGamepadInfo> = emptyList(),
     val sourceStates: Map<SourceId, VirtualGamepadState> = emptyMap(),
+    val rawSourceStates: Map<SourceId, VirtualGamepadState> = emptyMap(),
     val axisDiagnostics: Map<String, AxisDiagnostic> = emptyMap(),
     val lastRawEvent: String = "Connect a USB gamepad and press a control.",
     val inputEventCount: Long = 0,

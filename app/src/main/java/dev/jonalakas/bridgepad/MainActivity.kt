@@ -14,8 +14,8 @@ import android.provider.Settings
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import dev.jonalakas.bridgepad.output.hid.PairedHost
-import dev.jonalakas.bridgepad.output.hid.HidSessionStatus
+import dev.jonalakas.bridgepad.session.PairedHost
+import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -50,18 +50,21 @@ import dev.jonalakas.bridgepad.input.android.AndroidGamepadController
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
-import dev.jonalakas.bridgepad.input.usb.UsbGamepadMappingStore
+import dev.jonalakas.bridgepad.input.usb.DirectUsbCaptureManager
+import dev.jonalakas.bridgepad.input.mapping.GamepadMappingStore
 import dev.jonalakas.bridgepad.output.hid.BluetoothHidService
-import dev.jonalakas.bridgepad.output.hid.HidSessionStore
-import dev.jonalakas.bridgepad.output.hid.HidFeedbackLevel
+import dev.jonalakas.bridgepad.session.SessionStore as HidSessionStore
+import dev.jonalakas.bridgepad.session.FeedbackLevel as HidFeedbackLevel
+import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
-import dev.jonalakas.bridgepad.ui.home.InputMode
 import dev.jonalakas.bridgepad.ui.home.DestinationSelection
-import dev.jonalakas.bridgepad.ui.home.SessionSetup
+import dev.jonalakas.bridgepad.session.SessionSetup
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
-import dev.jonalakas.bridgepad.ui.mapping.UsbMappingScreen
+import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
+import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 class MainActivity : ComponentActivity() {
@@ -80,7 +83,7 @@ class MainActivity : ComponentActivity() {
                 var bluetoothPermissionGranted by remember { mutableStateOf(hasBluetoothPermission()) }
                 var showTouchController by rememberSaveable { mutableStateOf(false) }
                 var showMouseTouchpad by rememberSaveable { mutableStateOf(false) }
-                var showUsbMapping by rememberSaveable { mutableStateOf(false) }
+                var showGamepadMapping by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
@@ -90,6 +93,7 @@ class MainActivity : ComponentActivity() {
                 var bluetoothSelected by rememberSaveable {
                     mutableStateOf(false)
                 }
+                var captureModeName by rememberSaveable { mutableStateOf<String?>(null) }
                 var selectedAddress by rememberSaveable { mutableStateOf<String?>(null) }
                 var pairNewPcSelected by rememberSaveable { mutableStateOf(false) }
                 var showDestinationPicker by rememberSaveable { mutableStateOf(false) }
@@ -188,6 +192,35 @@ class MainActivity : ComponentActivity() {
                 val effectiveInputMode = if (hidState.sessionActive) {
                     if (hidState.touchInputSelected) InputMode.TOUCHSCREEN else InputMode.PHYSICAL_GAMEPAD
                 } else inputMode
+                val effectiveCaptureMode = if (hidState.sessionActive) {
+                    hidState.physicalCaptureMode
+                } else {
+                    captureModeName?.let(PhysicalCaptureMode::valueOf)
+                }
+                val mappingInput = when (effectiveCaptureMode) {
+                    PhysicalCaptureMode.BACKGROUND_USB -> directUsbState.deviceKey?.let { key ->
+                        GamepadMappingInput(
+                            deviceName = directUsbState.deviceName ?: getString(R.string.usb_gamepad),
+                            deviceKey = key,
+                            rawGamepad = directUsbState.rawGamepad,
+                            inputEventCount = directUsbState.inputEventCount,
+                        )
+                    }
+                    PhysicalCaptureMode.COMPATIBILITY -> physicalGamepadState.devices.firstOrNull()?.let { device ->
+                        GamepadMappingInput(
+                            deviceName = device.name,
+                            deviceKey = device.mappingKey,
+                            rawGamepad = physicalGamepadState.rawSourceStates[device.sourceId]
+                                ?: dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState(),
+                            inputEventCount = physicalGamepadState.inputEventCount,
+                        )
+                    }
+                    null -> null
+                }
+
+                LaunchedEffect(showGamepadMapping, mappingInput) {
+                    if (showGamepadMapping && mappingInput == null) showGamepadMapping = false
+                }
 
                 LaunchedEffect(bluetoothEnabled, bluetoothPermissionGranted) {
                     if (!bluetoothEnabled || !bluetoothPermissionGranted) {
@@ -273,7 +306,11 @@ class MainActivity : ComponentActivity() {
                             ContextCompat.startForegroundService(
                                 this@MainActivity,
                                 BluetoothHidService.intent(this@MainActivity, BluetoothHidService.ACTION_START)
-                                    .putExtra(BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED, inputMode == InputMode.TOUCHSCREEN),
+                                    .putExtra(BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED, inputMode == InputMode.TOUCHSCREEN)
+                                    .putExtra(
+                                        BluetoothHidService.EXTRA_PHYSICAL_CAPTURE_MODE,
+                                        effectiveCaptureMode?.name,
+                                    ),
                             )
                         }
                         hidState.status == HidSessionStatus.ERROR && hidState.sessionActive && connectionGate != "restart" -> {
@@ -309,18 +346,21 @@ class MainActivity : ComponentActivity() {
                             onboardingComplete = true
                         },
                     )
-                } else if (showUsbMapping) {
-                    UsbMappingScreen(
-                        usbState = directUsbState,
+                } else if (showGamepadMapping && mappingInput != null) {
+                    GamepadMappingScreen(
+                        input = mappingInput,
                         onSave = { mapping ->
-                            directUsbState.deviceKey?.let { key ->
-                                UsbGamepadMappingStore.initialize(this)
-                                UsbGamepadMappingStore.save(key, mapping)
-                                DirectUsbGamepadStore.applyMapping(mapping)
+                            mappingInput.deviceKey.let { key ->
+                                GamepadMappingStore.save(key, mapping)
                             }
-                            showUsbMapping = false
+                            if (effectiveCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
+                                DirectUsbGamepadStore.applyMapping(mapping)
+                            } else {
+                                gamepadController.reloadMappings()
+                            }
+                            showGamepadMapping = false
                         },
-                        onCancel = { showUsbMapping = false },
+                        onCancel = { showGamepadMapping = false },
                     )
                 } else if (showTouchController) {
                     LaunchedEffect(Unit) { enterGamepadMode() }
@@ -349,6 +389,9 @@ class MainActivity : ComponentActivity() {
                     hidState = hidState,
                     physicalGamepadState = physicalGamepadState,
                     inputMode = effectiveInputMode,
+                    physicalCaptureMode = effectiveCaptureMode,
+                    directUsbState = directUsbState,
+                    mappingAvailable = mappingInput != null,
                     bluetoothSelected = hidState.sessionActive || bluetoothSelected,
                     onSelectBluetooth = {
                         bluetoothSelected = true
@@ -373,6 +416,10 @@ class MainActivity : ComponentActivity() {
                     onInputModeChanged = { mode ->
                         inputModeName = mode.name
                         if (mode == InputMode.PHYSICAL_GAMEPAD) TouchGamepadStore.deactivate()
+                        if (mode == InputMode.TOUCHSCREEN && !hidState.sessionActive) {
+                            captureModeName = null
+                            DirectUsbCaptureManager.stop()
+                        }
                         if (hidState.sessionActive) {
                             startService(
                                 BluetoothHidService.intent(this, BluetoothHidService.ACTION_SELECT_INPUT)
@@ -380,6 +427,25 @@ class MainActivity : ComponentActivity() {
                                         BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED,
                                         mode == InputMode.TOUCHSCREEN,
                                     ),
+                            )
+                        }
+                    },
+                    onPhysicalCaptureModeChanged = { mode ->
+                        captureModeName = mode.name
+                        when (mode) {
+                            PhysicalCaptureMode.COMPATIBILITY -> DirectUsbCaptureManager.stop()
+                            PhysicalCaptureMode.BACKGROUND_USB -> DirectUsbCaptureManager.start(this)
+                        }
+                        if (hidState.sessionActive) {
+                            startService(
+                                BluetoothHidService.intent(
+                                    this,
+                                    if (mode == PhysicalCaptureMode.BACKGROUND_USB) {
+                                        BluetoothHidService.ACTION_ENABLE_BACKGROUND_USB
+                                    } else {
+                                        BluetoothHidService.ACTION_ENABLE_COMPATIBILITY_INPUT
+                                    },
+                                ),
                             )
                         }
                     },
@@ -395,6 +461,7 @@ class MainActivity : ComponentActivity() {
                         pairedHosts = currentHosts
                         if (SessionSetup.canConnect(
                                 effectiveInputMode,
+                                effectiveCaptureMode,
                                 hidState.sessionActive || bluetoothSelected,
                                 bluetoothReady,
                                 selectedAddress,
@@ -405,13 +472,7 @@ class MainActivity : ComponentActivity() {
                             pendingDestination = DestinationSelection.requestFor(selectedAddress, pairNewPcSelected, bluetoothReady)
                         }
                     },
-                    onEnableCompatibilityInput = {
-                        startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_ENABLE_COMPATIBILITY_INPUT))
-                    },
-                    onEnableBackgroundUsb = {
-                        startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_ENABLE_BACKGROUND_USB))
-                    },
-                    onConfigureUsbMapping = { showUsbMapping = true },
+                    onConfigureGamepadMapping = { if (mappingInput != null) showGamepadMapping = true },
                     onOpenTouchController = {
                         showTouchController = true
                     },
@@ -420,6 +481,8 @@ class MainActivity : ComponentActivity() {
                     },
                     onStopHid = {
                         inputModeName = null
+                        captureModeName = null
+                        DirectUsbCaptureManager.stop()
                         bluetoothSelected = false
                         selectedAddress = null
                         pairNewPcSelected = false
@@ -479,6 +542,13 @@ class MainActivity : ComponentActivity() {
         TouchGamepadStore.neutralize()
         gamepadController.stop()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (isFinishing && !HidSessionStore.state.value.sessionActive) {
+            DirectUsbCaptureManager.stop()
+        }
+        super.onDestroy()
     }
 
     @SuppressLint("RestrictedApi")
