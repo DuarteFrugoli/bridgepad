@@ -1,9 +1,21 @@
 package dev.jonalakas.bridgepad
 
+import dev.jonalakas.bridgepad.localization.LocalizedMessage
 import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothClass
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.net.Uri
+import android.provider.Settings
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import dev.jonalakas.bridgepad.output.hid.PairedHost
+import dev.jonalakas.bridgepad.output.hid.HidSessionStatus
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -44,6 +56,8 @@ import dev.jonalakas.bridgepad.output.hid.HidSessionStore
 import dev.jonalakas.bridgepad.output.hid.HidFeedbackLevel
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
 import dev.jonalakas.bridgepad.ui.home.InputMode
+import dev.jonalakas.bridgepad.ui.home.DestinationSelection
+import dev.jonalakas.bridgepad.ui.home.SessionSetup
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
@@ -70,17 +84,74 @@ class MainActivity : ComponentActivity() {
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
-                var inputModeName by rememberSaveable { mutableStateOf(InputMode.TOUCHSCREEN.name) }
-                val inputMode = InputMode.valueOf(inputModeName)
+                var inputModeName by rememberSaveable {
+                    mutableStateOf<String?>(null)
+                }
+                var bluetoothSelected by rememberSaveable {
+                    mutableStateOf(false)
+                }
+                var selectedAddress by rememberSaveable { mutableStateOf<String?>(null) }
+                var pairNewPcSelected by rememberSaveable { mutableStateOf(false) }
+                var showDestinationPicker by rememberSaveable { mutableStateOf(false) }
+                var pendingDestination by rememberSaveable { mutableStateOf<String?>(null) }
+                var connectionGate by rememberSaveable { mutableStateOf<String?>(null) }
+                var openAfterConnection by rememberSaveable { mutableStateOf(false) }
+                var pairedHosts by remember { mutableStateOf(readPairedHosts()) }
+                var bluetoothEnabled by remember { mutableStateOf(isBluetoothEnabled()) }
+                DisposableEffect(Unit) {
+                    fun refresh() {
+                        bluetoothPermissionGranted = hasBluetoothPermission()
+                        bluetoothEnabled = isBluetoothEnabled()
+                        pairedHosts = readPairedHosts()
+                    }
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) refresh()
+                    }
+                    val receiver = object : BroadcastReceiver() {
+                        override fun onReceive(context: Context?, intent: Intent?) { refresh() }
+                    }
+                    lifecycle.addObserver(observer)
+                    ContextCompat.registerReceiver(
+                        this@MainActivity, receiver,
+                        IntentFilter().apply {
+                            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+                            addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+                        },
+                        ContextCompat.RECEIVER_EXPORTED,
+                    )
+                    onDispose {
+                        lifecycle.removeObserver(observer)
+                        unregisterReceiver(receiver)
+                    }
+                }
+                val enableBluetoothLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult(),
+                ) { result ->
+                    bluetoothEnabled = isBluetoothEnabled()
+                    connectionGate = null
+                    if (!bluetoothEnabled && result.resultCode == RESULT_OK && pendingDestination != null) {
+                        // Approval may arrive before the adapter actually reaches STATE_ON.
+                        connectionGate = "bluetooth_starting"
+                    } else if (!bluetoothEnabled) {
+                        pendingDestination = null
+                        HidSessionStore.update { it.copy(message = LocalizedMessage(R.string.bluetooth_required), feedbackLevel = HidFeedbackLevel.WARNING) }
+                    }
+                    pairedHosts = readPairedHosts()
+                }
+                val inputMode = inputModeName?.let(InputMode::valueOf)
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestMultiplePermissions(),
                 ) {
                     bluetoothPermissionGranted = hasBluetoothPermission()
+                    pairedHosts = readPairedHosts()
+                    bluetoothEnabled = isBluetoothEnabled()
+                    connectionGate = null
                     if (!bluetoothPermissionGranted) {
+                        pendingDestination = null
                         SessionLog.record("PERMISSION", "Bluetooth permission was not granted")
                         HidSessionStore.update {
                             it.copy(
-                                message = "Bluetooth permission is required. You can grant it when you are ready.",
+                                message = LocalizedMessage(R.string.bluetooth_permission_required),
                                 feedbackLevel = HidFeedbackLevel.WARNING,
                             )
                         }
@@ -89,7 +160,9 @@ class MainActivity : ComponentActivity() {
                 val discoverableLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
                 ) { result ->
-                    if (result.resultCode > 0) {
+                    if (!HidSessionStore.state.value.sessionActive) {
+                        openAfterConnection = false
+                    } else if (result.resultCode > 0) {
                         startService(
                             BluetoothHidService.intent(
                                 this,
@@ -100,9 +173,10 @@ class MainActivity : ComponentActivity() {
                             ),
                         )
                     } else {
+                        openAfterConnection = false
                         HidSessionStore.update {
                             it.copy(
-                                message = "Phone visibility was not enabled. Tap Pair new PC to try again.",
+                                message = LocalizedMessage(R.string.visibility_not_enabled),
                                 feedbackLevel = HidFeedbackLevel.WARNING,
                             )
                         }
@@ -111,6 +185,122 @@ class MainActivity : ComponentActivity() {
                 val hidState by HidSessionStore.state.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
+                val effectiveInputMode = if (hidState.sessionActive) {
+                    if (hidState.touchInputSelected) InputMode.TOUCHSCREEN else InputMode.PHYSICAL_GAMEPAD
+                } else inputMode
+
+                LaunchedEffect(bluetoothEnabled, bluetoothPermissionGranted) {
+                    if (!bluetoothEnabled || !bluetoothPermissionGranted) {
+                        pairNewPcSelected = false
+                        showDestinationPicker = false
+                    }
+                }
+                LaunchedEffect(connectionGate) {
+                    if (connectionGate == "bluetooth_starting") {
+                        kotlinx.coroutines.delay(15_000)
+                        if (!isBluetoothEnabled()) {
+                            pendingDestination = null
+                            connectionGate = null
+                            HidSessionStore.update { it.copy(message = LocalizedMessage(R.string.bluetooth_required), feedbackLevel = HidFeedbackLevel.WARNING) }
+                        }
+                    }
+                }
+
+                LaunchedEffect(Unit) {
+                    // A restored Activity must not wait forever for a service lost with the process.
+                    if (connectionGate == "service" && !HidSessionStore.state.value.sessionActive) {
+                        pendingDestination = null
+                        connectionGate = null
+                    }
+                }
+
+                // A user gesture owns the whole preflight. Recomposition never starts a session by itself.
+                LaunchedEffect(pendingDestination, connectionGate, bluetoothPermissionGranted, bluetoothEnabled, hidState.status, hidState.sessionActive, hidState.message) {
+                    val destination = pendingDestination ?: return@LaunchedEffect
+                    when {
+                        connectionGate == "permission" || connectionGate == "bluetooth" -> Unit
+                        connectionGate == "bluetooth_starting" && !bluetoothEnabled -> Unit
+                        connectionGate == "bluetooth_starting" -> connectionGate = null
+                        connectionGate == "restart" && !hidState.sessionActive -> connectionGate = null
+                        connectionGate == "service" && !bluetoothEnabled -> {
+                            pendingDestination = null
+                            connectionGate = null
+                        }
+                        !bluetoothPermissionGranted -> {
+                            pendingDestination = DestinationSelection.CHOOSE_PC
+                            pairNewPcSelected = false
+                            connectionGate = "permission"
+                            permissionLauncher.launch(requiredPermissions())
+                        }
+                        !bluetoothEnabled -> {
+                            pendingDestination = DestinationSelection.CHOOSE_PC
+                            pairNewPcSelected = false
+                            connectionGate = "bluetooth"
+                            enableBluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+                        }
+                        destination == DestinationSelection.CHOOSE_PC -> {
+                            pairedHosts = readPairedHosts()
+                            pendingDestination = null
+                            connectionGate = null
+                            showDestinationPicker = true
+                        }
+                        destination != NEW_PC && pairedHosts.none { it.address == destination } -> {
+                            pendingDestination = null
+                            connectionGate = null
+                            HidSessionStore.update { it.copy(message = LocalizedMessage(R.string.selected_pc_unavailable), feedbackLevel = HidFeedbackLevel.WARNING) }
+                        }
+                        connectionGate == "service" && !hidState.sessionActive && hidState.message != null -> {
+                            pendingDestination = null
+                            connectionGate = null
+                        }
+                        hidState.status == HidSessionStatus.READY -> {
+                            pendingDestination = null
+                            connectionGate = null
+                            openAfterConnection = true
+                            if (destination == NEW_PC) {
+                                discoverableLauncher.launch(
+                                    Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+                                        .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120),
+                                )
+                            } else {
+                                startService(BluetoothHidService.intent(this@MainActivity, BluetoothHidService.ACTION_CONNECT)
+                                    .putExtra(BluetoothHidService.EXTRA_ADDRESS, destination))
+                            }
+                        }
+                        connectionGate == null && !hidState.sessionActive -> {
+                            connectionGate = "service"
+                            HidSessionStore.update { it.copy(message = null, status = HidSessionStatus.IDLE) }
+                            ContextCompat.startForegroundService(
+                                this@MainActivity,
+                                BluetoothHidService.intent(this@MainActivity, BluetoothHidService.ACTION_START)
+                                    .putExtra(BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED, inputMode == InputMode.TOUCHSCREEN),
+                            )
+                        }
+                        hidState.status == HidSessionStatus.ERROR && hidState.sessionActive && connectionGate != "restart" -> {
+                            connectionGate = "restart"
+                            startService(BluetoothHidService.intent(this@MainActivity, BluetoothHidService.ACTION_STOP))
+                        }
+                    }
+                }
+                LaunchedEffect(hidState.status, hidState.sessionActive, effectiveInputMode, openAfterConnection) {
+                    if (hidState.status == HidSessionStatus.CONNECTED && openAfterConnection) {
+                        openAfterConnection = false
+                        showTouchController = effectiveInputMode == InputMode.TOUCHSCREEN
+                        showMouseTouchpad = effectiveInputMode == InputMode.PHYSICAL_GAMEPAD
+                        hidState.connectedHostAddress?.let { address ->
+                            selectedAddress = address
+                            pairNewPcSelected = false
+                        }
+                    }
+                    if (!hidState.sessionActive || hidState.status == HidSessionStatus.ERROR) {
+                        openAfterConnection = false
+                    }
+                    if (hidState.status != HidSessionStatus.CONNECTED && (showTouchController || showMouseTouchpad)) {
+                        showTouchController = false
+                        showMouseTouchpad = false
+                        exitGamepadMode()
+                    }
+                }
 
                 if (!onboardingComplete) {
                     OnboardingScreen(
@@ -144,6 +334,7 @@ class MainActivity : ComponentActivity() {
                 } else if (showMouseTouchpad) {
                     LaunchedEffect(Unit) { enterGamepadMode() }
                     MouseTouchpadScreen(
+                        hidState = hidState,
                         onExit = {
                             showMouseTouchpad = false
                             exitGamepadMode()
@@ -153,10 +344,32 @@ class MainActivity : ComponentActivity() {
                     appVersion = BuildConfig.VERSION_NAME,
                     deviceInfo = deviceInfo,
                     bluetoothPermissionGranted = bluetoothPermissionGranted,
+                    bluetoothEnabled = bluetoothEnabled,
                     hidCompatible = isBluetoothHidPotentiallyAvailable(),
                     hidState = hidState,
                     physicalGamepadState = physicalGamepadState,
-                    inputMode = inputMode,
+                    inputMode = effectiveInputMode,
+                    bluetoothSelected = hidState.sessionActive || bluetoothSelected,
+                    onSelectBluetooth = {
+                        bluetoothSelected = true
+                    },
+                    pairedHosts = pairedHosts,
+                    selectedAddress = selectedAddress,
+                    pairNewPcSelected = pairNewPcSelected,
+                    showDestinationPicker = showDestinationPicker,
+                    onDismissDestinationPicker = { showDestinationPicker = false },
+                    onPickDestination = { address ->
+                        selectedAddress = address
+                        pairNewPcSelected = address == null
+                        showDestinationPicker = false
+                        connectionGate = null
+                        pendingDestination = null
+                    },
+                    preparingConnection = pendingDestination != null,
+                    onSelectHost = { address ->
+                        selectedAddress = address
+                        pairNewPcSelected = address == null
+                    },
                     onInputModeChanged = { mode ->
                         inputModeName = mode.name
                         if (mode == InputMode.PHYSICAL_GAMEPAD) TouchGamepadStore.deactivate()
@@ -170,27 +383,27 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     },
-                    onRequestPermissions = { permissionLauncher.launch(requiredPermissions()) },
-                    onStartHid = {
-                        ContextCompat.startForegroundService(
-                            this,
-                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_START)
-                                .putExtra(
-                                    BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED,
-                                    inputMode == InputMode.TOUCHSCREEN,
-                                ),
-                        )
+                    onPrepareBluetooth = {
+                        pairNewPcSelected = false
+                        connectionGate = null
+                        pendingDestination = DestinationSelection.CHOOSE_PC
                     },
-                    onConnect = { address ->
-                        startService(
-                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_CONNECT)
-                                .putExtra(BluetoothHidService.EXTRA_ADDRESS, address),
-                        )
-                    },
-                    onReconnect = {
-                        startService(
-                            BluetoothHidService.intent(this, BluetoothHidService.ACTION_RECONNECT),
-                        )
+                    onPlay = {
+                        val bluetoothReady = isBluetoothEnabled()
+                        bluetoothEnabled = bluetoothReady
+                        val currentHosts = readPairedHosts()
+                        pairedHosts = currentHosts
+                        if (SessionSetup.canConnect(
+                                effectiveInputMode,
+                                hidState.sessionActive || bluetoothSelected,
+                                bluetoothReady,
+                                selectedAddress,
+                                pairNewPcSelected,
+                                currentHosts.map { it.address },
+                            )) {
+                            connectionGate = null
+                            pendingDestination = DestinationSelection.requestFor(selectedAddress, pairNewPcSelected, bluetoothReady)
+                        }
                     },
                     onEnableCompatibilityInput = {
                         startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_ENABLE_COMPATIBILITY_INPUT))
@@ -199,14 +412,6 @@ class MainActivity : ComponentActivity() {
                         startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_ENABLE_BACKGROUND_USB))
                     },
                     onConfigureUsbMapping = { showUsbMapping = true },
-                    onPairNewPc = {
-                        discoverableLauncher.launch(
-                            Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).putExtra(
-                                BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION,
-                                120,
-                            ),
-                        )
-                    },
                     onOpenTouchController = {
                         showTouchController = true
                     },
@@ -214,8 +419,23 @@ class MainActivity : ComponentActivity() {
                         showMouseTouchpad = true
                     },
                     onStopHid = {
-                        startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_STOP))
+                        inputModeName = null
+                        bluetoothSelected = false
+                        selectedAddress = null
+                        pairNewPcSelected = false
+                        showDestinationPicker = false
+                        pendingDestination = null
+                        connectionGate = null
+                        openAfterConnection = false
+                        if (hidState.sessionActive) startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_STOP))
                     },
+                    onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
+                        runCatching {
+                            startActivity(Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.parse("package:$packageName")))
+                        }.onFailure {
+                            Toast.makeText(this, R.string.language_description, Toast.LENGTH_LONG).show()
+                        }
+                    }) else null,
                     onCopyDiagnostics = {
                         val report = DiagnosticReport.create(
                             BuildConfig.VERSION_NAME,
@@ -241,7 +461,7 @@ class MainActivity : ComponentActivity() {
                                     putExtra(Intent.EXTRA_SUBJECT, "BridgePad diagnostic report")
                                     putExtra(Intent.EXTRA_TEXT, report)
                                 },
-                                "Share BridgePad diagnostics",
+                                getString(R.string.share_diagnostics),
                             ),
                         )
                     },
@@ -308,7 +528,25 @@ class MainActivity : ComponentActivity() {
             packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH) &&
             getSystemService(BluetoothManager::class.java)?.adapter != null
 
+    @SuppressLint("MissingPermission")
+    private fun isBluetoothEnabled(): Boolean =
+        hasBluetoothPermission() && runCatching {
+            getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled == true
+        }.getOrDefault(false)
+
+    @SuppressLint("MissingPermission")
+    private fun readPairedHosts(): List<PairedHost> {
+        if (!hasBluetoothPermission()) return emptyList()
+        return runCatching {
+            getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices.orEmpty()
+                .filter { it.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.COMPUTER }
+                .map { PairedHost(it.address, it.name ?: getString(R.string.unnamed_pc)) }
+                .sortedBy { it.name.lowercase() }
+        }.getOrDefault(emptyList())
+    }
+
     companion object {
+        private const val NEW_PC = DestinationSelection.NEW_PC
         private const val PREFERENCES_NAME = "bridgepad_preferences"
         private const val KEY_ONBOARDING_COMPLETE = "onboarding_complete"
     }

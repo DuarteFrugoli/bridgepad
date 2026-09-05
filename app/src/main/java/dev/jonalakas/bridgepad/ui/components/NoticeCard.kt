@@ -9,6 +9,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import dev.jonalakas.bridgepad.R
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
@@ -32,17 +34,17 @@ fun NoticeCard(
         NoticeTone.SUCCESS -> {
             containerColor = MaterialTheme.colorScheme.primaryContainer
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            title = "Status"
+            title = stringResource(R.string.status_label)
         }
         NoticeTone.WARNING -> {
             containerColor = MaterialTheme.colorScheme.tertiaryContainer
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-            title = "Attention"
+            title = stringResource(R.string.notice_attention)
         }
         NoticeTone.ERROR -> {
             containerColor = MaterialTheme.colorScheme.errorContainer
             contentColor = MaterialTheme.colorScheme.onErrorContainer
-            title = "Error"
+            title = stringResource(R.string.state_error)
         }
     }
 

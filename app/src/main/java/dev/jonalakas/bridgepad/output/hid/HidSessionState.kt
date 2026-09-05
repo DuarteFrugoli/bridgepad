@@ -1,5 +1,6 @@
 package dev.jonalakas.bridgepad.output.hid
 
+import dev.jonalakas.bridgepad.localization.LocalizedMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,11 +33,12 @@ data class HidSessionState(
     val pairedHosts: List<PairedHost> = emptyList(),
     val pairingModeActive: Boolean = false,
     val connectedHost: String? = null,
+    val connectedHostAddress: String? = null,
     val canReconnect: Boolean = false,
     val physicalCaptureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
     val directUsbActive: Boolean = false,
     val touchInputSelected: Boolean = true,
-    val message: String = "Start the gamepad bridge to connect to a PC.",
+    val message: LocalizedMessage? = null,
     val feedbackLevel: HidFeedbackLevel = HidFeedbackLevel.INFO,
     val inputRateHz: Float = 0f,
     val outputRateHz: Float = 0f,

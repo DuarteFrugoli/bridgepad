@@ -48,6 +48,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import dev.jonalakas.bridgepad.R
+import dev.jonalakas.bridgepad.ui.home.labelResource
+import dev.jonalakas.bridgepad.output.hid.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
@@ -55,7 +57,6 @@ import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.output.hid.HidSessionState
 import dev.jonalakas.bridgepad.output.hid.HidSessionStatus
-import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -92,6 +93,7 @@ fun TouchscreenGamepadScreen(
 
 @Composable
 fun MouseTouchpadScreen(
+    hidState: HidSessionState,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -108,7 +110,8 @@ fun MouseTouchpadScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                text = stringResource(R.string.mouse_touchpad_instructions),
+                text = stringResource(hidState.status.labelResource()) + " · " +
+                    stringResource(if (hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) R.string.background_usb_active else R.string.compatibility_input_active),
                 style = MaterialTheme.typography.bodyMedium,
             )
             MouseTouchpad(
@@ -144,7 +147,7 @@ private fun LeftControls(modifier: Modifier = Modifier) {
         VirtualStick(
             xAxis = VirtualAxis.LEFT_X,
             yAxis = VirtualAxis.LEFT_Y,
-            label = "Left stick",
+            label = stringResource(R.string.left_stick),
             modifier = Modifier
                 .weight(1f)
                 .aspectRatio(1f)
@@ -172,7 +175,7 @@ private fun RightControls(modifier: Modifier = Modifier) {
         VirtualStick(
             xAxis = VirtualAxis.RIGHT_X,
             yAxis = VirtualAxis.RIGHT_Y,
-            label = "Right stick",
+            label = stringResource(R.string.right_stick),
             modifier = Modifier
                 .weight(1f)
                 .aspectRatio(1f)
@@ -194,12 +197,7 @@ private fun CenterControls(
     ) {
         val connected = hidState.status == HidSessionStatus.CONNECTED
         Text(
-            text = if (connected) {
-                "Connected · ${formatMetric(hidState.outputRateHz)} Hz · " +
-                    (hidState.lastLatencyMs?.let { "${formatMetric(it)} ms" } ?: "waiting for input")
-            } else {
-                "Disconnected"
-            },
+            text = stringResource(hidState.status.labelResource()),
             color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.labelMedium,
         )
@@ -217,19 +215,21 @@ private fun CenterControls(
             GamepadButton("R3", VirtualControl.RIGHT_STICK_BUTTON)
         }
         Spacer(Modifier.weight(1f))
-        TouchButton(label = "Menu", onPressedChange = { pressed -> if (pressed) onExit() })
+        TouchButton(label = stringResource(R.string.session_menu), onPressedChange = { pressed -> if (pressed) onExit() })
     }
 }
 
 @Composable
 private fun MouseTouchpad(modifier: Modifier = Modifier) {
+    val touchpadLabel = stringResource(R.string.open_mouse_touchpad)
+    val touchpadHint = stringResource(R.string.mouse_touchpad_instructions)
     val container = MaterialTheme.colorScheme.surfaceVariant
     val outline = MaterialTheme.colorScheme.outline
     Surface(
         modifier = modifier
             .semantics {
-                contentDescription = "Mouse touchpad"
-                stateDescription = "Drag to move the pointer; tap for left click"
+                contentDescription = touchpadLabel
+                stateDescription = touchpadHint
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -258,7 +258,7 @@ private fun MouseTouchpad(modifier: Modifier = Modifier) {
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
-                text = "Mouse\nDrag to move · Tap to click",
+                text = stringResource(R.string.mouse_surface),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -309,6 +309,7 @@ private fun TouchButton(
     modifier: Modifier = Modifier,
 ) {
     var pressed by remember { mutableStateOf(false) }
+    val pressDescription = stringResource(if (pressed) R.string.control_pressed else R.string.control_released)
     val containerColor by animateColorAsState(
         if (pressed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
         label = "button color",
@@ -326,7 +327,7 @@ private fun TouchButton(
             .semantics {
                 contentDescription = label
                 role = Role.Button
-                stateDescription = if (pressed) "Pressed" else "Released"
+                stateDescription = pressDescription
             }
             .pointerInput(label) {
                 detectTapGestures(
@@ -406,6 +407,7 @@ private fun VirtualStick(
 
 @Composable
 private fun DpadPad(modifier: Modifier = Modifier) {
+    val dpadLabel = stringResource(R.string.dpad_name)
     var direction by remember { mutableStateOf(DpadDirection.NEUTRAL) }
     val base = MaterialTheme.colorScheme.surfaceVariant
     val active = MaterialTheme.colorScheme.primary
@@ -414,7 +416,7 @@ private fun DpadPad(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .semantics {
-                contentDescription = "D-pad"
+                contentDescription = dpadLabel
                 stateDescription = direction.name
             }
             .pointerInput(Unit) {
@@ -484,5 +486,3 @@ internal fun directionForPosition(position: Offset, width: Float, height: Float)
         else -> DpadDirection.NORTH_EAST
     }
 }
-
-private fun formatMetric(value: Float): String = String.format(Locale.ROOT, "%.1f", value)

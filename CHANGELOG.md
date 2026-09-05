@@ -8,6 +8,22 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- New session setups no longer preselect input, connection or destination from
+  saved preferences. Ending a session clears the choices; rotation and active
+  sessions retain their current state.
+
+- Connect and play now requires explicit input, transport and valid destination
+  choices with Bluetooth enabled. Picking a destination no longer starts a
+  session; the user confirms the completed setup with Connect and play.
+
+- Redesigned Home around input, connection and destination, with an explicit
+  connect-and-play flow, saved choices and session resumption.
+- Moved controller capture/mapping, layout information and technical diagnostics
+  into contextual options while retaining source switching during a session.
+- Added English and Brazilian Portuguese resources for the interface, mapping
+  wizard, connection notices and notifications, plus Android 13+ app-language
+  settings integration.
+
 - Foreground-service notifications now explain the capabilities and limitations
   of the selected touchscreen, physical gamepad or Background USB input mode.
 - The Bluetooth HID service now advertises both mouse and gamepad capabilities
@@ -16,6 +32,15 @@ The project follows [Semantic Versioning](https://semver.org/).
   validation of the composite HID touchpad output.
 
 ### Fixed
+
+- End session no longer appears during Bluetooth preparation before an HID
+  session has started.
+
+- Destination choices now wait for Bluetooth to be enabled. Enabling Bluetooth
+  refreshes paired PCs and opens the picker instead of resuming stale pairing.
+
+- An unset Home destination now opens a paired-PC picker instead of implicitly
+  requesting phone discoverability. New pairing requires an explicit selection.
 
 - Dynamic receivers now declare explicit export behavior on every supported
   Android version, resolving release-blocking Android lint errors.

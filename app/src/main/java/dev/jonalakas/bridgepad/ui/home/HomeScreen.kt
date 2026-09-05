@@ -2,9 +2,11 @@ package dev.jonalakas.bridgepad.ui.home
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -22,253 +24,262 @@ fun HomeScreen(
     appVersion: String,
     deviceInfo: DeviceInfo,
     bluetoothPermissionGranted: Boolean,
+    bluetoothEnabled: Boolean,
     hidCompatible: Boolean,
     hidState: HidSessionState,
     physicalGamepadState: PhysicalGamepadState,
-    inputMode: InputMode,
+    inputMode: InputMode?,
+    bluetoothSelected: Boolean,
+    onSelectBluetooth: () -> Unit,
+    pairedHosts: List<PairedHost>,
+    selectedAddress: String?,
+    pairNewPcSelected: Boolean,
+    showDestinationPicker: Boolean,
+    onDismissDestinationPicker: () -> Unit,
+    onPickDestination: (String?) -> Unit,
+    preparingConnection: Boolean,
+    onSelectHost: (String?) -> Unit,
     onInputModeChanged: (InputMode) -> Unit,
-    onRequestPermissions: () -> Unit,
-    onStartHid: () -> Unit,
-    onConnect: (String) -> Unit,
-    onReconnect: () -> Unit,
+    onPrepareBluetooth: () -> Unit,
+    onPlay: () -> Unit,
     onEnableCompatibilityInput: () -> Unit,
     onEnableBackgroundUsb: () -> Unit,
     onConfigureUsbMapping: () -> Unit,
-    onPairNewPc: () -> Unit,
     onOpenTouchController: () -> Unit,
     onOpenMouseTouchpad: () -> Unit,
     onStopHid: () -> Unit,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
+    onLanguageSettings: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    var showTechnicalDetails by remember { mutableStateOf(false) }
-    val connectionBusy = hidState.status == HidSessionStatus.CONNECTING
+    var panel by rememberSaveable { mutableStateOf<String?>(null) }
+    val connected = hidState.status == HidSessionStatus.CONNECTED
+    val setupComplete = SessionSetup.canConnect(
+        inputMode, bluetoothSelected, bluetoothEnabled && bluetoothPermissionGranted,
+        selectedAddress, pairNewPcSelected, pairedHosts.map { it.address },
+    )
+    val busy = preparingConnection || hidState.status in listOf(
+        HidSessionStatus.STARTING, HidSessionStatus.REGISTERING, HidSessionStatus.CONNECTING,
+    ) || hidState.pairingModeActive
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
-    ) { innerPadding ->
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.app_name)) },
+                actions = { TextButton(onClick = { panel = "settings" }) { Text(stringResource(R.string.settings)) } },
+            )
+        },
+    ) { padding ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(24.dp),
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item { Text(stringResource(R.string.session_setup), style = MaterialTheme.typography.headlineMedium) }
             item {
-                InputSelector(
-                    inputMode,
-                    onInputModeChanged,
-                    enabled = hidState.status != HidSessionStatus.CONNECTING,
-                )
-            }
-            if (
-                inputMode == InputMode.PHYSICAL_GAMEPAD &&
-                physicalGamepadState.devices.isEmpty() &&
-                !hidState.directUsbActive
-            ) {
-                item { NoticeCard(stringResource(R.string.physical_input_missing), NoticeTone.WARNING) }
+                Text(stringResource(if (connected) R.string.session_active else R.string.home_title), style = MaterialTheme.typography.headlineMedium)
+                Text(stringResource(R.string.home_description), style = MaterialTheme.typography.bodyMedium)
             }
             item {
-                InfoCard(
-                    stringResource(R.string.bluetooth_hid),
-                    listOf(
-                        stringResource(R.string.hid_compatibility_label) to stringResource(if (hidCompatible) R.string.hid_compatibility_available else R.string.hid_compatibility_unavailable),
-                        stringResource(R.string.permission_label) to if (bluetoothPermissionGranted) "Granted" else "Required",
-                        stringResource(R.string.session_state_label) to hidState.status.name,
-                        stringResource(R.string.bluetooth_label) to if (hidState.bluetoothEnabled) "Enabled" else "Off or not checked",
-                        stringResource(R.string.host_label) to (hidState.connectedHost ?: "Not connected"),
-                    ),
-                )
-            }
-            item { SessionFeedback(hidState) }
-
-            if (!hidCompatible) {
-                item { NoticeCard("This Android device does not expose the features required by Bluetooth HID.", NoticeTone.ERROR) }
-            } else if (!bluetoothPermissionGranted) {
-                item { FullWidthButton(onRequestPermissions, R.string.grant_permissions) }
-            } else if (!hidState.sessionActive) {
-                item { FullWidthButton(onStartHid, R.string.start_hid_spike) }
-            }
-
-            if (hidState.sessionActive && hidState.status == HidSessionStatus.READY) {
-                if (hidState.canReconnect) item { FullWidthButton(onReconnect, R.string.reconnect_last_pc) }
-                if (!hidState.pairingModeActive) {
-                    item { FullWidthOutlinedButton(onPairNewPc, R.string.pair_new_pc) }
-                }
-                if (hidState.pairedHosts.isEmpty() && !hidState.pairingModeActive) {
-                    item { NoticeCard(stringResource(R.string.no_paired_computers), NoticeTone.WARNING) }
-                }
-                items(hidState.pairedHosts, key = { it.address }) { host ->
-                    OutlinedButton(
-                        onClick = { onConnect(host.address) },
-                        enabled = !connectionBusy,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("Connect to ${host.name}") }
-                }
-            }
-
-            if (hidState.status == HidSessionStatus.CONNECTED) {
-                if (inputMode == InputMode.PHYSICAL_GAMEPAD) {
-                    item {
-                        CaptureModeSelector(
-                            mode = hidState.physicalCaptureMode,
-                            onCompatibility = onEnableCompatibilityInput,
-                            onBackgroundUsb = onEnableBackgroundUsb,
+                SetupCard(R.string.step_input) {
+                    Choice(inputMode == InputMode.TOUCHSCREEN, R.string.touchscreen_input, !busy) { onInputModeChanged(InputMode.TOUCHSCREEN) }
+                    Choice(inputMode == InputMode.PHYSICAL_GAMEPAD, R.string.physical_input, !busy) { onInputModeChanged(InputMode.PHYSICAL_GAMEPAD) }
+                    if (inputMode == InputMode.TOUCHSCREEN) {
+                        TextButton(onClick = { panel = "layout" }) { Text(stringResource(R.string.controller_layout)) }
+                    } else if (inputMode == InputMode.PHYSICAL_GAMEPAD) {
+                        val deviceNames = physicalGamepadState.devices.joinToString { it.name }
+                        Text(
+                            if (hidState.directUsbActive) stringResource(R.string.background_usb_mode)
+                            else deviceNames.ifEmpty { stringResource(R.string.physical_input_missing) },
                         )
+                        TextButton(onClick = { panel = "controller" }) { Text(stringResource(R.string.controller_options)) }
                     }
-                    if (hidState.directUsbActive) {
-                        item {
-                            OutlinedButton(onClick = onConfigureUsbMapping, modifier = Modifier.fillMaxWidth()) {
-                                Text(stringResource(R.string.configure_usb_mapping))
+                }
+            }
+            item {
+                SetupCard(R.string.step_transport) {
+                    Choice(bluetoothSelected, R.string.bluetooth_label, !busy && !connected, onSelectBluetooth)
+                    Text(stringResource(R.string.transport_description))
+                    Text(stringResource(R.string.future_transports), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            item {
+                SetupCard(R.string.step_destination) {
+                    if (connected) {
+                        Text(stringResource(R.string.connected_to, hidState.connectedHost.orEmpty()))
+                        Text(stringResource(R.string.change_destination_hint), style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text(stringResource(R.string.destination_support), style = MaterialTheme.typography.bodySmall)
+                        if (!bluetoothPermissionGranted) {
+                            Text(stringResource(R.string.bluetooth_destination_permission))
+                            OutlinedButton(onClick = onPrepareBluetooth, enabled = !busy && hidCompatible) { Text(stringResource(R.string.grant_permissions)) }
+                        } else if (!bluetoothEnabled) {
+                            Text(stringResource(R.string.bluetooth_destination_off))
+                            OutlinedButton(onClick = onPrepareBluetooth, enabled = !busy && hidCompatible) { Text(stringResource(R.string.enable_bluetooth)) }
+                        } else {
+                            pairedHosts.forEach { host ->
+                                FilterChip(
+                                    selected = selectedAddress == host.address,
+                                    onClick = { onSelectHost(host.address) },
+                                    label = { Text(host.name) },
+                                    enabled = !busy,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            Choice(pairNewPcSelected, R.string.pair_new_pc, !busy) { onSelectHost(null) }
+                            if (selectedAddress == null && !pairNewPcSelected) {
+                                Text(stringResource(R.string.choose_destination_hint))
+                            }
+                            if (selectedAddress != null && pairedHosts.none { it.address == selectedAddress }) {
+                                NoticeCard(stringResource(R.string.selected_pc_unavailable), NoticeTone.WARNING)
                             }
                         }
                     }
                 }
+            }
+            if (!hidCompatible) item { NoticeCard(stringResource(R.string.hid_unavailable), NoticeTone.ERROR) }
+            if (hidState.message != null) {
                 item {
-                    if (inputMode == InputMode.TOUCHSCREEN) {
-                        FullWidthButton(onOpenTouchController, R.string.open_touch_controller)
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            FullWidthButton(onOpenMouseTouchpad, R.string.open_mouse_touchpad)
-                            NoticeCard(
-                                message = stringResource(
-                                    if (hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
-                                        R.string.background_usb_active
-                                    } else {
-                                        R.string.compatibility_input_active
-                                    },
-                                ),
-                                tone = NoticeTone.SUCCESS,
-                            )
-                        }
-                    }
-                }
-                item {
-                    InfoCard(
-                        stringResource(R.string.live_bridge_metrics),
-                        listOf(
-                            stringResource(R.string.input_rate_label) to "${formatAxis(hidState.inputRateHz)} Hz",
-                            stringResource(R.string.output_rate_label) to "${formatAxis(hidState.outputRateHz)} Hz",
-                            stringResource(R.string.latency_label) to (hidState.lastLatencyMs?.let { "${formatAxis(it)} ms" } ?: "Waiting for input"),
-                        ),
-                    )
+                    NoticeCard(stringResource(hidState.message.resourceId, *hidState.message.arguments.toTypedArray()), when (hidState.feedbackLevel) {
+                        HidFeedbackLevel.ERROR -> NoticeTone.ERROR
+                        HidFeedbackLevel.WARNING -> NoticeTone.WARNING
+                        HidFeedbackLevel.INFO -> NoticeTone.SUCCESS
+                    })
                 }
             }
-            if (hidState.sessionActive) item { FullWidthOutlinedButton(onStopHid, R.string.end_session) }
-
             item {
-                TextButton(onClick = { showTechnicalDetails = !showTechnicalDetails }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(if (showTechnicalDetails) R.string.hide_technical_details else R.string.show_technical_details))
+                if (!connected && !setupComplete && !busy) {
+                    Text(stringResource(R.string.complete_session_setup), modifier = Modifier.padding(bottom = 8.dp))
+                }
+                Button(
+                    onClick = if (connected) {
+                        if (inputMode == InputMode.TOUCHSCREEN) onOpenTouchController else onOpenMouseTouchpad
+                    } else onPlay,
+                    enabled = hidCompatible && !busy && (connected || setupComplete),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(stringResource(when {
+                        connected -> R.string.resume_session
+                        hidState.pairingModeActive -> R.string.waiting_for_pairing
+                        busy -> R.string.preparing_connection
+                        else -> R.string.connect_and_play
+                    }))
                 }
             }
-            if (showTechnicalDetails) {
-                item { PhysicalGamepadDiagnostic(physicalGamepadState) }
-                item {
-                    InfoCard(
-                        stringResource(R.string.app_information),
-                        listOf(
-                            stringResource(R.string.version_label) to appVersion,
-                            stringResource(R.string.device_label) to deviceInfo.displayModel,
-                            stringResource(R.string.android_label) to deviceInfo.androidVersion,
-                            stringResource(R.string.api_level_label) to deviceInfo.sdkLevel.toString(),
-                        ),
-                    )
+            if (hidState.sessionActive) item {
+                OutlinedButton(onClick = onStopHid, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.end_session)) }
+            }
+        }
+    }
+    if (showDestinationPicker && bluetoothEnabled && bluetoothPermissionGranted) {
+        AlertDialog(
+            onDismissRequest = onDismissDestinationPicker,
+            title = { Text(stringResource(R.string.choose_destination_title)) },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = onDismissDestinationPicker) { Text(stringResource(R.string.cancel_action)) }
+            },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.choose_destination_description))
+                    pairedHosts.forEach { host ->
+                        OutlinedButton(onClick = { onPickDestination(host.address) }, modifier = Modifier.fillMaxWidth()) {
+                            Text(host.name)
+                        }
+                    }
+                    if (pairedHosts.isEmpty()) Text(stringResource(R.string.no_paired_pc_choice))
+                    OutlinedButton(onClick = { onPickDestination(null) }, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.pair_new_pc))
+                    }
                 }
-                item {
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            },
+        )
+    }
+    if (panel != null) {
+        AlertDialog(
+            onDismissRequest = { panel = null },
+            title = { Text(stringResource(when (panel) {
+                "layout" -> R.string.controller_layout
+                "controller" -> R.string.controller_options
+                else -> R.string.settings
+            })) },
+            confirmButton = { TextButton(onClick = { panel = null }) { Text(stringResource(R.string.close_action)) } },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    when (panel) {
+                        "layout" -> {
+                            Text(stringResource(R.string.default_layout))
+                            Text(stringResource(R.string.layout_description))
+                        }
+                        "controller" -> {
+                            Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleMedium)
+                            Choice(hidState.physicalCaptureMode == PhysicalCaptureMode.COMPATIBILITY, R.string.compatibility_mode, connected, onEnableCompatibilityInput)
+                            Text(stringResource(R.string.compatibility_mode_description))
+                            Choice(hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB, R.string.background_usb_mode, connected, onEnableBackgroundUsb)
+                            Text(stringResource(R.string.background_usb_description))
+                            if (!connected) Text(stringResource(R.string.capture_requires_session))
+                            HorizontalDivider()
+                            Text(stringResource(R.string.mapping_optional))
+                            OutlinedButton(
+                                onClick = { panel = null; onConfigureUsbMapping() },
+                                enabled = connected && hidState.directUsbActive,
+                            ) { Text(stringResource(R.string.configure_usb_mapping)) }
+                            Text(stringResource(R.string.mapping_scope), style = MaterialTheme.typography.bodySmall)
+                        }
+                        else -> {
+                            Text(stringResource(R.string.language_title), style = MaterialTheme.typography.titleMedium)
+                            Text(stringResource(R.string.language_description))
+                            if (onLanguageSettings != null) TextButton(onClick = onLanguageSettings) { Text(stringResource(R.string.change_language)) }
+                            HorizontalDivider()
                             Text(stringResource(R.string.diagnostics), style = MaterialTheme.typography.titleMedium)
-                            FullWidthOutlinedButton(onCopyDiagnostics, R.string.copy_diagnostics)
-                            FullWidthOutlinedButton(onShareDiagnostics, R.string.share_diagnostics)
+                            Text(stringResource(R.string.diagnostic_status, stringResource(hidState.status.labelResource())))
+                            Text(stringResource(R.string.diagnostic_version, appVersion, deviceInfo.displayModel, deviceInfo.androidVersion))
+                            Text(stringResource(R.string.diagnostic_api, deviceInfo.sdkLevel))
+                            Text(stringResource(R.string.diagnostic_metrics, formatMetric(hidState.inputRateHz), formatMetric(hidState.outputRateHz), hidState.lastLatencyMs?.let(::formatMetric) ?: "—"))
+                            if (physicalGamepadState.devices.isNotEmpty()) {
+                                HorizontalDivider()
+                                Text(stringResource(R.string.physical_gamepad_diagnostic), style = MaterialTheme.typography.titleMedium)
+                                physicalGamepadState.devices.forEach { device ->
+                                    Text(device.name, style = MaterialTheme.typography.titleSmall)
+                                    Text(stringResource(R.string.diagnostic_controller_ids, device.vendorId, device.productId))
+                                    Text(stringResource(R.string.diagnostic_axes, device.axes.joinToString()))
+                                    Text(physicalGamepadState.sourceStates[device.sourceId]?.toString().orEmpty(), style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text(physicalGamepadState.lastRawEvent, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(stringResource(R.string.diagnostics_technical_note), style = MaterialTheme.typography.bodySmall)
+                            OutlinedButton(onClick = onCopyDiagnostics) { Text(stringResource(R.string.copy_diagnostics)) }
+                            OutlinedButton(onClick = onShareDiagnostics) { Text(stringResource(R.string.share_diagnostics)) }
                         }
                     }
                 }
-            }
+            },
+        )
+    }
+}
+
+@Composable
+private fun SetupCard(title: Int, content: @Composable ColumnScope.() -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(title), style = MaterialTheme.typography.titleMedium)
+            content()
         }
     }
 }
 
 @Composable
-private fun InputSelector(mode: InputMode, onChanged: (InputMode) -> Unit, enabled: Boolean) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.choose_input), style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(mode == InputMode.TOUCHSCREEN, { onChanged(InputMode.TOUCHSCREEN) }, { Text(stringResource(R.string.touchscreen_input)) }, enabled = enabled)
-                FilterChip(mode == InputMode.PHYSICAL_GAMEPAD, { onChanged(InputMode.PHYSICAL_GAMEPAD) }, { Text(stringResource(R.string.physical_input)) }, enabled = enabled)
-            }
-        }
-    }
+private fun Choice(selected: Boolean, label: Int, enabled: Boolean, onClick: () -> Unit) {
+    FilterChip(selected = selected, onClick = onClick, enabled = enabled, label = { Text(stringResource(label)) }, modifier = Modifier.fillMaxWidth())
 }
 
-@Composable
-private fun CaptureModeSelector(
-    mode: PhysicalCaptureMode,
-    onCompatibility: () -> Unit,
-    onBackgroundUsb: () -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(mode == PhysicalCaptureMode.COMPATIBILITY, onCompatibility, { Text(stringResource(R.string.compatibility_mode)) })
-                FilterChip(mode == PhysicalCaptureMode.BACKGROUND_USB, onBackgroundUsb, { Text(stringResource(R.string.background_usb_mode)) })
-            }
-            Text(
-                stringResource(if (mode == PhysicalCaptureMode.BACKGROUND_USB) R.string.background_usb_description else R.string.compatibility_mode_description),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-    }
+fun HidSessionStatus.labelResource(): Int = when (this) {
+    HidSessionStatus.IDLE -> R.string.state_idle
+    HidSessionStatus.STARTING, HidSessionStatus.REGISTERING -> R.string.preparing_connection
+    HidSessionStatus.READY -> R.string.state_ready
+    HidSessionStatus.CONNECTING -> R.string.state_connecting
+    HidSessionStatus.CONNECTED -> R.string.state_connected
+    HidSessionStatus.ERROR -> R.string.state_error
 }
 
-@Composable
-private fun SessionFeedback(state: HidSessionState) {
-    val tone = when (state.feedbackLevel) {
-        HidFeedbackLevel.WARNING -> NoticeTone.WARNING
-        HidFeedbackLevel.ERROR -> NoticeTone.ERROR
-        HidFeedbackLevel.INFO -> NoticeTone.SUCCESS
-    }
-    NoticeCard(state.message, tone)
-}
-
-@Composable
-private fun InfoCard(title: String, rows: List<Pair<String, String>>) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            rows.forEach { (label, value) -> Text("$label: $value") }
-        }
-    }
-}
-
-@Composable
-private fun PhysicalGamepadDiagnostic(state: PhysicalGamepadState) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.physical_gamepad_diagnostic), style = MaterialTheme.typography.titleMedium)
-            if (state.devices.isEmpty()) Text(stringResource(R.string.no_physical_gamepad))
-            state.devices.forEach { device ->
-                val gamepad = state.sourceStates[device.sourceId]
-                Text(device.name, style = MaterialTheme.typography.titleSmall)
-                Text("Vendor/Product: ${device.vendorId}/${device.productId}")
-                Text("Axes: ${device.axes.joinToString().ifEmpty { "None reported" }}")
-                Text("Buttons: ${gamepad?.pressedButtons?.joinToString()?.ifEmpty { "None" } ?: "None"}")
-                Text("D-pad: ${gamepad?.dpad ?: "NEUTRAL"}")
-            }
-            Text("Last event: ${state.lastRawEvent}", style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun FullWidthButton(onClick: () -> Unit, textId: Int) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text(stringResource(textId)) }
-}
-
-@Composable
-private fun FullWidthOutlinedButton(onClick: () -> Unit, textId: Int) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text(stringResource(textId)) }
-}
-
-private fun formatAxis(value: Float): String = String.format(Locale.ROOT, "%.3f", value)
+private fun formatMetric(value: Float): String = String.format(Locale.getDefault(), "%.1f", value)

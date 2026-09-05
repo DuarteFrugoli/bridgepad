@@ -1,5 +1,6 @@
 package dev.jonalakas.bridgepad.output.hid
 
+import dev.jonalakas.bridgepad.localization.LocalizedMessage
 import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -90,7 +91,7 @@ class BluetoothHidService : Service() {
                     val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
                     if (state == BluetoothAdapter.STATE_TURNING_OFF || state == BluetoothAdapter.STATE_OFF) {
                         SessionLog.record("BLUETOOTH", "Bluetooth was turned off")
-                        finishSession(HidSessionStatus.IDLE, "Bluetooth is off. Turn it on and try again.")
+                        finishSession(HidSessionStatus.IDLE, LocalizedMessage(R.string.hid_bluetooth_off))
                     }
                 }
                 BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
@@ -113,9 +114,9 @@ class BluetoothHidService : Service() {
                                 it.copy(
                                     pairingModeActive = false,
                                     message = if (newlyPairedComputer != null) {
-                                        "Computer paired. Connecting HID…"
+                                        LocalizedMessage(R.string.hid_paired_connecting)
                                     } else {
-                                        "Computer paired. Select it from the list to connect HID."
+                                        LocalizedMessage(R.string.hid_paired_select)
                                     },
                                     feedbackLevel = HidFeedbackLevel.INFO,
                                 )
@@ -144,7 +145,7 @@ class BluetoothHidService : Service() {
             if (profile != BluetoothProfile.HID_DEVICE || shuttingDown) return
             hidDevice = null
             connectedDevice = null
-            finishSession(HidSessionStatus.ERROR, "Android disconnected the HID Device profile.")
+            finishSession(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_profile_disconnected))
         }
     }
 
@@ -156,10 +157,10 @@ class BluetoothHidService : Service() {
                 if (pluggedDevice != null) {
                     hidDevice?.disconnect(pluggedDevice)
                 }
-                update(HidSessionStatus.READY, "HID gamepad registered. Choose a paired PC or pair a new one.")
+                update(HidSessionStatus.READY, LocalizedMessage(R.string.hid_ready))
             } else {
                 connectedDevice = null
-                finishSession(HidSessionStatus.ERROR, "Android did not keep the HID registration.")
+                finishSession(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_registration_lost))
             }
         }
 
@@ -183,7 +184,7 @@ class BluetoothHidService : Service() {
                 BluetoothProfile.STATE_CONNECTING -> if (wasRequested) {
                     update(
                         HidSessionStatus.CONNECTING,
-                        "Connecting to ${device.safeName()}…",
+                        LocalizedMessage(R.string.hid_connecting, device.safeName()),
                     )
                 }
                 BluetoothProfile.STATE_CONNECTED -> {
@@ -193,7 +194,7 @@ class BluetoothHidService : Service() {
                         hidDevice?.disconnect(device)
                         update(
                             HidSessionStatus.READY,
-                            "Choose a paired PC before connecting.",
+                            LocalizedMessage(R.string.hid_choose_pc),
                         )
                     }
                 }
@@ -206,8 +207,9 @@ class BluetoothHidService : Service() {
                         it.copy(
                             status = HidSessionStatus.READY,
                             connectedHost = null,
+                            connectedHostAddress = null,
                             canReconnect = lastHostAddress != null,
-                            message = "Host disconnected. Select it to reconnect.",
+                            message = LocalizedMessage(R.string.hid_host_disconnected),
                         )
                     }
                 }
@@ -222,7 +224,7 @@ class BluetoothHidService : Service() {
             HidSessionState(
                 status = HidSessionStatus.STARTING,
                 sessionActive = true,
-                message = "Starting the Bluetooth HID session…",
+                message = LocalizedMessage(R.string.hid_starting),
             )
         }
         registerBluetoothStateReceiver()
@@ -273,7 +275,7 @@ class BluetoothHidService : Service() {
                     it.copy(
                         physicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
                         directUsbActive = false,
-                        message = "Compatibility input is active. Keep BridgePad visible and the screen on.",
+                        message = LocalizedMessage(R.string.compatibility_input_active),
                         feedbackLevel = HidFeedbackLevel.INFO,
                     )
                 }
@@ -291,6 +293,11 @@ class BluetoothHidService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!shuttingDown) updateNotification()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
@@ -304,7 +311,7 @@ class BluetoothHidService : Service() {
         releaseProfile()
         runCatching { unregisterReceiver(bluetoothStateReceiver) }
         if (!stateWasFinalized) {
-            HidSessionStore.update { HidSessionState(message = "HID session ended.") }
+            HidSessionStore.update { HidSessionState(message = LocalizedMessage(R.string.hid_ended)) }
         }
         super.onDestroy()
     }
@@ -313,22 +320,22 @@ class BluetoothHidService : Service() {
         SessionLog.record("SESSION", "Bluetooth HID session start requested")
         val currentAdapter = adapter
         if (currentAdapter == null) {
-            finishSession(HidSessionStatus.ERROR, "This device has no Bluetooth adapter.")
+            finishSession(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_no_adapter))
             return
         }
         if (!currentAdapter.isEnabled) {
-            finishSession(HidSessionStatus.IDLE, "Bluetooth is off. Turn it on and try again.")
+            finishSession(HidSessionStatus.IDLE, LocalizedMessage(R.string.hid_bluetooth_off))
             return
         }
         HidSessionStore.update {
             it.copy(
                 status = HidSessionStatus.STARTING,
                 bluetoothEnabled = true,
-                message = "Requesting the Android HID Device profile…",
+                message = LocalizedMessage(R.string.hid_requesting_profile),
             )
         }
         val requested = currentAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HID_DEVICE)
-        if (!requested) finishSession(HidSessionStatus.ERROR, "HID Device profile is unavailable.")
+        if (!requested) finishSession(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_no_profile))
     }
 
     private fun selectInput(touchSelected: Boolean) {
@@ -344,9 +351,9 @@ class BluetoothHidService : Service() {
             it.copy(
                 touchInputSelected = touchSelected,
                 message = if (touchSelected) {
-                    "Touchscreen input selected. Open the touchscreen controller to play."
+                    LocalizedMessage(R.string.hid_touch_selected)
                 } else {
-                    "Physical gamepad input selected. Choose a capture mode below."
+                    LocalizedMessage(R.string.hid_physical_selected)
                 },
                 feedbackLevel = HidFeedbackLevel.INFO,
             )
@@ -357,7 +364,7 @@ class BluetoothHidService : Service() {
     }
 
     private fun registerHidApp() {
-        update(HidSessionStatus.REGISTERING, "Registering the BridgePad HID gamepad…")
+        update(HidSessionStatus.REGISTERING, LocalizedMessage(R.string.hid_registering))
         val settings = BluetoothHidDeviceAppSdpSettings(
             "BridgePad",
             "BridgePad Bluetooth HID gamepad and mouse bridge",
@@ -370,7 +377,7 @@ class BluetoothHidService : Service() {
         )
         val accepted = hidDevice?.registerApp(settings, null, null, mainExecutor, callback) == true
         if (!accepted) {
-            finishSession(HidSessionStatus.ERROR, "Android rejected the HID registration request.")
+            finishSession(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_registration_rejected))
         }
     }
 
@@ -390,9 +397,9 @@ class BluetoothHidService : Service() {
             HidSessionStore.update {
                 it.copy(
                     message = if (connectedDevice != null) {
-                        "A PC is already connected. End the session before choosing another one."
+                        LocalizedMessage(R.string.hid_already_connected)
                     } else {
-                        "A connection attempt is already in progress."
+                        LocalizedMessage(R.string.connection_busy)
                     },
                     feedbackLevel = HidFeedbackLevel.WARNING,
                 )
@@ -411,14 +418,14 @@ class BluetoothHidService : Service() {
             BluetoothProfile.STATE_CONNECTING -> {
                 update(
                     HidSessionStatus.CONNECTING,
-                    "Windows is already connecting to ${device.safeName()}…",
+                    LocalizedMessage(R.string.hid_windows_connecting, device.safeName()),
                 )
                 return
             }
         }
         update(
             HidSessionStatus.CONNECTING,
-            "Waiting briefly for Windows to connect to ${device.safeName()}…",
+            LocalizedMessage(R.string.hid_windows_waiting, device.safeName()),
         )
         cancelPendingConnection()
         val request = Runnable { connectAfterAutomaticAttempt(device) }
@@ -431,7 +438,7 @@ class BluetoothHidService : Service() {
         if (address == null) {
             HidSessionStore.update {
                 it.copy(
-                    message = "No previous PC is available. Select a paired PC instead.",
+                    message = LocalizedMessage(R.string.hid_no_previous),
                     feedbackLevel = HidFeedbackLevel.WARNING,
                 )
             }
@@ -447,13 +454,13 @@ class BluetoothHidService : Service() {
             BluetoothProfile.STATE_CONNECTED -> acceptConnectedDevice(device)
             BluetoothProfile.STATE_CONNECTING -> update(
                 HidSessionStatus.CONNECTING,
-                "Windows is connecting to ${device.safeName()}…",
+                LocalizedMessage(R.string.hid_windows_connecting, device.safeName()),
             )
             else -> {
-                update(HidSessionStatus.CONNECTING, "Requesting connection to ${device.safeName()}…")
+                update(HidSessionStatus.CONNECTING, LocalizedMessage(R.string.hid_requesting_connection, device.safeName()))
                 if (hidDevice?.connect(device) != true) {
                     requestedHostAddress = null
-                    update(HidSessionStatus.ERROR, "Android rejected the connection request.")
+                    update(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_connection_rejected))
                 }
             }
         }
@@ -468,8 +475,9 @@ class BluetoothHidService : Service() {
             it.copy(
                 status = HidSessionStatus.CONNECTED,
                 connectedHost = device.safeName(),
+                connectedHostAddress = device.address,
                 canReconnect = false,
-                message = "Connected. Gamepad input is being sent to the PC.",
+                message = LocalizedMessage(R.string.hid_connected),
                 feedbackLevel = HidFeedbackLevel.INFO,
             )
         }
@@ -585,7 +593,7 @@ class BluetoothHidService : Service() {
             HidReportEncoder.encode(state),
         ) == true
         if (!sent) {
-            update(HidSessionStatus.ERROR, "A physical gamepad report could not be sent.")
+            update(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_report_failed))
             return
         }
         reportsSinceConnection++
@@ -640,15 +648,15 @@ class BluetoothHidService : Service() {
         }
         SessionLog.record("SESSION", "Session ended safely with a neutral report")
         releaseProfile()
-        HidSessionStore.update { HidSessionState(message = "HID session stopped.") }
+        HidSessionStore.update { HidSessionState(message = LocalizedMessage(R.string.hid_stopped)) }
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private fun finishSession(status: HidSessionStatus, message: String) {
+    private fun finishSession(status: HidSessionStatus, message: LocalizedMessage) {
         if (shuttingDown) return
         shuttingDown = true
-        SessionLog.record(if (status == HidSessionStatus.ERROR) "ERROR" else "SESSION", message)
+        SessionLog.record(if (status == HidSessionStatus.ERROR) "ERROR" else "SESSION", message.resolve(this))
         HidSessionStore.update {
             HidSessionState(
                 status = status,
@@ -679,7 +687,7 @@ class BluetoothHidService : Service() {
         HidSessionStore.update {
             it.copy(
                 pairingModeActive = true,
-                message = "This phone is visible to nearby devices for $durationSeconds seconds. Add it from Windows Bluetooth settings.",
+                message = LocalizedMessage(R.string.hid_visible, durationSeconds),
                 feedbackLevel = HidFeedbackLevel.WARNING,
             )
         }
@@ -687,7 +695,7 @@ class BluetoothHidService : Service() {
             HidSessionStore.update {
                 it.copy(
                     pairingModeActive = false,
-                    message = "Phone visibility ended. Tap Pair new PC to try again.",
+                    message = LocalizedMessage(R.string.hid_visibility_ended),
                     feedbackLevel = HidFeedbackLevel.INFO,
                 )
             }
@@ -718,7 +726,7 @@ class BluetoothHidService : Service() {
         )
     }
 
-    private fun update(status: HidSessionStatus, message: String) {
+    private fun update(status: HidSessionStatus, message: LocalizedMessage) {
         HidSessionStore.update {
             it.copy(
                 status = status,
@@ -737,7 +745,7 @@ class BluetoothHidService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Bluetooth HID session",
+            getString(R.string.notification_channel),
             NotificationManager.IMPORTANCE_LOW,
         )
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)

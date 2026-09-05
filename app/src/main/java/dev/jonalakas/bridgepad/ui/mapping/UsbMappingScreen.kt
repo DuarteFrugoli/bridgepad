@@ -8,6 +8,9 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+import dev.jonalakas.bridgepad.R
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
@@ -18,43 +21,43 @@ import dev.jonalakas.bridgepad.input.usb.DirectUsbState
 import dev.jonalakas.bridgepad.input.usb.UsbGamepadMapping
 
 private sealed interface MappingStep {
-    val prompt: String
-    data class Button(val target: VirtualControl, override val prompt: String) : MappingStep
-    data class Dpad(val target: DpadDirection, override val prompt: String) : MappingStep
+    val prompt: Int
+    data class Button(val target: VirtualControl, override val prompt: Int) : MappingStep
+    data class Dpad(val target: DpadDirection, override val prompt: Int) : MappingStep
     data class Axis(
         val target: VirtualAxis,
         val expectedSign: Int,
-        override val prompt: String,
+        override val prompt: Int,
     ) : MappingStep
 }
 
 private val steps = listOf(
-    MappingStep.Button(VirtualControl.FACE_SOUTH, "Press the bottom face button (A)"),
-    MappingStep.Button(VirtualControl.FACE_EAST, "Press the right face button (B)"),
-    MappingStep.Button(VirtualControl.FACE_WEST, "Press the left face button (X)"),
-    MappingStep.Button(VirtualControl.FACE_NORTH, "Press the top face button (Y)"),
-    MappingStep.Dpad(DpadDirection.WEST, "Press D-pad left"),
-    MappingStep.Dpad(DpadDirection.EAST, "Press D-pad right"),
-    MappingStep.Dpad(DpadDirection.NORTH, "Press D-pad up"),
-    MappingStep.Dpad(DpadDirection.SOUTH, "Press D-pad down"),
-    MappingStep.Axis(VirtualAxis.LEFT_X, -1, "Move the left stick fully left"),
-    MappingStep.Axis(VirtualAxis.LEFT_X, 1, "Move the left stick fully right"),
-    MappingStep.Axis(VirtualAxis.LEFT_Y, -1, "Move the left stick fully up"),
-    MappingStep.Axis(VirtualAxis.LEFT_Y, 1, "Move the left stick fully down"),
-    MappingStep.Button(VirtualControl.LEFT_STICK_BUTTON, "Press the left stick (L3)"),
-    MappingStep.Axis(VirtualAxis.RIGHT_X, -1, "Move the right stick fully left"),
-    MappingStep.Axis(VirtualAxis.RIGHT_X, 1, "Move the right stick fully right"),
-    MappingStep.Axis(VirtualAxis.RIGHT_Y, -1, "Move the right stick fully up"),
-    MappingStep.Axis(VirtualAxis.RIGHT_Y, 1, "Move the right stick fully down"),
-    MappingStep.Button(VirtualControl.RIGHT_STICK_BUTTON, "Press the right stick (R3)"),
-    MappingStep.Button(VirtualControl.LEFT_BUMPER, "Press the left bumper (L1)"),
-    MappingStep.Axis(VirtualAxis.LEFT_TRIGGER, 1, "Fully press the left trigger (L2)"),
-    MappingStep.Button(VirtualControl.RIGHT_BUMPER, "Press the right bumper (R1)"),
-    MappingStep.Axis(VirtualAxis.RIGHT_TRIGGER, 1, "Fully press the right trigger (R2)"),
-    MappingStep.Button(VirtualControl.SELECT, "Press Back / Select / Share"),
-    MappingStep.Button(VirtualControl.START, "Press Start / Options / Menu"),
-    MappingStep.Button(VirtualControl.EXTRA_1, "Press Guide / PS / Home"),
-    MappingStep.Button(VirtualControl.EXTRA_2, "Press Share / Capture"),
+    MappingStep.Button(VirtualControl.FACE_SOUTH, R.string.mapping_prompt_1),
+    MappingStep.Button(VirtualControl.FACE_EAST, R.string.mapping_prompt_2),
+    MappingStep.Button(VirtualControl.FACE_WEST, R.string.mapping_prompt_3),
+    MappingStep.Button(VirtualControl.FACE_NORTH, R.string.mapping_prompt_4),
+    MappingStep.Dpad(DpadDirection.WEST, R.string.mapping_prompt_5),
+    MappingStep.Dpad(DpadDirection.EAST, R.string.mapping_prompt_6),
+    MappingStep.Dpad(DpadDirection.NORTH, R.string.mapping_prompt_7),
+    MappingStep.Dpad(DpadDirection.SOUTH, R.string.mapping_prompt_8),
+    MappingStep.Axis(VirtualAxis.LEFT_X, -1, R.string.mapping_prompt_9),
+    MappingStep.Axis(VirtualAxis.LEFT_X, 1, R.string.mapping_prompt_10),
+    MappingStep.Axis(VirtualAxis.LEFT_Y, -1, R.string.mapping_prompt_11),
+    MappingStep.Axis(VirtualAxis.LEFT_Y, 1, R.string.mapping_prompt_12),
+    MappingStep.Button(VirtualControl.LEFT_STICK_BUTTON, R.string.mapping_prompt_13),
+    MappingStep.Axis(VirtualAxis.RIGHT_X, -1, R.string.mapping_prompt_14),
+    MappingStep.Axis(VirtualAxis.RIGHT_X, 1, R.string.mapping_prompt_15),
+    MappingStep.Axis(VirtualAxis.RIGHT_Y, -1, R.string.mapping_prompt_16),
+    MappingStep.Axis(VirtualAxis.RIGHT_Y, 1, R.string.mapping_prompt_17),
+    MappingStep.Button(VirtualControl.RIGHT_STICK_BUTTON, R.string.mapping_prompt_18),
+    MappingStep.Button(VirtualControl.LEFT_BUMPER, R.string.mapping_prompt_19),
+    MappingStep.Axis(VirtualAxis.LEFT_TRIGGER, 1, R.string.mapping_prompt_20),
+    MappingStep.Button(VirtualControl.RIGHT_BUMPER, R.string.mapping_prompt_21),
+    MappingStep.Axis(VirtualAxis.RIGHT_TRIGGER, 1, R.string.mapping_prompt_22),
+    MappingStep.Button(VirtualControl.SELECT, R.string.mapping_prompt_23),
+    MappingStep.Button(VirtualControl.START, R.string.mapping_prompt_24),
+    MappingStep.Button(VirtualControl.EXTRA_1, R.string.mapping_prompt_25),
+    MappingStep.Button(VirtualControl.EXTRA_2, R.string.mapping_prompt_26),
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +67,8 @@ fun UsbMappingScreen(
     onSave: (UsbGamepadMapping) -> Unit,
     onCancel: () -> Unit,
 ) {
+    val context = LocalContext.current
+    androidx.activity.compose.BackHandler(onBack = onCancel)
     var stepIndex by rememberSaveable { mutableIntStateOf(0) }
     var baseline by remember { mutableStateOf(usbState.rawGamepad) }
     var armed by remember { mutableStateOf(false) }
@@ -76,13 +81,13 @@ fun UsbMappingScreen(
     val dpad = rememberSaveable(
         saver = dpadMappingSaver(),
     ) { mutableStateMapOf<DpadDirection, DpadDirection>() }
-    var instruction by remember { mutableStateOf("Release all controls, then follow the prompt.") }
+    var instruction by remember { mutableStateOf(context.getString(R.string.mapping_release_all)) }
     val step = steps.getOrNull(stepIndex)
 
     LaunchedEffect(stepIndex) {
         baseline = usbState.rawGamepad
         armed = usbState.rawGamepad.isNeutral()
-        instruction = if (armed) "Ready." else "Release all controls first."
+        instruction = if (armed) context.getString(R.string.mapping_ready) else context.getString(R.string.mapping_release_first)
     }
     LaunchedEffect(usbState.inputEventCount, stepIndex) {
         val currentStep = steps.getOrNull(stepIndex) ?: return@LaunchedEffect
@@ -90,7 +95,7 @@ fun UsbMappingScreen(
             if (usbState.rawGamepad.isNeutral()) {
                 baseline = usbState.rawGamepad
                 armed = true
-                instruction = "Ready."
+                instruction = context.getString(R.string.mapping_ready)
             }
             return@LaunchedEffect
         }
@@ -111,7 +116,7 @@ fun UsbMappingScreen(
                         it.value == source && it.key != currentStep.target
                     }?.key
                     if (usedBy != null) {
-                        instruction = "That physical button is already used by ${usedBy.displayName()}. Choose another button."
+                        instruction = context.getString(R.string.mapping_button_used, usedBy.displayName())
                     } else {
                         buttons[currentStep.target] = source
                         armed = false
@@ -127,7 +132,7 @@ fun UsbMappingScreen(
                         it.value == usbState.rawGamepad.dpad && it.key != currentStep.target
                     }?.key
                     if (usedBy != null) {
-                        instruction = "That D-pad direction is already used by ${usedBy.name.replace('_', ' ')}. Choose another direction."
+                        instruction = context.getString(R.string.mapping_dpad_used)
                     } else {
                         dpad[currentStep.target] = usbState.rawGamepad.dpad
                         armed = false
@@ -150,11 +155,11 @@ fun UsbMappingScreen(
                         it.value.source == movement.first && it.key != currentStep.target
                     }?.key
                     if (existingForTarget != null && existingForTarget.source != movement.first) {
-                        instruction = "Both directions must use the same physical axis. Move the requested direction on the same stick as the previous step."
+                        instruction = context.getString(R.string.mapping_same_axis)
                     } else if (existingForTarget != null && existingForTarget.inverted != candidate.inverted) {
-                        instruction = "That was the opposite direction. Move the stick in the direction shown by the prompt."
+                        instruction = context.getString(R.string.mapping_opposite)
                     } else if (usedBy != null) {
-                        instruction = "That physical axis is already used by ${usedBy.displayName()}. Move another axis."
+                        instruction = context.getString(R.string.mapping_axis_used)
                     } else {
                         axes[currentStep.target] = candidate
                         armed = false
@@ -165,23 +170,23 @@ fun UsbMappingScreen(
         }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Configure USB gamepad") }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.mapping_title)) }) }) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Text(usbState.deviceName ?: "USB gamepad", style = MaterialTheme.typography.titleMedium)
+            Text(usbState.deviceName ?: stringResource(R.string.usb_gamepad), style = MaterialTheme.typography.titleMedium)
             LinearProgressIndicator(
                 progress = { stepIndex.toFloat() / steps.size },
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text("Step ${stepIndex.coerceAtMost(steps.size)} of ${steps.size}")
+            Text(stringResource(R.string.mapping_progress, (stepIndex + 1).coerceAtMost(steps.size), steps.size))
             if (step != null) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(step.prompt, style = MaterialTheme.typography.headlineSmall)
+                        Text(stringResource(step.prompt), style = MaterialTheme.typography.headlineSmall)
                         Text(instruction)
-                        if (stepIndex > 0) Text("Press the mapped A button to skip this control.")
+                        if (stepIndex > 0) Text(stringResource(R.string.mapping_skip))
                     }
                 }
                 OutlinedButton(
@@ -198,10 +203,10 @@ fun UsbMappingScreen(
                     },
                     enabled = stepIndex > 0,
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Previous step") }
+                ) { Text(stringResource(R.string.mapping_previous)) }
             } else {
-                Text("Mapping complete", style = MaterialTheme.typography.headlineSmall)
-                Text("Save this profile to apply it automatically whenever this controller is connected.")
+                Text(stringResource(R.string.mapping_complete), style = MaterialTheme.typography.headlineSmall)
+                Text(stringResource(R.string.mapping_save_hint))
                 Button(
                     onClick = {
                         onSave(
@@ -213,7 +218,7 @@ fun UsbMappingScreen(
                         )
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Save mapping") }
+                ) { Text(stringResource(R.string.mapping_save)) }
                 OutlinedButton(
                     onClick = {
                         val previousIndex = steps.lastIndex
@@ -225,9 +230,9 @@ fun UsbMappingScreen(
                         stepIndex = previousIndex
                     },
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("Previous step") }
+                ) { Text(stringResource(R.string.mapping_previous)) }
             }
-            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+            OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.cancel_action)) }
         }
     }
 }

@@ -42,13 +42,72 @@ The same checks run as independent jobs in GitHub Actions after every push.
 .\gradlew.bat installDebug
 ```
 
-8. Open BridgePad on the device and confirm that its version, manufacturer,
-   model, Android version and API level are displayed correctly.
+8. Open BridgePad, complete onboarding if shown, then open **Settings**. Confirm
+   the version, device model, Android version and API level are correct.
 
 If Windows does not list the device, change the USB mode to file transfer and
 install the Samsung Android USB driver if necessary.
 
 ## Hardware test record
+
+### Current Home and localization regression checklist
+
+The earlier phase procedures below describe historical milestone screens. For
+the current navigation use [Session UI and localization](ui-flow.md) and this
+checklist. These checks are pending hardware validation for the UI redesign.
+
+- Set Android to Brazilian Portuguese and then English. Verify onboarding,
+  the three Home steps, notices, mapping prompts and foreground notifications.
+- On Android 13+, use **Settings > Change app language**, reopen BridgePad and
+  verify the selection persists. On older versions use the system language.
+- On both fresh and upgraded installations, confirm input, connection and
+  destination are not preselected on a new launch without an active session.
+  Explicitly end a session and verify all three choices are cleared. Rotate
+  during setup and reopen an active session: current choices/session must survive.
+  Omit each setup choice in turn and verify **Connect and play** stays disabled.
+  Completing all three choices with Bluetooth enabled must enable the button.
+- With Bluetooth off, confirm **Connect and play** is disabled.
+  **End session** must remain hidden while granting permissions, enabling
+  Bluetooth or choosing a PC; it appears only after the HID session starts.
+  Destination must show **Turn on Bluetooth**, with no paired-PC list,
+  missing-PC warning or selected new-pairing option. Accept enabling Bluetooth
+  and confirm the PC picker opens without another tap or a visibility request.
+- Repeat using **Turn on Bluetooth** in Destination, including with missing
+  Bluetooth permission, a saved PC, and a previous new-pairing choice. All paths
+  must refresh paired PCs and require a destination choice before connecting.
+- Cancel Bluetooth enablement, enable it from Android quick settings, and turn
+  it off while the PC picker is open. Confirm the UI follows the actual adapter
+  state and no hidden new-pairing selection or automatic visibility remains.
+- Deny or cancel permissions/discoverability. Confirm there is actionable
+  localized feedback, no false connected state and no automatic retry loop.
+- With no saved destination and an already paired PC, select it in Destination
+  or the picker shown after Bluetooth preparation. No session or visibility prompt
+  should start until **Connect and play** is pressed with all choices complete.
+  Repeat with no paired PCs: new pairing still requires an explicit choice.
+  Cancel the picker and verify no session starts. A forgotten saved PC must keep
+  the button disabled until a valid destination is selected.
+- Choose **Pair a new PC**, tap **Connect and play**, allow visibility and add
+  the phone in Windows Bluetooth settings. Confirm the input screen opens only
+  after connection, without restarting the session.
+- End the session, choose the input, connection and same paired PC again, then
+  connect. Merely opening BridgePad must not select options or reconnect a session.
+- Open **Session menu**, switch virtual/physical input and **Resume game**.
+  Confirm the PC remains connected, inactive controls are released, and both
+  mouse touchpads still move/click correctly.
+- Under **Controller options**, switch to Background USB, approve access and
+  optionally configure buttons. Verify cancellation and rotation preserve the
+  existing mapping behavior. Compatibility mode must not imply custom mapping.
+- Test the physical controller with the app visible in Compatibility mode and
+  with the screen off in Background USB mode. Check the notification wording.
+- Rotate Home and the controller screens, reopen the app, turn Bluetooth off
+  during setup/gameplay, and unpair a selected PC. No stale play screen, stuck
+  preparing state or unrequested connection should remain.
+- Use a large system font and a small screen in both languages. All actions
+  should remain reachable by scrolling; translated labels must not be clipped.
+- Check **Settings** for metrics/device details, copy/share diagnostics and
+  confirm Wi-Fi, USB output and consoles are not presented as available.
+
+### Recording results
 
 Create one record for each relevant combination:
 

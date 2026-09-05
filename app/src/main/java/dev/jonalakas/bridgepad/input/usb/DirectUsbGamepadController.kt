@@ -1,5 +1,7 @@
 package dev.jonalakas.bridgepad.input.usb
 
+import dev.jonalakas.bridgepad.localization.LocalizedMessage
+import dev.jonalakas.bridgepad.R
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -22,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class DirectUsbGamepadController(
     private val context: Context,
-    private val onStatus: (active: Boolean, message: String, error: Boolean) -> Unit,
+    private val onStatus: (active: Boolean, message: LocalizedMessage, error: Boolean) -> Unit,
 ) {
     private val manager = context.getSystemService(UsbManager::class.java)
     private val running = AtomicBoolean(false)
@@ -63,12 +65,12 @@ class DirectUsbGamepadController(
             (0 until device.interfaceCount).any { device.getInterface(it).interfaceClass == UsbConstants.USB_CLASS_HID }
         }
         if (candidate == null) {
-            onStatus(false, "No USB HID gamepad was found. Connect one or use Compatibility mode.", true)
+            onStatus(false, LocalizedMessage(R.string.usb_no_gamepad), true)
             return
         }
         if (manager.hasPermission(candidate)) open(candidate) else {
             pendingPermissionDevice = candidate
-            onStatus(false, "Approve USB access to enable background input.", false)
+            onStatus(false, LocalizedMessage(R.string.usb_approve), false)
             val intent = PendingIntent.getBroadcast(
                 context, 0, Intent(ACTION_USB_PERMISSION).setPackage(context.packageName),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
@@ -86,14 +88,14 @@ class DirectUsbGamepadController(
                 it.direction == UsbConstants.USB_DIR_IN && it.type == UsbConstants.USB_ENDPOINT_XFER_INT
             }
         }
-        if (hidInterface == null || endpoint == null) return fail("The USB gamepad has no readable HID input endpoint.")
-        val opened = manager.openDevice(device) ?: return fail("Android could not open the USB gamepad.")
-        if (!opened.claimInterface(hidInterface, true)) { opened.close(); return fail("Android could not claim the USB gamepad interface.") }
+        if (hidInterface == null || endpoint == null) return fail(LocalizedMessage(R.string.usb_no_endpoint))
+        val opened = manager.openDevice(device) ?: return fail(LocalizedMessage(R.string.usb_open_failed))
+        if (!opened.claimInterface(hidInterface, true)) { opened.close(); return fail(LocalizedMessage(R.string.usb_claim_failed)) }
         val descriptor = ByteArray(1024)
         val descriptorSize = opened.controlTransfer(0x81, 0x06, 0x2200, hidInterface.id, descriptor, descriptor.size, 1500)
-        if (descriptorSize <= 0) { opened.releaseInterface(hidInterface); opened.close(); return fail("The gamepad did not provide a readable HID descriptor.") }
+        if (descriptorSize <= 0) { opened.releaseInterface(hidInterface); opened.close(); return fail(LocalizedMessage(R.string.usb_no_descriptor)) }
         val parser = runCatching { UsbHidReportParser(descriptor.copyOf(descriptorSize)) }.getOrElse {
-            opened.releaseInterface(hidInterface); opened.close(); return fail(it.message ?: "Unsupported HID descriptor.")
+            opened.releaseInterface(hidInterface); opened.close(); return fail(LocalizedMessage(R.string.usb_unsupported))
         }
         connection = opened
         claimedInterface = hidInterface
@@ -102,14 +104,14 @@ class DirectUsbGamepadController(
         DirectUsbGamepadStore.set(
             DirectUsbState(
                 active = true,
-                deviceName = device.productName ?: "USB gamepad",
+                deviceName = device.productName ?: context.getString(R.string.usb_gamepad),
                 deviceKey = deviceKey,
             ),
         )
-        onStatus(true, "Background USB input is active. You can turn off the screen or leave BridgePad.", false)
+        onStatus(true, LocalizedMessage(R.string.background_usb_active), false)
         SessionLog.record("USB", "Direct USB HID capture started")
         worker = Thread(
-            { readLoop(opened, endpoint, parser, device.deviceId, deviceKey, device.productName ?: "USB gamepad") },
+            { readLoop(opened, endpoint, parser, device.deviceId, deviceKey, device.productName ?: context.getString(R.string.usb_gamepad)) },
             "BridgePad-USB-HID",
         ).also { it.start() }
     }
@@ -121,7 +123,7 @@ class DirectUsbGamepadController(
         while (running.get()) {
             val length = connection.bulkTransfer(endpoint, buffer, buffer.size, 1000)
             if (length < 0 && manager.deviceList.values.none { it.deviceId == deviceId }) {
-                fail("USB gamepad disconnected. All controls were released.")
+                fail(LocalizedMessage(R.string.usb_disconnected))
                 return
             }
             if (length > 0) runCatching { parser.decode(buffer.copyOf(length)) }.onSuccess { rawGamepad ->
@@ -141,7 +143,7 @@ class DirectUsbGamepadController(
                         ),
                     )
                 }
-            }.onFailure { fail("USB report parsing failed; returning to Compatibility mode.") }
+            }.onFailure { fail(LocalizedMessage(R.string.usb_parse_failed)) }
         }
     }
 
@@ -160,7 +162,7 @@ class DirectUsbGamepadController(
         runCatching { context.unregisterReceiver(permissionReceiver) }
     }
 
-    private fun fail(message: String) { stop(); SessionLog.record("USB_ERROR", message); onStatus(false, message, true) }
+    private fun fail(message: LocalizedMessage) { stop(); SessionLog.record("USB_ERROR", message.resolve(context)); onStatus(false, message, true) }
 
     @Suppress("DEPRECATION")
     private fun usbDeviceFrom(intent: Intent): UsbDevice? =
@@ -176,7 +178,7 @@ class DirectUsbGamepadController(
             open(device)
         } else {
             pendingPermissionDevice = null
-            onStatus(false, "USB permission was denied. Compatibility mode is still available.", true)
+            onStatus(false, LocalizedMessage(R.string.usb_denied), true)
         }
     }
 
