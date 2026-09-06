@@ -69,14 +69,15 @@ checklist. These checks are pending hardware validation for the UI redesign.
 - With Bluetooth off, confirm **Connect and play** is disabled.
   **End session** must remain hidden while granting permissions, enabling
   Bluetooth or choosing a PC; it appears only after the HID session starts.
-  Destination must show **Turn on Bluetooth**, with no paired-PC list,
+  Connection must show **Turn on Bluetooth**, with no paired-PC list,
   missing-PC warning or selected new-pairing option. Accept enabling Bluetooth
-  and confirm the PC picker opens without another tap or a visibility request.
-- Repeat using **Turn on Bluetooth** in Destination, including with missing
+  and confirm the paired-PC choices appear inline without a visibility request
+  or a second picker.
+- Repeat using **Turn on Bluetooth** in Connection, including with missing
   Bluetooth permission, a saved PC, and a previous new-pairing choice. All paths
   must refresh paired PCs and require a destination choice before connecting.
 - Cancel Bluetooth enablement, enable it from Android quick settings, and turn
-  it off while the PC picker is open. Confirm the UI follows the actual adapter
+  it off while the paired-PC choices are visible. Confirm the UI follows the actual adapter
   state and no hidden new-pairing selection or automatic visibility remains.
 - Deny or cancel permissions/discoverability. Confirm there is actionable
   localized feedback, no false connected state and no automatic retry loop.
@@ -86,12 +87,12 @@ checklist. These checks are pending hardware validation for the UI redesign.
   is connecting or that an established connection was lost. Next connect
   successfully, turn off PC Bluetooth and confirm the distinct connection-lost
   message is shown.
-- With no saved destination and an already paired PC, select it in Destination
-  or the picker shown after Bluetooth preparation. No session or visibility prompt
-  should start until **Connect and play** is pressed with all choices complete.
+- With no saved destination and an already paired PC, select it inline in
+  Connection after Bluetooth preparation. No session or visibility prompt should
+  start until **Connect and play** is pressed with all choices complete.
   Repeat with no paired PCs: new pairing still requires an explicit choice.
-  Cancel the picker and verify no session starts. A forgotten saved PC must keep
-  the button disabled until a valid destination is selected.
+  Return without choosing a PC and verify no session starts. A forgotten saved PC
+  must keep the button disabled until a valid destination is selected.
 - Choose **Pair a new PC**, tap **Connect and play**, allow visibility and add
   the phone in Windows Bluetooth settings. Confirm the input screen opens only
   after connection, without restarting the session.

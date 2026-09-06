@@ -16,6 +16,8 @@ import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.usb.DirectUsbState
 import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.ConnectionMethod
+import dev.jonalakas.bridgepad.core.session.DestinationType
 import dev.jonalakas.bridgepad.core.session.OutputAdapterCatalog
 import dev.jonalakas.bridgepad.core.session.SessionDraft
 import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
@@ -41,16 +43,15 @@ fun HomeScreen(
     physicalCaptureMode: PhysicalCaptureMode?,
     sessionDraft: SessionDraft,
     outputAdapters: OutputAdapterCatalog,
+    destinationType: DestinationType?,
+    connectionMethod: ConnectionMethod?,
     directUsbState: DirectUsbState,
     mappingAvailable: Boolean,
-    bluetoothSelected: Boolean,
+    onDestinationChanged: (DestinationType) -> Unit,
     onSelectBluetooth: () -> Unit,
     pairedHosts: List<PairedHost>,
     selectedAddress: String?,
     pairNewPcSelected: Boolean,
-    showDestinationPicker: Boolean,
-    onDismissDestinationPicker: () -> Unit,
-    onPickDestination: (String?) -> Unit,
     preparingConnection: Boolean,
     onSelectHost: (String?) -> Unit,
     onInputModeChanged: (InputMode) -> Unit,
@@ -68,6 +69,12 @@ fun HomeScreen(
 ) {
     var panel by rememberSaveable { mutableStateOf<String?>(null) }
     val connected = hidState.status == HidSessionStatus.CONNECTED
+    val bluetoothSelected = connectionMethod == ConnectionMethod.BLUETOOTH
+    val targetChosen = connected || (
+        destinationType == DestinationType.PC &&
+            bluetoothSelected &&
+            (selectedAddress != null || pairNewPcSelected)
+        )
     val setupComplete = SessionSetup.canConnect(
         draft = sessionDraft,
         adapters = outputAdapters,
@@ -96,91 +103,114 @@ fun HomeScreen(
                 Text(stringResource(R.string.home_description), style = MaterialTheme.typography.bodyMedium)
             }
             item {
-                SetupCard(R.string.step_input) {
-                    Choice(inputMode == InputMode.TOUCHSCREEN, R.string.touchscreen_input, !busy) { onInputModeChanged(InputMode.TOUCHSCREEN) }
-                    Choice(inputMode == InputMode.PHYSICAL_GAMEPAD, R.string.physical_input, !busy) { onInputModeChanged(InputMode.PHYSICAL_GAMEPAD) }
-                    if (inputMode == InputMode.TOUCHSCREEN) {
-                        TextButton(onClick = { panel = "layout" }) { Text(stringResource(R.string.controller_layout)) }
-                    } else if (inputMode == InputMode.PHYSICAL_GAMEPAD) {
-                        val deviceNames = physicalGamepadState.devices.joinToString { it.name }
-                        Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleSmall)
+                SetupCard(R.string.step_destination) {
+                    Choice(
+                        destinationType == DestinationType.PC,
+                        R.string.destination_pc,
+                        !busy && !connected,
+                    ) { onDestinationChanged(DestinationType.PC) }
+                    Choice(false, R.string.destination_playstation_coming_soon, false) {}
+                    Choice(false, R.string.destination_xbox_coming_soon, false) {}
+                }
+            }
+            if (destinationType != null) {
+                item {
+                    SetupCard(R.string.step_transport) {
                         Choice(
-                            physicalCaptureMode == PhysicalCaptureMode.COMPATIBILITY,
-                            R.string.compatibility_mode,
-                            !busy,
-                        ) { onPhysicalCaptureModeChanged(PhysicalCaptureMode.COMPATIBILITY) }
-                        Text(stringResource(R.string.compatibility_mode_description), style = MaterialTheme.typography.bodySmall)
-                        Choice(
-                            physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB,
-                            R.string.background_usb_mode,
-                            !busy,
-                        ) { onPhysicalCaptureModeChanged(PhysicalCaptureMode.BACKGROUND_USB) }
-                        Text(stringResource(R.string.background_usb_description), style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            when (physicalCaptureMode) {
-                                PhysicalCaptureMode.BACKGROUND_USB -> directUsbState.deviceName
-                                    ?: stringResource(R.string.physical_input_missing_usb)
-                                PhysicalCaptureMode.COMPATIBILITY -> deviceNames.ifEmpty {
-                                    stringResource(R.string.physical_input_missing)
-                                }
-                                null -> stringResource(R.string.choose_capture_mode)
-                            },
+                            bluetoothSelected,
+                            R.string.bluetooth_label,
+                            !busy && !connected && destinationType == DestinationType.PC,
+                            onSelectBluetooth,
                         )
-                        if (physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB && directUsbState.statusMessage != null) {
-                            NoticeCard(
-                                stringResource(
-                                    directUsbState.statusMessage.resourceId,
-                                    *directUsbState.statusMessage.arguments.toTypedArray(),
-                                ),
-                                if (directUsbState.statusIsError) NoticeTone.WARNING else NoticeTone.SUCCESS,
-                            )
+                        Choice(false, R.string.wifi_coming_soon, false) {}
+                        Choice(false, R.string.usb_connection_coming_soon, false) {}
+                        if (bluetoothSelected && destinationType == DestinationType.PC) {
+                            HorizontalDivider()
+                            Text(stringResource(R.string.choose_destination_title), style = MaterialTheme.typography.titleSmall)
+                            if (connected) {
+                                Text(stringResource(R.string.connected_to, hidState.connectedHost.orEmpty()))
+                                Text(stringResource(R.string.change_destination_hint), style = MaterialTheme.typography.bodySmall)
+                            } else if (!bluetoothPermissionGranted) {
+                                Text(stringResource(R.string.bluetooth_destination_permission))
+                                OutlinedButton(onClick = onPrepareBluetooth, enabled = !busy && hidCompatible) {
+                                    Text(stringResource(R.string.grant_permissions))
+                                }
+                            } else if (!bluetoothEnabled) {
+                                Text(stringResource(R.string.bluetooth_destination_off))
+                                OutlinedButton(onClick = onPrepareBluetooth, enabled = !busy && hidCompatible) {
+                                    Text(stringResource(R.string.enable_bluetooth))
+                                }
+                            } else {
+                                pairedHosts.forEach { host ->
+                                    FilterChip(
+                                        selected = selectedAddress == host.address,
+                                        onClick = { onSelectHost(host.address) },
+                                        label = { Text(host.name) },
+                                        enabled = !busy,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                }
+                                Choice(pairNewPcSelected, R.string.pair_new_pc, !busy) { onSelectHost(null) }
+                                if (selectedAddress == null && !pairNewPcSelected) {
+                                    Text(stringResource(R.string.choose_destination_hint))
+                                }
+                                if (selectedAddress != null && pairedHosts.none { it.address == selectedAddress }) {
+                                    NoticeCard(stringResource(R.string.selected_pc_unavailable), NoticeTone.WARNING)
+                                }
+                            }
                         }
-                        OutlinedButton(
-                            onClick = onConfigureGamepadMapping,
-                            enabled = mappingAvailable && !busy,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text(stringResource(R.string.configure_gamepad_mapping)) }
-                        Text(stringResource(R.string.mapping_optional_both_modes), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
-            item {
-                SetupCard(R.string.step_transport) {
-                    Choice(bluetoothSelected, R.string.bluetooth_label, !busy && !connected, onSelectBluetooth)
-                    Text(stringResource(R.string.transport_description))
-                    Text(stringResource(R.string.future_transports), style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            item {
-                SetupCard(R.string.step_destination) {
-                    if (connected) {
-                        Text(stringResource(R.string.connected_to, hidState.connectedHost.orEmpty()))
-                        Text(stringResource(R.string.change_destination_hint), style = MaterialTheme.typography.bodySmall)
-                    } else {
-                        Text(stringResource(R.string.destination_support), style = MaterialTheme.typography.bodySmall)
-                        if (!bluetoothPermissionGranted) {
-                            Text(stringResource(R.string.bluetooth_destination_permission))
-                            OutlinedButton(onClick = onPrepareBluetooth, enabled = !busy && hidCompatible) { Text(stringResource(R.string.grant_permissions)) }
-                        } else if (!bluetoothEnabled) {
-                            Text(stringResource(R.string.bluetooth_destination_off))
-                            OutlinedButton(onClick = onPrepareBluetooth, enabled = !busy && hidCompatible) { Text(stringResource(R.string.enable_bluetooth)) }
-                        } else {
-                            pairedHosts.forEach { host ->
-                                FilterChip(
-                                    selected = selectedAddress == host.address,
-                                    onClick = { onSelectHost(host.address) },
-                                    label = { Text(host.name) },
-                                    enabled = !busy,
-                                    modifier = Modifier.fillMaxWidth(),
+            if (targetChosen) {
+                item {
+                    SetupCard(R.string.step_input) {
+                        Choice(inputMode == InputMode.TOUCHSCREEN, R.string.touchscreen_input, !busy) { onInputModeChanged(InputMode.TOUCHSCREEN) }
+                        Choice(inputMode == InputMode.PHYSICAL_GAMEPAD, R.string.physical_input, !busy) { onInputModeChanged(InputMode.PHYSICAL_GAMEPAD) }
+                        if (inputMode == InputMode.TOUCHSCREEN) {
+                            TextButton(onClick = { panel = "layout" }) { Text(stringResource(R.string.controller_layout)) }
+                        } else if (inputMode == InputMode.PHYSICAL_GAMEPAD) {
+                            val deviceNames = physicalGamepadState.devices.joinToString { it.name }
+                            Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleSmall)
+                            Choice(
+                                physicalCaptureMode == PhysicalCaptureMode.COMPATIBILITY,
+                                R.string.compatibility_mode,
+                                !busy,
+                            ) { onPhysicalCaptureModeChanged(PhysicalCaptureMode.COMPATIBILITY) }
+                            Text(stringResource(R.string.compatibility_mode_description), style = MaterialTheme.typography.bodySmall)
+                            Choice(
+                                physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB,
+                                R.string.background_usb_mode,
+                                !busy,
+                            ) { onPhysicalCaptureModeChanged(PhysicalCaptureMode.BACKGROUND_USB) }
+                            Text(stringResource(R.string.background_usb_description), style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                when (physicalCaptureMode) {
+                                    PhysicalCaptureMode.BACKGROUND_USB -> directUsbState.deviceName
+                                        ?: stringResource(R.string.physical_input_missing_usb)
+                                    PhysicalCaptureMode.COMPATIBILITY -> deviceNames.ifEmpty {
+                                        stringResource(R.string.physical_input_missing)
+                                    }
+                                    null -> stringResource(R.string.choose_capture_mode)
+                                },
+                            )
+                            if (physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB && directUsbState.statusMessage != null) {
+                                NoticeCard(
+                                    stringResource(
+                                        directUsbState.statusMessage.resourceId,
+                                        *directUsbState.statusMessage.arguments.toTypedArray(),
+                                    ),
+                                    if (directUsbState.statusIsError) NoticeTone.WARNING else NoticeTone.SUCCESS,
                                 )
                             }
-                            Choice(pairNewPcSelected, R.string.pair_new_pc, !busy) { onSelectHost(null) }
-                            if (selectedAddress == null && !pairNewPcSelected) {
-                                Text(stringResource(R.string.choose_destination_hint))
-                            }
-                            if (selectedAddress != null && pairedHosts.none { it.address == selectedAddress }) {
-                                NoticeCard(stringResource(R.string.selected_pc_unavailable), NoticeTone.WARNING)
-                            }
+                            OutlinedButton(
+                                onClick = onConfigureGamepadMapping,
+                                enabled = mappingAvailable && !busy,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(R.string.configure_gamepad_mapping)) }
+                            Text(stringResource(R.string.mapping_optional_both_modes), style = MaterialTheme.typography.bodySmall)
+                        } else {
+                            Text(stringResource(R.string.choose_input_hint), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -218,30 +248,6 @@ fun HomeScreen(
                 OutlinedButton(onClick = onStopHid, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.end_session)) }
             }
         }
-    }
-    if (showDestinationPicker && bluetoothEnabled && bluetoothPermissionGranted) {
-        AlertDialog(
-            onDismissRequest = onDismissDestinationPicker,
-            title = { Text(stringResource(R.string.choose_destination_title)) },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = onDismissDestinationPicker) { Text(stringResource(R.string.cancel_action)) }
-            },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.choose_destination_description))
-                    pairedHosts.forEach { host ->
-                        OutlinedButton(onClick = { onPickDestination(host.address) }, modifier = Modifier.fillMaxWidth()) {
-                            Text(host.name)
-                        }
-                    }
-                    if (pairedHosts.isEmpty()) Text(stringResource(R.string.no_paired_pc_choice))
-                    OutlinedButton(onClick = { onPickDestination(null) }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.pair_new_pc))
-                    }
-                }
-            },
-        )
     }
     if (panel != null) {
         AlertDialog(

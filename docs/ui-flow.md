@@ -1,13 +1,16 @@
 # Session UI and localization
 
-The Home screen contains three choices on one page:
+The Home screen progressively reveals three choices on one page:
 
-1. **Input**: virtual gamepad or physical controller. Input can change during an
-   active session without reconnecting the PC.
-2. **Connection**: Bluetooth output. Wi-Fi and USB output are explicitly marked
-   as future work, not selectable transports.
-3. **Destination**: an already paired computer or **Pair a new PC**. Windows is
-   the validated destination; console support is not currently offered.
+1. **Destination**: PC is available. PlayStation and Xbox are visible but marked
+   as future work and cannot be selected yet.
+2. **Connection**: the compatible methods for the selected destination. For PC,
+   Bluetooth is available while Wi-Fi and USB are visible as future work. With
+   PC and Bluetooth selected, this step also asks for an already paired computer
+   or **Pair a new PC**.
+3. **Input**: virtual gamepad or physical controller. This step appears after a
+   connection target has been chosen. Input can change during an active session
+   without reconnecting the PC.
 
 Each new setup starts with no input, transport or destination selected, including
 after explicitly ending a session. Previously saved setup preferences are ignored.
@@ -20,6 +23,7 @@ For physical input, the Input step also requires an explicit capture choice:
 outside the app or with the screen off. This capture choice is independent from
 the Bluetooth output transport and may be prepared before a PC session exists.
 
+Changing destination, connection or PC clears every dependent choice below it.
 **Connect and play** remains disabled until the three steps and, when applicable,
 the physical capture choice are valid, Bluetooth is on and access permission is
 granted. A selected PC that is no longer paired does not count as a valid
@@ -28,10 +32,11 @@ starts HID registration and connects to the chosen PC, or requests temporary
 discoverability if **Pair a new PC** was explicitly selected. Picking a destination
 only fills the setup; it never starts a session on its own.
 
-While Bluetooth is off, Destination hides paired-host and new-pairing choices
+While Bluetooth is off, Connection hides paired-host and new-pairing choices
 and offers **Turn on Bluetooth**. Missing access permissions are requested first.
-This action waits for the adapter to be enabled, refreshes paired PCs and opens
-the destination picker. **Connect and play** stays disabled during preparation.
+This action waits for the adapter to be enabled and refreshes the paired PCs
+shown directly in Connection. **Connect and play** stays disabled during
+preparation.
 A previous new-pairing choice
 is cleared; enabling Bluetooth never implies consent to become discoverable.
 The phone must be added from Windows Bluetooth settings during discoverability.

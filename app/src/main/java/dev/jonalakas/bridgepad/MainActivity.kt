@@ -94,13 +94,11 @@ class MainActivity : ComponentActivity() {
                 var inputModeName by rememberSaveable {
                     mutableStateOf<String?>(null)
                 }
-                var bluetoothSelected by rememberSaveable {
-                    mutableStateOf(false)
-                }
+                var destinationTypeName by rememberSaveable { mutableStateOf<String?>(null) }
+                var connectionMethodName by rememberSaveable { mutableStateOf<String?>(null) }
                 var captureModeName by rememberSaveable { mutableStateOf<String?>(null) }
                 var selectedAddress by rememberSaveable { mutableStateOf<String?>(null) }
                 var pairNewPcSelected by rememberSaveable { mutableStateOf(false) }
-                var showDestinationPicker by rememberSaveable { mutableStateOf(false) }
                 var pendingDestination by rememberSaveable { mutableStateOf<String?>(null) }
                 var connectionGate by rememberSaveable { mutableStateOf<String?>(null) }
                 var openAfterConnection by rememberSaveable { mutableStateOf(false) }
@@ -193,14 +191,23 @@ class MainActivity : ComponentActivity() {
                 } else {
                     captureModeName?.let(PhysicalCaptureMode::valueOf)
                 }
+                val effectiveDestinationType = if (hidState.sessionActive) {
+                    hidState.destinationType
+                } else {
+                    destinationTypeName?.let(DestinationType::valueOf)
+                }
+                val effectiveConnectionMethod = if (hidState.sessionActive) {
+                    hidState.connectionMethod
+                } else {
+                    connectionMethodName?.let(ConnectionMethod::valueOf)
+                }
                 val sessionDraft = SessionDraft(
-                    destinationType = if (hidState.sessionActive || bluetoothSelected) {
-                        DestinationType.WINDOWS
-                    } else null,
-                    connectionMethod = if (hidState.sessionActive || bluetoothSelected) {
-                        ConnectionMethod.BLUETOOTH
-                    } else null,
-                    outputAdapterId = if (hidState.sessionActive || bluetoothSelected) {
+                    destinationType = effectiveDestinationType,
+                    connectionMethod = effectiveConnectionMethod,
+                    outputAdapterId = if (
+                        effectiveDestinationType == DestinationType.PC &&
+                        effectiveConnectionMethod == ConnectionMethod.BLUETOOTH
+                    ) {
                         OutputAdapterIds.GENERIC_BLUETOOTH_HID
                     } else null,
                     destinationTarget = when {
@@ -242,7 +249,6 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(bluetoothEnabled, bluetoothPermissionGranted) {
                     if (!bluetoothEnabled || !bluetoothPermissionGranted) {
                         pairNewPcSelected = false
-                        showDestinationPicker = false
                     }
                 }
                 LaunchedEffect(connectionGate) {
@@ -292,7 +298,6 @@ class MainActivity : ComponentActivity() {
                             pairedHosts = readPairedHosts()
                             pendingDestination = null
                             connectionGate = null
-                            showDestinationPicker = true
                         }
                         destination != NEW_PC && pairedHosts.none { it.address == destination } -> {
                             pendingDestination = null
@@ -321,7 +326,7 @@ class MainActivity : ComponentActivity() {
                             sessionCoordinator.updateState { it.copy(message = null, status = HidSessionStatus.IDLE) }
                             sessionCoordinator.start(
                                 adapterId = OutputAdapterIds.GENERIC_BLUETOOTH_HID,
-                                destination = DestinationType.WINDOWS,
+                                destination = requireNotNull(effectiveDestinationType),
                                 inputMode = requireNotNull(inputMode),
                                 physicalCaptureMode = effectiveCaptureMode,
                             )
@@ -405,28 +410,44 @@ class MainActivity : ComponentActivity() {
                     physicalCaptureMode = effectiveCaptureMode,
                     sessionDraft = sessionDraft,
                     outputAdapters = sessionCoordinator.catalog,
+                    destinationType = effectiveDestinationType,
+                    connectionMethod = effectiveConnectionMethod,
                     directUsbState = directUsbState,
                     mappingAvailable = mappingInput != null,
-                    bluetoothSelected = hidState.sessionActive || bluetoothSelected,
+                    onDestinationChanged = { destination ->
+                        if (destinationTypeName != destination.name) {
+                            destinationTypeName = destination.name
+                            connectionMethodName = null
+                            selectedAddress = null
+                            pairNewPcSelected = false
+                            inputModeName = null
+                            captureModeName = null
+                            sessionCoordinator.preparePhysicalCapture(null)
+                        }
+                    },
                     onSelectBluetooth = {
-                        bluetoothSelected = true
+                        if (connectionMethodName != ConnectionMethod.BLUETOOTH.name) {
+                            connectionMethodName = ConnectionMethod.BLUETOOTH.name
+                            selectedAddress = null
+                            pairNewPcSelected = false
+                            inputModeName = null
+                            captureModeName = null
+                            sessionCoordinator.preparePhysicalCapture(null)
+                        }
                     },
                     pairedHosts = pairedHosts,
                     selectedAddress = selectedAddress,
                     pairNewPcSelected = pairNewPcSelected,
-                    showDestinationPicker = showDestinationPicker,
-                    onDismissDestinationPicker = { showDestinationPicker = false },
-                    onPickDestination = { address ->
-                        selectedAddress = address
-                        pairNewPcSelected = address == null
-                        showDestinationPicker = false
-                        connectionGate = null
-                        pendingDestination = null
-                    },
                     preparingConnection = pendingDestination != null,
                     onSelectHost = { address ->
-                        selectedAddress = address
-                        pairNewPcSelected = address == null
+                        val selectingNewPc = address == null
+                        if (selectedAddress != address || pairNewPcSelected != selectingNewPc) {
+                            selectedAddress = address
+                            pairNewPcSelected = selectingNewPc
+                            inputModeName = null
+                            captureModeName = null
+                            sessionCoordinator.preparePhysicalCapture(null)
+                        }
                     },
                     onInputModeChanged = { mode ->
                         inputModeName = mode.name
@@ -445,6 +466,10 @@ class MainActivity : ComponentActivity() {
                     },
                     onPrepareBluetooth = {
                         pairNewPcSelected = false
+                        selectedAddress = null
+                        inputModeName = null
+                        captureModeName = null
+                        sessionCoordinator.preparePhysicalCapture(null)
                         connectionGate = null
                         pendingDestination = DestinationSelection.CHOOSE_PC
                     },
@@ -474,10 +499,10 @@ class MainActivity : ComponentActivity() {
                         inputModeName = null
                         captureModeName = null
                         sessionCoordinator.preparePhysicalCapture(null)
-                        bluetoothSelected = false
+                        destinationTypeName = null
+                        connectionMethodName = null
                         selectedAddress = null
                         pairNewPcSelected = false
-                        showDestinationPicker = false
                         pendingDestination = null
                         connectionGate = null
                         openAfterConnection = false

@@ -9,7 +9,6 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalContext
 import dev.jonalakas.bridgepad.R
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
@@ -29,6 +28,11 @@ private sealed interface MappingStep {
         override val prompt: Int,
     ) : MappingStep
 }
+
+private data class MappingInstruction(
+    val resourceId: Int,
+    val arguments: List<Any> = emptyList(),
+)
 
 private val steps = listOf(
     MappingStep.Button(VirtualControl.FACE_SOUTH, R.string.mapping_prompt_1),
@@ -73,7 +77,6 @@ fun GamepadMappingScreen(
     onSave: (GamepadMapping) -> Unit,
     onCancel: () -> Unit,
 ) {
-    val context = LocalContext.current
     androidx.activity.compose.BackHandler(onBack = onCancel)
     var stepIndex by rememberSaveable { mutableIntStateOf(0) }
     var baseline by remember { mutableStateOf(input.rawGamepad) }
@@ -87,13 +90,17 @@ fun GamepadMappingScreen(
     val dpad = rememberSaveable(
         saver = dpadMappingSaver(),
     ) { mutableStateMapOf<DpadDirection, DpadDirection>() }
-    var instruction by remember { mutableStateOf(context.getString(R.string.mapping_release_all)) }
+    var instruction by remember {
+        mutableStateOf(MappingInstruction(R.string.mapping_release_all))
+    }
     val step = steps.getOrNull(stepIndex)
 
     LaunchedEffect(stepIndex) {
         baseline = input.rawGamepad
         armed = input.rawGamepad.isNeutral()
-        instruction = if (armed) context.getString(R.string.mapping_ready) else context.getString(R.string.mapping_release_first)
+        instruction = MappingInstruction(
+            if (armed) R.string.mapping_ready else R.string.mapping_release_first,
+        )
     }
     LaunchedEffect(input.inputEventCount, stepIndex) {
         val currentStep = steps.getOrNull(stepIndex) ?: return@LaunchedEffect
@@ -101,7 +108,7 @@ fun GamepadMappingScreen(
             if (input.rawGamepad.isNeutral()) {
                 baseline = input.rawGamepad
                 armed = true
-                instruction = context.getString(R.string.mapping_ready)
+                instruction = MappingInstruction(R.string.mapping_ready)
             }
             return@LaunchedEffect
         }
@@ -122,7 +129,10 @@ fun GamepadMappingScreen(
                         it.value == source && it.key != currentStep.target
                     }?.key
                     if (usedBy != null) {
-                        instruction = context.getString(R.string.mapping_button_used, usedBy.displayName())
+                        instruction = MappingInstruction(
+                            R.string.mapping_button_used,
+                            listOf(usedBy.displayName()),
+                        )
                     } else {
                         buttons[currentStep.target] = source
                         armed = false
@@ -138,7 +148,7 @@ fun GamepadMappingScreen(
                         it.value == input.rawGamepad.dpad && it.key != currentStep.target
                     }?.key
                     if (usedBy != null) {
-                        instruction = context.getString(R.string.mapping_dpad_used)
+                        instruction = MappingInstruction(R.string.mapping_dpad_used)
                     } else {
                         dpad[currentStep.target] = input.rawGamepad.dpad
                         armed = false
@@ -161,11 +171,11 @@ fun GamepadMappingScreen(
                         it.value.source == movement.first && it.key != currentStep.target
                     }?.key
                     if (existingForTarget != null && existingForTarget.source != movement.first) {
-                        instruction = context.getString(R.string.mapping_same_axis)
+                        instruction = MappingInstruction(R.string.mapping_same_axis)
                     } else if (existingForTarget != null && existingForTarget.inverted != candidate.inverted) {
-                        instruction = context.getString(R.string.mapping_opposite)
+                        instruction = MappingInstruction(R.string.mapping_opposite)
                     } else if (usedBy != null) {
-                        instruction = context.getString(R.string.mapping_axis_used)
+                        instruction = MappingInstruction(R.string.mapping_axis_used)
                     } else {
                         axes[currentStep.target] = candidate
                         armed = false
@@ -191,7 +201,12 @@ fun GamepadMappingScreen(
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(stringResource(step.prompt), style = MaterialTheme.typography.headlineSmall)
-                        Text(instruction)
+                        Text(
+                            stringResource(
+                                instruction.resourceId,
+                                *instruction.arguments.toTypedArray(),
+                            ),
+                        )
                         if (stepIndex > 0) Text(stringResource(R.string.mapping_skip))
                     }
                 }

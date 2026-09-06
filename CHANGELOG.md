@@ -8,6 +8,10 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Reordered the Home setup into a progressive destination, connection, device
+  and input flow, with unavailable platforms and transports marked as upcoming.
+- Mapping instructions now resolve string resources during Compose rendering so
+  language changes are reflected correctly and Compose resource lint passes.
 - Refactored session setup around destination, connection, target and input.
 - Added destination-specific output adapter identities and isolated Bluetooth
   HID profiles in a dedicated Android library module.

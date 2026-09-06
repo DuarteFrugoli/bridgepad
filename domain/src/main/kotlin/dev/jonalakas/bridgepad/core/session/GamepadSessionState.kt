@@ -4,7 +4,7 @@ enum class InputMode { TOUCHSCREEN, PHYSICAL_GAMEPAD }
 
 enum class PhysicalCaptureMode { COMPATIBILITY, BACKGROUND_USB }
 
-enum class DestinationType { WINDOWS, LINUX, PLAYSTATION, XBOX }
+enum class DestinationType { PC, PLAYSTATION, XBOX }
 
 enum class ConnectionMethod { BLUETOOTH, WIFI, USB }
 

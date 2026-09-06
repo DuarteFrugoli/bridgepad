@@ -1,12 +1,10 @@
 <resources>
-    <string name="complete_session_setup">Choose input, connection and destination to enable Connect and play. Bluetooth must be on.</string>
+    <string name="complete_session_setup">Choose a destination, connection, device and input to enable Connect and play.</string>
     <string name="enable_bluetooth">Turn on Bluetooth</string>
     <string name="bluetooth_destination_off">Turn on Bluetooth to see paired PCs and choose where to connect.</string>
     <string name="bluetooth_destination_permission">Allow Bluetooth access to load paired PCs before choosing a destination.</string>
     <string name="choose_destination_title">Choose a PC</string>
     <string name="choose_destination_hint">Select a paired PC above or choose Pair a new PC.</string>
-    <string name="choose_destination_description">Connect to a paired PC without making the phone visible. Visibility is needed only to pair a new PC.</string>
-    <string name="no_paired_pc_choice">No paired PC was found. You can pair a new one or cancel.</string>
     <string name="diagnostic_api">API level: %1$d</string>
     <string name="diagnostic_controller_ids">Vendor/Product: %1$d / %2$d</string>
     <string name="diagnostic_axes">Axes: %1$s</string>
@@ -44,7 +42,7 @@
     <string name="mouse_touchpad_instructions">Drag anywhere to move the PC pointer. Tap for a left click.</string>
     <string name="close_touchpad">Session menu</string>
     <string name="onboarding_title">Your phone, your controller</string>
-    <string name="onboarding_description">Choose your input, connection and destination. BridgePad sends your controls to a Windows PC over Bluetooth.</string>
+    <string name="onboarding_description">Choose your destination, connection and input. BridgePad currently sends your controls to a PC over Bluetooth.</string>
     <string name="before_you_start">Before you start</string>
     <string name="onboarding_requirement_bluetooth">• Allow Bluetooth access when connecting.</string>
     <string name="onboarding_requirement_pc">• For a new PC, allow phone visibility and add the phone in Windows Bluetooth settings.</string>
@@ -85,10 +83,16 @@
     <string name="settings">Settings</string>
     <string name="session_active">Session in progress</string>
     <string name="home_title">Ready to play?</string>
-    <string name="home_description">Choose where your controls come from and where they go.</string>
-    <string name="step_input">1 · Input</string>
+    <string name="home_description">Choose where to play, how to connect and which controls to use.</string>
+    <string name="step_input">3 · Input</string>
     <string name="step_transport">2 · Connection</string>
-    <string name="step_destination">3 · Destination</string>
+    <string name="step_destination">1 · Destination</string>
+    <string name="destination_pc">PC</string>
+    <string name="destination_playstation_coming_soon">PlayStation · Coming soon</string>
+    <string name="destination_xbox_coming_soon">Xbox · Coming soon</string>
+    <string name="wifi_coming_soon">Wi-Fi · Coming soon</string>
+    <string name="usb_connection_coming_soon">USB cable · Coming soon</string>
+    <string name="choose_input_hint">Choose the controls you want to use on this phone.</string>
     <string name="controller_layout">Virtual gamepad layout</string>
     <string name="transport_description">Sends gamepad and mouse commands from this phone to your PC.</string>
     <string name="future_transports">Wi-Fi and USB output are planned, but not available in this version.</string>

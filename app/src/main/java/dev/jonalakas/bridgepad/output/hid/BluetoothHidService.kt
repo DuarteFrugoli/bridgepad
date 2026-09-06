@@ -53,7 +53,7 @@ class BluetoothHidService : Service() {
     private var connectedDevice: BluetoothDevice? = null
     private val profileRegistry = BluetoothHidProfileRegistry(listOf(GenericCompositeHidProfile))
     private var activeProfile: BluetoothHidProfile = GenericCompositeHidProfile
-    private var activeDestination = DestinationType.WINDOWS
+    private var activeDestination = DestinationType.PC
     private val outputTransport = BluetoothHidOutputTransport(
         hidDevice = { hidDevice },
         connectedHost = { connectedDevice },
@@ -279,7 +279,7 @@ class BluetoothHidService : Service() {
                     ?: OutputAdapterIds.GENERIC_BLUETOOTH_HID
                 val requestedDestination = intent.getStringExtra(EXTRA_DESTINATION_TYPE)
                     ?.let { runCatching { DestinationType.valueOf(it) }.getOrNull() }
-                    ?: DestinationType.WINDOWS
+                    ?: DestinationType.PC
                 val requestedProfile = profileRegistry.find(requestedAdapterId)
                 if (requestedProfile == null ||
                     !requestedProfile.adapter.supports(requestedDestination, ConnectionMethod.BLUETOOTH)

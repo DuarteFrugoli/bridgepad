@@ -14,7 +14,7 @@ object GenericCompositeHidProfile : BluetoothHidProfile {
     override val adapter = OutputAdapterDescriptor(
         id = OutputAdapterIds.GENERIC_BLUETOOTH_HID,
         connectionMethod = ConnectionMethod.BLUETOOTH,
-        supportedDestinations = setOf(DestinationType.WINDOWS, DestinationType.LINUX),
+        supportedDestinations = setOf(DestinationType.PC),
         targetSelectionMode = TargetSelectionMode.PAIRED_OR_NEW,
     )
     override val serviceName = "BridgePad"

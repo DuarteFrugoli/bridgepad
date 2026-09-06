@@ -1,12 +1,10 @@
 <resources>
-    <string name="complete_session_setup">Escolha entrada, conexão e destino para liberar Conectar e jogar. O Bluetooth precisa estar ligado.</string>
+    <string name="complete_session_setup">Escolha destino, conexão, dispositivo e entrada para liberar Conectar e jogar.</string>
     <string name="enable_bluetooth">Ligar Bluetooth</string>
     <string name="bluetooth_destination_off">Ligue o Bluetooth para ver os PCs pareados e escolher onde conectar.</string>
     <string name="bluetooth_destination_permission">Permita o acesso ao Bluetooth para carregar os PCs pareados antes de escolher um destino.</string>
     <string name="choose_destination_title">Escolha um PC</string>
     <string name="choose_destination_hint">Selecione um PC pareado acima ou escolha Parear um novo PC.</string>
-    <string name="choose_destination_description">Conecte a um PC pareado sem deixar o celular visível. A visibilidade só é necessária para parear um novo PC.</string>
-    <string name="no_paired_pc_choice">Nenhum PC pareado encontrado. Você pode parear um novo ou cancelar.</string>
     <string name="diagnostic_api">Nível da API: %1$d</string>
     <string name="diagnostic_controller_ids">Fabricante/Produto: %1$d / %2$d</string>
     <string name="diagnostic_axes">Eixos: %1$s</string>
@@ -44,7 +42,7 @@
     <string name="mouse_touchpad_instructions">Arraste para mover o ponteiro do PC. Toque para clicar com o botão esquerdo.</string>
     <string name="close_touchpad">Menu da sessão</string>
     <string name="onboarding_title">Seu celular, seu controle</string>
-    <string name="onboarding_description">Escolha a entrada, a conexão e o destino. O BridgePad envia seus comandos para um PC Windows por Bluetooth.</string>
+    <string name="onboarding_description">Escolha o destino, a conexão e a entrada. Atualmente, o BridgePad envia seus comandos para um PC por Bluetooth.</string>
     <string name="before_you_start">Antes de começar</string>
     <string name="onboarding_requirement_bluetooth">• Permita o acesso ao Bluetooth ao conectar.</string>
     <string name="onboarding_requirement_pc">• Para um novo PC, permita a visibilidade do celular e adicione-o no Bluetooth do Windows.</string>
@@ -85,10 +83,16 @@
     <string name="settings">Configurações</string>
     <string name="session_active">Sessão em andamento</string>
     <string name="home_title">Vamos jogar?</string>
-    <string name="home_description">Escolha de onde vêm seus comandos e para onde eles vão.</string>
-    <string name="step_input">1 · Entrada</string>
+    <string name="home_description">Escolha onde jogar, como conectar e quais controles usar.</string>
+    <string name="step_input">3 · Entrada</string>
     <string name="step_transport">2 · Conexão</string>
-    <string name="step_destination">3 · Destino</string>
+    <string name="step_destination">1 · Destino</string>
+    <string name="destination_pc">PC</string>
+    <string name="destination_playstation_coming_soon">PlayStation · Em breve</string>
+    <string name="destination_xbox_coming_soon">Xbox · Em breve</string>
+    <string name="wifi_coming_soon">Wi-Fi · Em breve</string>
+    <string name="usb_connection_coming_soon">Cabo USB · Em breve</string>
+    <string name="choose_input_hint">Escolha os controles que deseja usar neste celular.</string>
     <string name="controller_layout">Layout do controle virtual</string>
     <string name="transport_description">Envia os comandos do controle e do mouse deste celular para o PC.</string>
     <string name="future_transports">As saídas por Wi-Fi e USB estão planejadas, mas não estão disponíveis nesta versão.</string>

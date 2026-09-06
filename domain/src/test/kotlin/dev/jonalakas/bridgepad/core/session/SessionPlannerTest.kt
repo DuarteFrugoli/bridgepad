@@ -8,7 +8,7 @@ class SessionPlannerTest {
     private val pcBluetooth = OutputAdapterDescriptor(
         id = OutputAdapterIds.GENERIC_BLUETOOTH_HID,
         connectionMethod = ConnectionMethod.BLUETOOTH,
-        supportedDestinations = setOf(DestinationType.WINDOWS, DestinationType.LINUX),
+        supportedDestinations = setOf(DestinationType.PC),
         targetSelectionMode = TargetSelectionMode.PAIRED_OR_NEW,
     )
     private val catalog = OutputAdapterCatalog(listOf(pcBluetooth))
@@ -16,7 +16,7 @@ class SessionPlannerTest {
     @Test
     fun selectionsClearEveryDependentStep() {
         val complete = SessionDraft(
-            destinationType = DestinationType.WINDOWS,
+            destinationType = DestinationType.PC,
             connectionMethod = ConnectionMethod.BLUETOOTH,
             outputAdapterId = OutputAdapterIds.GENERIC_BLUETOOTH_HID,
             destinationTarget = DestinationTarget(DestinationTargetKind.EXISTING, "pc"),
@@ -36,7 +36,7 @@ class SessionPlannerTest {
     fun soleCompatibleAdapterIsResolvedWithoutExposingItToTheUser() {
         val result = SessionPlanner.plan(
             draft = SessionDraft(
-                destinationType = DestinationType.WINDOWS,
+                destinationType = DestinationType.PC,
                 connectionMethod = ConnectionMethod.BLUETOOTH,
                 destinationTarget = DestinationTarget(DestinationTargetKind.EXISTING, "pc"),
                 inputMode = InputMode.TOUCHSCREEN,
