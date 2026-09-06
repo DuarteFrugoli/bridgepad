@@ -8,6 +8,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Refactored session setup around destination, connection, target and input.
+- Added destination-specific output adapter identities and isolated Bluetooth
+  HID profiles in a dedicated Android library module.
 - Split the project into pure Kotlin domain, platform-independent protocol and
   Android application modules with enforced inward dependencies.
 - Bluetooth HID now implements a generic output-transport contract and consumes

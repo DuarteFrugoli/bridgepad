@@ -31,6 +31,10 @@ import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.ConnectionMethod
+import dev.jonalakas.bridgepad.core.session.DestinationType
+import dev.jonalakas.bridgepad.core.session.OutputAdapterId
+import dev.jonalakas.bridgepad.core.session.OutputAdapterIds
 import dev.jonalakas.bridgepad.core.output.OutputScheduler
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import dev.jonalakas.bridgepad.session.InputRouter
@@ -47,10 +51,14 @@ class BluetoothHidService : Service() {
     private var adapter: BluetoothAdapter? = null
     private var hidDevice: BluetoothHidDevice? = null
     private var connectedDevice: BluetoothDevice? = null
+    private val profileRegistry = BluetoothHidProfileRegistry(listOf(GenericCompositeHidProfile))
+    private var activeProfile: BluetoothHidProfile = GenericCompositeHidProfile
+    private var activeDestination = DestinationType.WINDOWS
     private val outputTransport = BluetoothHidOutputTransport(
         hidDevice = { hidDevice },
         connectedHost = { connectedDevice },
         resolveHost = { address -> adapter?.getRemoteDevice(address) },
+        profile = { activeProfile },
     )
     private var requestedHostAddress: String? = null
     private var lastHostAddress: String? = null
@@ -198,6 +206,42 @@ class BluetoothHidService : Service() {
                 }
             }
         }
+
+        override fun onGetReport(device: BluetoothDevice, type: Byte, id: Byte, bufferSize: Int) {
+            handleHostRequest(device, type, id, activeProfile.onGetReport(type, id, bufferSize))
+        }
+
+        override fun onSetReport(device: BluetoothDevice, type: Byte, id: Byte, data: ByteArray) {
+            handleHostRequest(device, type, id, activeProfile.onSetReport(type, id, data))
+        }
+
+        override fun onSetProtocol(device: BluetoothDevice, protocol: Byte) {
+            handleHostRequest(device, null, null, activeProfile.onSetProtocol(protocol))
+        }
+
+        override fun onInterruptData(device: BluetoothDevice, reportId: Byte, data: ByteArray) {
+            activeProfile.onInterruptData(reportId, data)
+        }
+
+        override fun onVirtualCableUnplug(device: BluetoothDevice) {
+            activeProfile.onVirtualCableUnplug()
+        }
+    }
+
+    private fun handleHostRequest(
+        device: BluetoothDevice,
+        type: Byte?,
+        id: Byte?,
+        result: HidHostRequestResult,
+    ) {
+        when (result) {
+            HidHostRequestResult.Ignored,
+            HidHostRequestResult.Accepted -> Unit
+            is HidHostRequestResult.Rejected -> hidDevice?.reportError(device, result.errorCode)
+            is HidHostRequestResult.Reply -> {
+                if (type != null && id != null) hidDevice?.replyReport(device, type, id, result.payload)
+            }
+        }
     }
 
     override fun onCreate() {
@@ -229,6 +273,22 @@ class BluetoothHidService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                val requestedAdapterId = intent.getStringExtra(EXTRA_OUTPUT_ADAPTER_ID)
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(::OutputAdapterId)
+                    ?: OutputAdapterIds.GENERIC_BLUETOOTH_HID
+                val requestedDestination = intent.getStringExtra(EXTRA_DESTINATION_TYPE)
+                    ?.let { runCatching { DestinationType.valueOf(it) }.getOrNull() }
+                    ?: DestinationType.WINDOWS
+                val requestedProfile = profileRegistry.find(requestedAdapterId)
+                if (requestedProfile == null ||
+                    !requestedProfile.adapter.supports(requestedDestination, ConnectionMethod.BLUETOOTH)
+                ) {
+                    finishSession(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_registration_rejected))
+                    return START_NOT_STICKY
+                }
+                activeProfile = requestedProfile
+                activeDestination = requestedDestination
                 val touchSelected = intent.getBooleanExtra(EXTRA_TOUCH_INPUT_SELECTED, true)
                 val captureMode = intent.getStringExtra(EXTRA_PHYSICAL_CAPTURE_MODE)
                     ?.let { runCatching { PhysicalCaptureMode.valueOf(it) }.getOrNull() }
@@ -238,6 +298,9 @@ class BluetoothHidService : Service() {
                         touchInputSelected = touchSelected,
                         physicalCaptureMode = captureMode,
                         directUsbActive = inputRouter.current.directUsbActive,
+                        destinationType = activeDestination,
+                        connectionMethod = ConnectionMethod.BLUETOOTH,
+                        outputAdapterId = activeProfile.adapter.id,
                     )
                 }
                 inputRouter.select(
@@ -349,14 +412,11 @@ class BluetoothHidService : Service() {
     private fun registerHidApp() {
         update(HidSessionStatus.REGISTERING, LocalizedMessage(R.string.hid_registering))
         val settings = BluetoothHidDeviceAppSdpSettings(
-            "BridgePad",
-            "BridgePad Bluetooth HID gamepad and mouse bridge",
-            "BridgePad",
-            (
-                BluetoothHidDevice.SUBCLASS1_MOUSE.toInt() or
-                    BluetoothHidDevice.SUBCLASS2_GAMEPAD.toInt()
-            ).toByte(),
-            GamepadHidDescriptor.bytes,
+            activeProfile.serviceName,
+            activeProfile.description,
+            activeProfile.provider,
+            activeProfile.subclass,
+            activeProfile.reportDescriptor,
         )
         val accepted = hidDevice?.registerApp(settings, null, null, mainExecutor, callback) == true
         if (!accepted) {
@@ -441,7 +501,7 @@ class BluetoothHidService : Service() {
             )
             else -> {
                 update(HidSessionStatus.CONNECTING, LocalizedMessage(R.string.hid_connecting, device.safeName()))
-                if (!outputTransport.connect(device.address)) {
+                if (!outputTransport.connect(activeDestination, device.address)) {
                     connectionFailed(device)
                 }
             }
@@ -747,6 +807,8 @@ class BluetoothHidService : Service() {
         const val EXTRA_DISCOVERABLE_DURATION = "discoverable_duration"
         const val EXTRA_TOUCH_INPUT_SELECTED = "touch_input_selected"
         const val EXTRA_PHYSICAL_CAPTURE_MODE = "physical_capture_mode"
+        const val EXTRA_OUTPUT_ADAPTER_ID = "output_adapter_id"
+        const val EXTRA_DESTINATION_TYPE = "destination_type"
 
         private const val CHANNEL_ID = "bluetooth_hid_session"
         private const val NOTIFICATION_ID = 1001

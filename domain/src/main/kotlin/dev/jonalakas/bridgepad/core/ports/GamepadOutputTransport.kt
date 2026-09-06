@@ -1,7 +1,8 @@
 package dev.jonalakas.bridgepad.core.ports
 
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
-import dev.jonalakas.bridgepad.core.session.OutputTransportType
+import dev.jonalakas.bridgepad.core.session.DestinationType
+import dev.jonalakas.bridgepad.core.session.OutputAdapterDescriptor
 
 data class PointerReport(
     val buttons: Int = 0,
@@ -17,9 +18,9 @@ data class TransportCapabilities(
 
 /** Sends logical input to one destination without knowing its physical source. */
 interface GamepadOutputTransport {
-    val type: OutputTransportType
+    val descriptor: OutputAdapterDescriptor
     val capabilities: TransportCapabilities
-    fun connect(destinationId: String): Boolean
+    fun connect(destination: DestinationType, destinationId: String): Boolean
     fun sendGamepad(state: VirtualGamepadState): Boolean
     fun sendPointer(report: PointerReport): Boolean
     fun disconnect()

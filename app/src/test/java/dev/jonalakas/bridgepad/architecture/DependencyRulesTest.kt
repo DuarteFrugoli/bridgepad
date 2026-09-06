@@ -18,6 +18,15 @@ class DependencyRulesTest {
         assertNoImport(sourceRoot().resolve("ui"), "dev.jonalakas.bridgepad.output.")
     }
 
+    @Test
+    fun activityDoesNotControlOutputAdaptersDirectly() {
+        val activity = sourceRoot().resolve("MainActivity.kt")
+        val importsOutput = activity.readText().lineSequence().any { line ->
+            line.startsWith("import dev.jonalakas.bridgepad.output.")
+        }
+        assertTrue("MainActivity must use SessionCoordinator", !importsOutput)
+    }
+
     private fun assertNoImport(root: Path, forbiddenPackage: String) {
         val violations = Files.walk(root).use { files ->
             files.filter { it.extension == "kt" }

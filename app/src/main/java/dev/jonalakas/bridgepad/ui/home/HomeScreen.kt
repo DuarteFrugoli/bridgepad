@@ -16,6 +16,8 @@ import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.usb.DirectUsbState
 import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.OutputAdapterCatalog
+import dev.jonalakas.bridgepad.core.session.SessionDraft
 import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
 import dev.jonalakas.bridgepad.session.FeedbackLevel as HidFeedbackLevel
 import dev.jonalakas.bridgepad.session.PairedHost
@@ -37,6 +39,8 @@ fun HomeScreen(
     physicalGamepadState: PhysicalGamepadState,
     inputMode: InputMode?,
     physicalCaptureMode: PhysicalCaptureMode?,
+    sessionDraft: SessionDraft,
+    outputAdapters: OutputAdapterCatalog,
     directUsbState: DirectUsbState,
     mappingAvailable: Boolean,
     bluetoothSelected: Boolean,
@@ -65,9 +69,10 @@ fun HomeScreen(
     var panel by rememberSaveable { mutableStateOf<String?>(null) }
     val connected = hidState.status == HidSessionStatus.CONNECTED
     val setupComplete = SessionSetup.canConnect(
-        inputMode, physicalCaptureMode, bluetoothSelected,
-        bluetoothEnabled && bluetoothPermissionGranted,
-        selectedAddress, pairNewPcSelected, pairedHosts.map { it.address },
+        draft = sessionDraft,
+        adapters = outputAdapters,
+        connectionAvailable = bluetoothEnabled && bluetoothPermissionGranted,
+        availableTargetIds = pairedHosts.map { it.address },
     )
     val busy = preparingConnection || hidState.status in listOf(
         HidSessionStatus.STARTING, HidSessionStatus.REGISTERING, HidSessionStatus.CONNECTING,

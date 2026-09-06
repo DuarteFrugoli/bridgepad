@@ -50,11 +50,14 @@ import dev.jonalakas.bridgepad.input.android.AndroidGamepadController
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
-import dev.jonalakas.bridgepad.input.usb.DirectUsbCaptureManager
 import dev.jonalakas.bridgepad.input.mapping.GamepadMappingStore
-import dev.jonalakas.bridgepad.output.hid.BluetoothHidService
-import dev.jonalakas.bridgepad.session.SessionStore as HidSessionStore
 import dev.jonalakas.bridgepad.session.FeedbackLevel as HidFeedbackLevel
+import dev.jonalakas.bridgepad.core.session.DestinationType
+import dev.jonalakas.bridgepad.core.session.ConnectionMethod
+import dev.jonalakas.bridgepad.core.session.DestinationTarget
+import dev.jonalakas.bridgepad.core.session.DestinationTargetKind
+import dev.jonalakas.bridgepad.core.session.OutputAdapterIds
+import dev.jonalakas.bridgepad.core.session.SessionDraft
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
@@ -74,6 +77,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         gamepadController = AndroidGamepadController(this)
+        val sessionCoordinator = (application as BridgePadApplication).sessionCoordinator
 
         val deviceInfo = AndroidDeviceInfoProvider.get()
         val preferences = getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -138,7 +142,7 @@ class MainActivity : ComponentActivity() {
                         connectionGate = "bluetooth_starting"
                     } else if (!bluetoothEnabled) {
                         pendingDestination = null
-                        HidSessionStore.update { it.copy(message = LocalizedMessage(R.string.bluetooth_required), feedbackLevel = HidFeedbackLevel.WARNING) }
+                        sessionCoordinator.updateState { it.copy(message = LocalizedMessage(R.string.bluetooth_required), feedbackLevel = HidFeedbackLevel.WARNING) }
                     }
                     pairedHosts = readPairedHosts()
                 }
@@ -153,7 +157,7 @@ class MainActivity : ComponentActivity() {
                     if (!bluetoothPermissionGranted) {
                         pendingDestination = null
                         SessionLog.record("PERMISSION", "Bluetooth permission was not granted")
-                        HidSessionStore.update {
+                        sessionCoordinator.updateState {
                             it.copy(
                                 message = LocalizedMessage(R.string.bluetooth_permission_required),
                                 feedbackLevel = HidFeedbackLevel.WARNING,
@@ -164,21 +168,13 @@ class MainActivity : ComponentActivity() {
                 val discoverableLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.StartActivityForResult(),
                 ) { result ->
-                    if (!HidSessionStore.state.value.sessionActive) {
+                    if (!sessionCoordinator.state.value.sessionActive) {
                         openAfterConnection = false
                     } else if (result.resultCode > 0) {
-                        startService(
-                            BluetoothHidService.intent(
-                                this,
-                                BluetoothHidService.ACTION_DISCOVERABILITY_STARTED,
-                            ).putExtra(
-                                BluetoothHidService.EXTRA_DISCOVERABLE_DURATION,
-                                result.resultCode,
-                            ),
-                        )
+                        sessionCoordinator.pairingWindowStarted(result.resultCode)
                     } else {
                         openAfterConnection = false
-                        HidSessionStore.update {
+                        sessionCoordinator.updateState {
                             it.copy(
                                 message = LocalizedMessage(R.string.visibility_not_enabled),
                                 feedbackLevel = HidFeedbackLevel.WARNING,
@@ -186,7 +182,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                val hidState by HidSessionStore.state.collectAsState()
+                val hidState by sessionCoordinator.state.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
                 val effectiveInputMode = if (hidState.sessionActive) {
@@ -197,6 +193,27 @@ class MainActivity : ComponentActivity() {
                 } else {
                     captureModeName?.let(PhysicalCaptureMode::valueOf)
                 }
+                val sessionDraft = SessionDraft(
+                    destinationType = if (hidState.sessionActive || bluetoothSelected) {
+                        DestinationType.WINDOWS
+                    } else null,
+                    connectionMethod = if (hidState.sessionActive || bluetoothSelected) {
+                        ConnectionMethod.BLUETOOTH
+                    } else null,
+                    outputAdapterId = if (hidState.sessionActive || bluetoothSelected) {
+                        OutputAdapterIds.GENERIC_BLUETOOTH_HID
+                    } else null,
+                    destinationTarget = when {
+                        selectedAddress != null -> DestinationTarget(
+                            DestinationTargetKind.EXISTING,
+                            selectedAddress,
+                        )
+                        pairNewPcSelected -> DestinationTarget(DestinationTargetKind.NEW_PAIRING)
+                        else -> null
+                    },
+                    inputMode = effectiveInputMode,
+                    physicalCaptureMode = effectiveCaptureMode,
+                )
                 val mappingInput = when (effectiveCaptureMode) {
                     PhysicalCaptureMode.BACKGROUND_USB -> directUsbState.deviceKey?.let { key ->
                         GamepadMappingInput(
@@ -234,14 +251,14 @@ class MainActivity : ComponentActivity() {
                         if (!isBluetoothEnabled()) {
                             pendingDestination = null
                             connectionGate = null
-                            HidSessionStore.update { it.copy(message = LocalizedMessage(R.string.bluetooth_required), feedbackLevel = HidFeedbackLevel.WARNING) }
+                            sessionCoordinator.updateState { it.copy(message = LocalizedMessage(R.string.bluetooth_required), feedbackLevel = HidFeedbackLevel.WARNING) }
                         }
                     }
                 }
 
                 LaunchedEffect(Unit) {
                     // A restored Activity must not wait forever for a service lost with the process.
-                    if (connectionGate == "service" && !HidSessionStore.state.value.sessionActive) {
+                    if (connectionGate == "service" && !sessionCoordinator.state.value.sessionActive) {
                         pendingDestination = null
                         connectionGate = null
                     }
@@ -280,7 +297,7 @@ class MainActivity : ComponentActivity() {
                         destination != NEW_PC && pairedHosts.none { it.address == destination } -> {
                             pendingDestination = null
                             connectionGate = null
-                            HidSessionStore.update { it.copy(message = LocalizedMessage(R.string.selected_pc_unavailable), feedbackLevel = HidFeedbackLevel.WARNING) }
+                            sessionCoordinator.updateState { it.copy(message = LocalizedMessage(R.string.selected_pc_unavailable), feedbackLevel = HidFeedbackLevel.WARNING) }
                         }
                         connectionGate == "service" && !hidState.sessionActive && hidState.message != null -> {
                             pendingDestination = null
@@ -296,26 +313,22 @@ class MainActivity : ComponentActivity() {
                                         .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120),
                                 )
                             } else {
-                                startService(BluetoothHidService.intent(this@MainActivity, BluetoothHidService.ACTION_CONNECT)
-                                    .putExtra(BluetoothHidService.EXTRA_ADDRESS, destination))
+                                sessionCoordinator.connect(destination)
                             }
                         }
                         connectionGate == null && !hidState.sessionActive -> {
                             connectionGate = "service"
-                            HidSessionStore.update { it.copy(message = null, status = HidSessionStatus.IDLE) }
-                            ContextCompat.startForegroundService(
-                                this@MainActivity,
-                                BluetoothHidService.intent(this@MainActivity, BluetoothHidService.ACTION_START)
-                                    .putExtra(BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED, inputMode == InputMode.TOUCHSCREEN)
-                                    .putExtra(
-                                        BluetoothHidService.EXTRA_PHYSICAL_CAPTURE_MODE,
-                                        effectiveCaptureMode?.name,
-                                    ),
+                            sessionCoordinator.updateState { it.copy(message = null, status = HidSessionStatus.IDLE) }
+                            sessionCoordinator.start(
+                                adapterId = OutputAdapterIds.GENERIC_BLUETOOTH_HID,
+                                destination = DestinationType.WINDOWS,
+                                inputMode = requireNotNull(inputMode),
+                                physicalCaptureMode = effectiveCaptureMode,
                             )
                         }
                         hidState.status == HidSessionStatus.ERROR && hidState.sessionActive && connectionGate != "restart" -> {
                             connectionGate = "restart"
-                            startService(BluetoothHidService.intent(this@MainActivity, BluetoothHidService.ACTION_STOP))
+                            sessionCoordinator.stop()
                         }
                     }
                 }
@@ -390,6 +403,8 @@ class MainActivity : ComponentActivity() {
                     physicalGamepadState = physicalGamepadState,
                     inputMode = effectiveInputMode,
                     physicalCaptureMode = effectiveCaptureMode,
+                    sessionDraft = sessionDraft,
+                    outputAdapters = sessionCoordinator.catalog,
                     directUsbState = directUsbState,
                     mappingAvailable = mappingInput != null,
                     bluetoothSelected = hidState.sessionActive || bluetoothSelected,
@@ -418,36 +433,15 @@ class MainActivity : ComponentActivity() {
                         if (mode == InputMode.PHYSICAL_GAMEPAD) TouchGamepadStore.deactivate()
                         if (mode == InputMode.TOUCHSCREEN && !hidState.sessionActive) {
                             captureModeName = null
-                            DirectUsbCaptureManager.stop()
+                            sessionCoordinator.preparePhysicalCapture(null)
                         }
                         if (hidState.sessionActive) {
-                            startService(
-                                BluetoothHidService.intent(this, BluetoothHidService.ACTION_SELECT_INPUT)
-                                    .putExtra(
-                                        BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED,
-                                        mode == InputMode.TOUCHSCREEN,
-                                    ),
-                            )
+                            sessionCoordinator.selectInput(mode)
                         }
                     },
                     onPhysicalCaptureModeChanged = { mode ->
                         captureModeName = mode.name
-                        when (mode) {
-                            PhysicalCaptureMode.COMPATIBILITY -> DirectUsbCaptureManager.stop()
-                            PhysicalCaptureMode.BACKGROUND_USB -> DirectUsbCaptureManager.start(this)
-                        }
-                        if (hidState.sessionActive) {
-                            startService(
-                                BluetoothHidService.intent(
-                                    this,
-                                    if (mode == PhysicalCaptureMode.BACKGROUND_USB) {
-                                        BluetoothHidService.ACTION_ENABLE_BACKGROUND_USB
-                                    } else {
-                                        BluetoothHidService.ACTION_ENABLE_COMPATIBILITY_INPUT
-                                    },
-                                ),
-                            )
-                        }
+                        sessionCoordinator.selectPhysicalCaptureMode(mode)
                     },
                     onPrepareBluetooth = {
                         pairNewPcSelected = false
@@ -460,13 +454,10 @@ class MainActivity : ComponentActivity() {
                         val currentHosts = readPairedHosts()
                         pairedHosts = currentHosts
                         if (SessionSetup.canConnect(
-                                effectiveInputMode,
-                                effectiveCaptureMode,
-                                hidState.sessionActive || bluetoothSelected,
-                                bluetoothReady,
-                                selectedAddress,
-                                pairNewPcSelected,
-                                currentHosts.map { it.address },
+                                draft = sessionDraft,
+                                adapters = sessionCoordinator.catalog,
+                                connectionAvailable = bluetoothReady,
+                                availableTargetIds = currentHosts.map { it.address },
                             )) {
                             connectionGate = null
                             pendingDestination = DestinationSelection.requestFor(selectedAddress, pairNewPcSelected, bluetoothReady)
@@ -482,7 +473,7 @@ class MainActivity : ComponentActivity() {
                     onStopHid = {
                         inputModeName = null
                         captureModeName = null
-                        DirectUsbCaptureManager.stop()
+                        sessionCoordinator.preparePhysicalCapture(null)
                         bluetoothSelected = false
                         selectedAddress = null
                         pairNewPcSelected = false
@@ -490,7 +481,7 @@ class MainActivity : ComponentActivity() {
                         pendingDestination = null
                         connectionGate = null
                         openAfterConnection = false
-                        if (hidState.sessionActive) startService(BluetoothHidService.intent(this, BluetoothHidService.ACTION_STOP))
+                        if (hidState.sessionActive) sessionCoordinator.stop()
                     },
                     onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
                         runCatching {
@@ -545,8 +536,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        if (isFinishing && !HidSessionStore.state.value.sessionActive) {
-            DirectUsbCaptureManager.stop()
+        val sessionCoordinator = (application as BridgePadApplication).sessionCoordinator
+        if (isFinishing && !sessionCoordinator.state.value.sessionActive) {
+            sessionCoordinator.preparePhysicalCapture(null)
         }
         super.onDestroy()
     }

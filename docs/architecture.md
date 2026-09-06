@@ -8,6 +8,8 @@ new connection methods and destinations do not change existing input adapters.
 ```text
 :app ---------------------> :protocol -----------------> :domain
   |                                                       ^
+  +----------------> :transport-bluetooth-hid ------------+
+  |                                                       ^
   +-------------------------------------------------------+
 ```
 
@@ -17,8 +19,12 @@ new connection methods and destinations do not change existing input adapters.
 - `:protocol` owns versioned messages shared with a future BridgePad receiver.
   It depends only on `:domain`. A published wire format must remain independent
   of the desktop implementation language.
+- `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
+  generic Windows/Linux profile, descriptors and encoders. Future console HID
+  profiles can live in sibling modules that depend on this contract without
+  modifying the generic profile.
 - `:app` is the Android composition root. It owns Compose UI, permissions,
-  lifecycle, hardware input adapters, persistence and output adapters.
+  lifecycle, hardware input adapters, persistence and adapter registration.
 
 ## Runtime flow
 
@@ -45,6 +51,26 @@ does not own USB capture, controller mapping or touchscreen state.
 `BluetoothHidOutputTransport` implements the same domain port intended for future
 Wi-Fi, USB and console-specific adapters.
 
+`SessionCoordinator` is the Android application boundary used by presentation
+code. It owns a catalog of `OutputSessionAdapter` implementations and selects an
+adapter by stable id. `MainActivity` does not start a transport service directly.
+
+Connection method and output-adapter identity are deliberately separate. For
+example, generic PC HID, DualShock 4 research and DualSense research can all use
+Bluetooth while keeping independent descriptors and protocol behavior.
+
+The setup model is a progressive dependency chain:
+
+```text
+destination -> connection -> target -> input
+```
+
+Changing an earlier choice clears every dependent choice. `SessionPlanner`
+resolves a compatible adapter and rejects unsupported combinations before an
+Android service is started. A single compatible adapter remains an internal
+detail; multiple compatible adapters require an explicit product policy or user
+choice.
+
 ## Dependency rules
 
 1. Dependencies point inward toward `:domain`.
@@ -64,6 +90,10 @@ Wi-Fi, USB and console-specific adapters.
   Windows or Linux to create the native virtual controller.
 - Bluetooth HID remains an Android-only adapter and does not use the desktop
   protocol.
+- Each Bluetooth device identity is a `BluetoothHidProfile`. The existing
+  `GenericCompositeHidProfile` contains the Windows/Linux descriptor and report
+  encoding. Future console experiments get distinct profiles, including their
+  own SDP data and host-request callbacks, without modifying the generic profile.
 - PlayStation and Xbox support must be isolated in destination-specific adapters.
   This architecture provides the boundary but does not bypass each platform's
   protocol, authentication or hardware restrictions.

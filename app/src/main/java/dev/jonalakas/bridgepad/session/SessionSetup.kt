@@ -1,19 +1,20 @@
 package dev.jonalakas.bridgepad.session
 
-import dev.jonalakas.bridgepad.core.session.InputMode
-import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.OutputAdapterCatalog
+import dev.jonalakas.bridgepad.core.session.SessionDraft
+import dev.jonalakas.bridgepad.core.session.SessionPlanResult
+import dev.jonalakas.bridgepad.core.session.SessionPlanner
 
 internal object SessionSetup {
     fun canConnect(
-        inputMode: InputMode?,
-        physicalCaptureMode: PhysicalCaptureMode?,
-        bluetoothSelected: Boolean,
-        bluetoothReady: Boolean,
-        selectedAddress: String?,
-        pairNewPcSelected: Boolean,
-        pairedAddresses: Collection<String>,
-    ): Boolean = inputMode != null &&
-        (inputMode != InputMode.PHYSICAL_GAMEPAD || physicalCaptureMode != null) &&
-        bluetoothSelected && bluetoothReady &&
-        (if (selectedAddress != null) selectedAddress in pairedAddresses else pairNewPcSelected)
+        draft: SessionDraft,
+        adapters: OutputAdapterCatalog,
+        connectionAvailable: Boolean,
+        availableTargetIds: Collection<String>,
+    ): Boolean = SessionPlanner.plan(
+        draft = draft,
+        adapters = adapters,
+        connectionAvailable = connectionAvailable,
+        availableTargetIds = availableTargetIds,
+    ) is SessionPlanResult.Ready
 }

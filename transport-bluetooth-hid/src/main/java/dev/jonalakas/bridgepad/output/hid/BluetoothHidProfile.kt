@@ -1,0 +1,55 @@
+package dev.jonalakas.bridgepad.output.hid
+
+import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
+import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.session.OutputAdapterDescriptor
+import dev.jonalakas.bridgepad.core.session.OutputAdapterId
+
+/**
+ * A device personality registered with Android's Bluetooth HID host API.
+ *
+ * Console experiments implement this contract without changing the generic PC
+ * profile or the input pipeline. Protocol-specific callbacks can be added here
+ * when a destination proves that it requires them.
+ */
+interface BluetoothHidProfile {
+    val adapter: OutputAdapterDescriptor
+    val serviceName: String
+    val description: String
+    val provider: String
+    val subclass: Byte
+    val reportDescriptor: ByteArray
+
+    fun encodeGamepad(state: VirtualGamepadState): HidReport
+    fun encodePointer(report: PointerReport): HidReport?
+
+    fun onGetReport(type: Byte, id: Byte, bufferSize: Int): HidHostRequestResult =
+        HidHostRequestResult.Ignored
+
+    fun onSetReport(type: Byte, id: Byte, data: ByteArray): HidHostRequestResult =
+        HidHostRequestResult.Ignored
+
+    fun onSetProtocol(protocol: Byte): HidHostRequestResult = HidHostRequestResult.Ignored
+    fun onInterruptData(reportId: Byte, data: ByteArray) = Unit
+    fun onVirtualCableUnplug() = Unit
+}
+
+data class HidReport(val id: Int, val payload: ByteArray)
+
+sealed interface HidHostRequestResult {
+    data object Ignored : HidHostRequestResult
+    data object Accepted : HidHostRequestResult
+    data class Reply(val payload: ByteArray) : HidHostRequestResult
+    data class Rejected(val errorCode: Byte) : HidHostRequestResult
+}
+
+class BluetoothHidProfileRegistry(profiles: Collection<BluetoothHidProfile>) {
+    private val byId = profiles.associateBy { it.adapter.id }
+
+    init {
+        require(byId.size == profiles.size) { "Bluetooth HID profile ids must be unique." }
+    }
+
+    fun find(id: OutputAdapterId): BluetoothHidProfile? = byId[id]
+    fun descriptors(): List<OutputAdapterDescriptor> = byId.values.map { it.adapter }
+}

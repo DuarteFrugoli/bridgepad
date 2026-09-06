@@ -8,8 +8,8 @@ phase is complete only when its automated and hardware evidence is recorded.
 Run from the repository root on Windows:
 
 ```powershell
-.\gradlew.bat :domain:test :protocol:test :app:testDebugUnitTest
-.\gradlew.bat :app:lintDebug
+.\gradlew.bat :domain:test :protocol:test :transport-bluetooth-hid:testDebugUnitTest :app:testDebugUnitTest
+.\gradlew.bat :transport-bluetooth-hid:lintDebug :app:lintDebug
 .\gradlew.bat :app:assembleDebug
 ```
 

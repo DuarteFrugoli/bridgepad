@@ -2,6 +2,9 @@ package dev.jonalakas.bridgepad.session
 
 import dev.jonalakas.bridgepad.localization.LocalizedMessage
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.ConnectionMethod
+import dev.jonalakas.bridgepad.core.session.DestinationType
+import dev.jonalakas.bridgepad.core.session.OutputAdapterId
 import dev.jonalakas.bridgepad.core.session.SessionStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +22,9 @@ data class PairedHost(val address: String, val name: String)
 data class SessionState(
     val status: SessionStatus = SessionStatus.IDLE,
     val sessionActive: Boolean = false,
+    val destinationType: DestinationType? = null,
+    val connectionMethod: ConnectionMethod? = null,
+    val outputAdapterId: OutputAdapterId? = null,
     val bluetoothEnabled: Boolean = false,
     val pairedHosts: List<PairedHost> = emptyList(),
     val pairingModeActive: Boolean = false,
