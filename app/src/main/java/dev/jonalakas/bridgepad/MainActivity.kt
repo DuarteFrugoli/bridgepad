@@ -66,6 +66,8 @@ import dev.jonalakas.bridgepad.ui.home.DestinationSelection
 import dev.jonalakas.bridgepad.session.SessionSetup
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutEditorScreen
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
 import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
@@ -89,6 +91,7 @@ class MainActivity : ComponentActivity() {
                 var showTouchController by rememberSaveable { mutableStateOf(false) }
                 var showMouseTouchpad by rememberSaveable { mutableStateOf(false) }
                 var showGamepadMapping by rememberSaveable { mutableStateOf(false) }
+                var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
@@ -182,6 +185,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val hidState by sessionCoordinator.state.collectAsState()
+                val touchscreenLayout by TouchscreenLayoutStore.layout.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
                 val effectiveInputMode = if (hidState.sessionActive) {
@@ -371,6 +375,20 @@ class MainActivity : ComponentActivity() {
                             onboardingComplete = true
                         },
                     )
+                } else if (showTouchscreenLayoutEditor) {
+                    LaunchedEffect(Unit) { enterGamepadMode() }
+                    TouchscreenLayoutEditorScreen(
+                        initialLayout = touchscreenLayout,
+                        onSave = { layout ->
+                            TouchscreenLayoutStore.save(layout)
+                            showTouchscreenLayoutEditor = false
+                            exitGamepadMode()
+                        },
+                        onCancel = {
+                            showTouchscreenLayoutEditor = false
+                            exitGamepadMode()
+                        },
+                    )
                 } else if (showGamepadMapping && mappingInput != null) {
                     GamepadMappingScreen(
                         input = mappingInput,
@@ -390,7 +408,7 @@ class MainActivity : ComponentActivity() {
                 } else if (showTouchController) {
                     LaunchedEffect(Unit) { enterGamepadMode() }
                     TouchscreenGamepadScreen(
-                        hidState = hidState,
+                        layout = touchscreenLayout,
                         onExit = {
                             showTouchController = false
                             exitGamepadMode()
@@ -503,6 +521,7 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onConfigureGamepadMapping = { if (mappingInput != null) showGamepadMapping = true },
+                    onEditTouchscreenLayout = { showTouchscreenLayoutEditor = true },
                     onOpenTouchController = {
                         showTouchController = true
                     },

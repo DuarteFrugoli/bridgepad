@@ -91,7 +91,16 @@
     <string name="wifi_coming_soon">Wi-Fi · Em breve</string>
     <string name="usb_connection_coming_soon">Cabo USB · Em breve</string>
     <string name="choose_input_hint">Escolha os controles que deseja usar neste celular.</string>
-    <string name="controller_layout">Layout do controle virtual</string>
+    <string name="edit_controller_layout">Editar layout virtual</string>
+    <string name="virtual_gamepad_settings">Controle virtual</string>
+    <string name="virtual_gamepad_settings_description">Personalize a posição e o tamanho dos controles mostrados durante o jogo.</string>
+    <string name="layout_editor_title">Editar layout</string>
+    <string name="layout_editor_instructions">Toque em um controle para selecioná-lo e arraste para mover. Use o controle deslizante para mudar o tamanho.</string>
+    <string name="layout_selected_control">Selecionado: %1$s</string>
+    <string name="layout_control_size">Tamanho: %1$d%%</string>
+    <string name="reset_layout">Restaurar padrão</string>
+    <string name="save_layout">Salvar layout</string>
+    <string name="mouse_label">Mouse</string>
     <string name="transport_description">Envia os comandos do controle e do mouse deste celular para o PC.</string>
     <string name="future_transports">As saídas por Wi-Fi e USB estão planejadas, mas não estão disponíveis nesta versão.</string>
     <string name="connected_to">Conectado a %1$s</string>
@@ -104,8 +113,6 @@
     <string name="preparing_connection">Preparando conexão…</string>
     <string name="connect_and_play">Conectar e jogar</string>
     <string name="close_action">Fechar</string>
-    <string name="default_layout">Layout atual: Padrão</string>
-    <string name="layout_description">Dois analógicos, um direcional, botões, gatilhos e um touchpad de mouse. Outros layouts e um editor de layouts estão planejados; esta versão ainda não possui layouts alternativos.</string>
     <string name="language_title">Idioma</string>
     <string name="language_description">O BridgePad acompanha o idioma do Android: inglês ou português brasileiro. No Android 13 ou superior, você pode escolher um idioma só para este app.</string>
     <string name="change_language">Alterar idioma do app</string>

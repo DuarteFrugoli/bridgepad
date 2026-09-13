@@ -7,21 +7,16 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -48,21 +44,22 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import dev.jonalakas.bridgepad.R
-import dev.jonalakas.bridgepad.ui.home.labelResource
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
-import dev.jonalakas.bridgepad.session.SessionState as HidSessionState
-import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlId
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlPlacement
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
+import dev.jonalakas.bridgepad.ui.gamepad.layout.controlOffset
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot
 
 @Composable
 fun TouchscreenGamepadScreen(
-    hidState: HidSessionState,
+    layout: TouchscreenLayout,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -72,20 +69,82 @@ fun TouchscreenGamepadScreen(
     }
     BackHandler(onBack = onExit)
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(12.dp),
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            LeftControls(Modifier.weight(1f).fillMaxHeight())
-            CenterControls(hidState, onExit, Modifier.weight(0.9f).fillMaxHeight())
-            RightControls(Modifier.weight(1f).fillMaxHeight())
+        val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        val heightPixels = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+        TouchControlId.entries.forEach { control ->
+            RuntimeLayoutControl(
+                control = control,
+                placement = layout.placement(control),
+                containerWidthPixels = widthPixels,
+                containerHeightPixels = heightPixels,
+                onExit = onExit,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoxWithConstraintsScope.RuntimeLayoutControl(
+    control: TouchControlId,
+    placement: TouchControlPlacement,
+    containerWidthPixels: Float,
+    containerHeightPixels: Float,
+    onExit: () -> Unit,
+) {
+    val density = LocalDensity.current
+    val width = (control.baseWidthDp * placement.scale).dp
+    val height = (control.baseHeightDp * placement.scale).dp
+    val offset = controlOffset(
+        placement = placement,
+        containerWidth = containerWidthPixels,
+        containerHeight = containerHeightPixels,
+        controlWidth = with(density) { width.toPx() },
+        controlHeight = with(density) { height.toPx() },
+    )
+    Box(
+        modifier = Modifier
+            .offset { offset }
+            .size(width, height),
+    ) {
+        when (control) {
+            TouchControlId.MOUSE_TOUCHPAD -> MouseTouchpad(Modifier.fillMaxSize())
+            TouchControlId.DPAD -> DpadPad(Modifier.fillMaxSize())
+            TouchControlId.LEFT_STICK -> VirtualStick(
+                VirtualAxis.LEFT_X,
+                VirtualAxis.LEFT_Y,
+                stringResource(R.string.left_stick),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.RIGHT_STICK -> VirtualStick(
+                VirtualAxis.RIGHT_X,
+                VirtualAxis.RIGHT_Y,
+                stringResource(R.string.right_stick),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.LEFT_TRIGGER -> TriggerButton("L2", VirtualAxis.LEFT_TRIGGER, Modifier.fillMaxSize())
+            TouchControlId.LEFT_BUMPER -> GamepadButton("L1", VirtualControl.LEFT_BUMPER, Modifier.fillMaxSize())
+            TouchControlId.RIGHT_BUMPER -> GamepadButton("R1", VirtualControl.RIGHT_BUMPER, Modifier.fillMaxSize())
+            TouchControlId.RIGHT_TRIGGER -> TriggerButton("R2", VirtualAxis.RIGHT_TRIGGER, Modifier.fillMaxSize())
+            TouchControlId.FACE_NORTH -> GamepadButton("Y", VirtualControl.FACE_NORTH, Modifier.fillMaxSize())
+            TouchControlId.FACE_WEST -> GamepadButton("X", VirtualControl.FACE_WEST, Modifier.fillMaxSize())
+            TouchControlId.FACE_EAST -> GamepadButton("B", VirtualControl.FACE_EAST, Modifier.fillMaxSize())
+            TouchControlId.FACE_SOUTH -> GamepadButton("A", VirtualControl.FACE_SOUTH, Modifier.fillMaxSize())
+            TouchControlId.SELECT -> GamepadButton("Select", VirtualControl.SELECT, Modifier.fillMaxSize())
+            TouchControlId.START -> GamepadButton("Start", VirtualControl.START, Modifier.fillMaxSize())
+            TouchControlId.LEFT_STICK_BUTTON -> GamepadButton("L3", VirtualControl.LEFT_STICK_BUTTON, Modifier.fillMaxSize())
+            TouchControlId.RIGHT_STICK_BUTTON -> GamepadButton("R3", VirtualControl.RIGHT_STICK_BUTTON, Modifier.fillMaxSize())
+            TouchControlId.SESSION_MENU -> TouchButton(
+                label = stringResource(R.string.session_menu),
+                onPressedChange = { pressed -> if (pressed) onExit() },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }
@@ -113,97 +172,6 @@ fun MouseTouchpadScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
         )
-    }
-}
-
-@Composable
-private fun LeftControls(modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TriggerButton("L2", VirtualAxis.LEFT_TRIGGER, Modifier.weight(1f))
-            GamepadButton("L1", VirtualControl.LEFT_BUMPER, Modifier.weight(1f))
-        }
-        DpadPad(
-            modifier = Modifier
-                .weight(1f)
-                .aspectRatio(1f)
-                .widthIn(max = 150.dp),
-        )
-        VirtualStick(
-            xAxis = VirtualAxis.LEFT_X,
-            yAxis = VirtualAxis.LEFT_Y,
-            label = stringResource(R.string.left_stick),
-            modifier = Modifier
-                .weight(1f)
-                .aspectRatio(1f)
-                .widthIn(max = 150.dp),
-        )
-    }
-}
-
-@Composable
-private fun RightControls(modifier: Modifier = Modifier) {
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            GamepadButton("R1", VirtualControl.RIGHT_BUMPER, Modifier.weight(1f))
-            TriggerButton("R2", VirtualAxis.RIGHT_TRIGGER, Modifier.weight(1f))
-        }
-        FaceButtons(
-            modifier = Modifier
-                .weight(1f)
-                .aspectRatio(1f)
-                .widthIn(max = 150.dp),
-        )
-        VirtualStick(
-            xAxis = VirtualAxis.RIGHT_X,
-            yAxis = VirtualAxis.RIGHT_Y,
-            label = stringResource(R.string.right_stick),
-            modifier = Modifier
-                .weight(1f)
-                .aspectRatio(1f)
-                .widthIn(max = 150.dp),
-        )
-    }
-}
-
-@Composable
-private fun CenterControls(
-    hidState: HidSessionState,
-    onExit: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        val connected = hidState.status == HidSessionStatus.CONNECTED
-        Text(
-            text = stringResource(hidState.status.labelResource()),
-            color = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.labelMedium,
-        )
-        MouseTouchpad(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GamepadButton("Select", VirtualControl.SELECT)
-            GamepadButton("Start", VirtualControl.START)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GamepadButton("L3", VirtualControl.LEFT_STICK_BUTTON)
-            GamepadButton("R3", VirtualControl.RIGHT_STICK_BUTTON)
-        }
-        Spacer(Modifier.weight(1f))
-        TouchButton(label = stringResource(R.string.session_menu), onPressedChange = { pressed -> if (pressed) onExit() })
     }
 }
 
@@ -255,16 +223,6 @@ private fun MouseTouchpad(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun FaceButtons(modifier: Modifier = Modifier) {
-    Box(modifier) {
-        GamepadButton("Y", VirtualControl.FACE_NORTH, Modifier.align(Alignment.TopCenter))
-        GamepadButton("X", VirtualControl.FACE_WEST, Modifier.align(Alignment.CenterStart))
-        GamepadButton("B", VirtualControl.FACE_EAST, Modifier.align(Alignment.CenterEnd))
-        GamepadButton("A", VirtualControl.FACE_SOUTH, Modifier.align(Alignment.BottomCenter))
-    }
-}
-
-@Composable
 private fun GamepadButton(
     label: String,
     control: VirtualControl,
@@ -310,8 +268,7 @@ private fun TouchButton(
 
     Surface(
         modifier = modifier
-            .height(52.dp)
-            .widthIn(min = 52.dp)
+            .fillMaxSize()
             .semantics {
                 contentDescription = label
                 role = Role.Button
@@ -449,7 +406,8 @@ private fun DpadCell(
 ) {
     Box(
         modifier = modifier
-            .size(48.dp)
+            .fillMaxSize(0.36f)
+            .aspectRatio(1f)
             .background(if (selected) active else base, RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center,
     ) {

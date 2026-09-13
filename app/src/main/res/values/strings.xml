@@ -91,7 +91,16 @@
     <string name="wifi_coming_soon">Wi-Fi · Coming soon</string>
     <string name="usb_connection_coming_soon">USB cable · Coming soon</string>
     <string name="choose_input_hint">Choose the controls you want to use on this phone.</string>
-    <string name="controller_layout">Virtual gamepad layout</string>
+    <string name="edit_controller_layout">Edit virtual layout</string>
+    <string name="virtual_gamepad_settings">Virtual gamepad</string>
+    <string name="virtual_gamepad_settings_description">Customize the position and size of the controls shown while playing.</string>
+    <string name="layout_editor_title">Edit layout</string>
+    <string name="layout_editor_instructions">Tap a control to select it, then drag it to move. Use the slider to change its size.</string>
+    <string name="layout_selected_control">Selected: %1$s</string>
+    <string name="layout_control_size">Size: %1$d%%</string>
+    <string name="reset_layout">Reset to standard</string>
+    <string name="save_layout">Save layout</string>
+    <string name="mouse_label">Mouse</string>
     <string name="transport_description">Sends gamepad and mouse commands from this phone to your PC.</string>
     <string name="future_transports">Wi-Fi and USB output are planned, but not available in this version.</string>
     <string name="connected_to">Connected to %1$s</string>
@@ -104,8 +113,6 @@
     <string name="preparing_connection">Preparing connection…</string>
     <string name="connect_and_play">Connect and play</string>
     <string name="close_action">Close</string>
-    <string name="default_layout">Current layout: Standard</string>
-    <string name="layout_description">Two sticks, a D-pad, face buttons, triggers and a mouse touchpad. More layouts and a custom layout editor are planned; there are no alternate layouts in this version.</string>
     <string name="language_title">Language</string>
     <string name="language_description">BridgePad follows your Android language: English or Brazilian Portuguese. On Android 13 or later you can choose a language just for this app.</string>
     <string name="change_language">Change app language</string>

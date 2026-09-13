@@ -50,8 +50,12 @@ appropriate input screen, and **End session** explicitly releases the connection
 
 ## Contextual options
 
-- **Virtual gamepad layout** describes the current standard layout. Alternative
-  presets and a layout editor are future features, not implemented settings.
+- **Edit virtual layout**, available from Settings and the selected virtual-input
+  options, opens a landscape preview where every virtual control
+  can be selected, dragged and resized. Saving immediately replaces the active
+  layout and persists it across launches; canceling discards the draft. **Reset
+  to standard** restores the built-in arrangement in the draft, which is only
+  persisted when saved. Named presets remain future work.
 - Physical-controller capture is selected directly inside the Input step, before
   connecting. It can also be changed during an active session without reconnecting
   the Bluetooth HID output.

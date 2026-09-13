@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad
 
 import android.app.Application
 import dev.jonalakas.bridgepad.input.usb.DirectUsbCaptureManager
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
 import dev.jonalakas.bridgepad.session.InputRouter
 import dev.jonalakas.bridgepad.session.SessionCoordinator
 import dev.jonalakas.bridgepad.output.hid.BluetoothHidSessionAdapter
@@ -22,6 +23,7 @@ class BridgePadApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         DirectUsbCaptureManager.initialize(this)
+        TouchscreenLayoutStore.initialize(this)
         inputRouter = InputRouter(applicationScope)
         sessionCoordinator = SessionCoordinator(
             context = this,

@@ -60,6 +60,7 @@ fun HomeScreen(
     onPrepareBluetooth: () -> Unit,
     onPlay: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
+    onEditTouchscreenLayout: () -> Unit,
     onOpenTouchController: () -> Unit,
     onOpenMouseTouchpad: () -> Unit,
     onStopHid: () -> Unit,
@@ -171,7 +172,11 @@ fun HomeScreen(
                         Choice(inputMode == InputMode.TOUCHSCREEN, R.string.touchscreen_input, !busy) { onInputModeChanged(InputMode.TOUCHSCREEN) }
                         Choice(inputMode == InputMode.PHYSICAL_GAMEPAD, R.string.physical_input, !busy) { onInputModeChanged(InputMode.PHYSICAL_GAMEPAD) }
                         if (inputMode == InputMode.TOUCHSCREEN) {
-                            TextButton(onClick = { panel = "layout" }) { Text(stringResource(R.string.controller_layout)) }
+                            OutlinedButton(
+                                onClick = onEditTouchscreenLayout,
+                                enabled = !busy,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(R.string.edit_controller_layout)) }
                         } else if (inputMode == InputMode.PHYSICAL_GAMEPAD) {
                             val deviceNames = physicalGamepadState.devices.joinToString { it.name }
                             Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleSmall)
@@ -255,52 +260,51 @@ fun HomeScreen(
     if (panel != null) {
         AlertDialog(
             onDismissRequest = { panel = null },
-            title = { Text(stringResource(when (panel) {
-                "layout" -> R.string.controller_layout
-                else -> R.string.settings
-            })) },
+            title = { Text(stringResource(R.string.settings)) },
             confirmButton = { TextButton(onClick = { panel = null }) { Text(stringResource(R.string.close_action)) } },
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    when (panel) {
-                        "layout" -> {
-                            Text(stringResource(R.string.default_layout))
-                            Text(stringResource(R.string.layout_description))
+                    Text(stringResource(R.string.virtual_gamepad_settings), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.virtual_gamepad_settings_description))
+                    OutlinedButton(
+                        onClick = {
+                            panel = null
+                            onEditTouchscreenLayout()
+                        },
+                        enabled = !busy,
+                    ) { Text(stringResource(R.string.edit_controller_layout)) }
+                    HorizontalDivider()
+                    Text(stringResource(R.string.language_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.language_description))
+                    if (onLanguageSettings != null) TextButton(onClick = onLanguageSettings) { Text(stringResource(R.string.change_language)) }
+                    HorizontalDivider()
+                    Text(stringResource(R.string.diagnostics), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.diagnostic_status, stringResource(hidState.status.labelResource())))
+                    Text(stringResource(R.string.diagnostic_version, appVersion, deviceInfo.displayModel, deviceInfo.androidVersion))
+                    Text(stringResource(R.string.diagnostic_api, deviceInfo.sdkLevel))
+                    Text(
+                        stringResource(
+                            R.string.diagnostic_metrics,
+                            formatMetric(hidState.inputRateHz),
+                            formatMetric(hidState.outputRateHz),
+                            hidState.lastLatencyMs?.let(::formatMetric) ?: "—",
+                            formatMetric(hidState.maxOutputDelayMs),
+                        ),
+                    )
+                    if (physicalGamepadState.devices.isNotEmpty()) {
+                        HorizontalDivider()
+                        Text(stringResource(R.string.physical_gamepad_diagnostic), style = MaterialTheme.typography.titleMedium)
+                        physicalGamepadState.devices.forEach { device ->
+                            Text(device.name, style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(R.string.diagnostic_controller_ids, device.vendorId, device.productId))
+                            Text(stringResource(R.string.diagnostic_axes, device.axes.joinToString()))
+                            Text(physicalGamepadState.sourceStates[device.sourceId]?.toString().orEmpty(), style = MaterialTheme.typography.bodySmall)
                         }
-                        else -> {
-                            Text(stringResource(R.string.language_title), style = MaterialTheme.typography.titleMedium)
-                            Text(stringResource(R.string.language_description))
-                            if (onLanguageSettings != null) TextButton(onClick = onLanguageSettings) { Text(stringResource(R.string.change_language)) }
-                            HorizontalDivider()
-                            Text(stringResource(R.string.diagnostics), style = MaterialTheme.typography.titleMedium)
-                            Text(stringResource(R.string.diagnostic_status, stringResource(hidState.status.labelResource())))
-                            Text(stringResource(R.string.diagnostic_version, appVersion, deviceInfo.displayModel, deviceInfo.androidVersion))
-                            Text(stringResource(R.string.diagnostic_api, deviceInfo.sdkLevel))
-                            Text(
-                                stringResource(
-                                    R.string.diagnostic_metrics,
-                                    formatMetric(hidState.inputRateHz),
-                                    formatMetric(hidState.outputRateHz),
-                                    hidState.lastLatencyMs?.let(::formatMetric) ?: "—",
-                                    formatMetric(hidState.maxOutputDelayMs),
-                                ),
-                            )
-                            if (physicalGamepadState.devices.isNotEmpty()) {
-                                HorizontalDivider()
-                                Text(stringResource(R.string.physical_gamepad_diagnostic), style = MaterialTheme.typography.titleMedium)
-                                physicalGamepadState.devices.forEach { device ->
-                                    Text(device.name, style = MaterialTheme.typography.titleSmall)
-                                    Text(stringResource(R.string.diagnostic_controller_ids, device.vendorId, device.productId))
-                                    Text(stringResource(R.string.diagnostic_axes, device.axes.joinToString()))
-                                    Text(physicalGamepadState.sourceStates[device.sourceId]?.toString().orEmpty(), style = MaterialTheme.typography.bodySmall)
-                                }
-                                Text(physicalGamepadState.lastRawEvent, style = MaterialTheme.typography.bodySmall)
-                            }
-                            Text(stringResource(R.string.diagnostics_technical_note), style = MaterialTheme.typography.bodySmall)
-                            OutlinedButton(onClick = onCopyDiagnostics) { Text(stringResource(R.string.copy_diagnostics)) }
-                            OutlinedButton(onClick = onShareDiagnostics) { Text(stringResource(R.string.share_diagnostics)) }
-                        }
+                        Text(physicalGamepadState.lastRawEvent, style = MaterialTheme.typography.bodySmall)
                     }
+                    Text(stringResource(R.string.diagnostics_technical_note), style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(onClick = onCopyDiagnostics) { Text(stringResource(R.string.copy_diagnostics)) }
+                    OutlinedButton(onClick = onShareDiagnostics) { Text(stringResource(R.string.share_diagnostics)) }
                 }
             },
         )

@@ -22,7 +22,9 @@ new connection methods and destinations do not change existing input adapters.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
 - `:app` is the Android composition root. It owns Compose UI, permissions,
-  lifecycle, hardware input adapters, persistence and adapter registration.
+  lifecycle, hardware input adapters, persistence and adapter registration. The
+  active touchscreen layout is an app-owned, versioned set of normalized control
+  positions and scales; it never enters the input or transport domain models.
 
 ## Runtime flow
 

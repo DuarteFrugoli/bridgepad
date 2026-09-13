@@ -101,6 +101,12 @@ checklist. These checks are pending hardware validation for the UI redesign.
 - Open **Session menu**, switch virtual/physical input and **Resume game**.
   Confirm the PC remains connected, inactive controls are released, and both
   mouse touchpads still move/click correctly.
+- Select virtual input and open **Edit virtual layout**. Move every control,
+  resize representative buttons, sticks, the D-pad and mouse surface, then save.
+  Confirm the gameplay screen applies the layout, every control remains usable,
+  and the layout survives rotation and an app restart. Reopen the editor, change
+  the draft and cancel; the saved layout must remain unchanged. Finally restore
+  the standard draft, save it and confirm the built-in arrangement returns.
 - Select physical input and confirm **Connect and play** remains disabled until
   either Compatibility or Background USB is selected. Choose each capture mode
   before connecting, then configure buttons in both modes. Verify cancellation,
