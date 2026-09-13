@@ -328,8 +328,9 @@ first-run flow.
 10. Repeat start, connect, disconnect and stop after putting the app in the
     background and returning to it.
 11. Open the physical-controller touchpad. Confirm that it fills the usable
-    screen, has no permanent menu button and shows a compact Android Back hint
-    in a corner without substantially reducing the touch surface.
+    screen, has no permanent menu button or redundant status banner, and shows
+    the Android Back instruction as plain text in a corner without looking
+    clickable or substantially reducing the touch surface.
 12. Press Android Back or use the system Back gesture from the touchpad. Confirm
     that Home opens while the Bluetooth session remains active and **Resume game**
     reopens the touchpad.

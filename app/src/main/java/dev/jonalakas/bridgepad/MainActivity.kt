@@ -399,7 +399,6 @@ class MainActivity : ComponentActivity() {
                 } else if (showMouseTouchpad) {
                     LaunchedEffect(Unit) { enterGamepadMode() }
                     MouseTouchpadScreen(
-                        hidState = hidState,
                         onExit = {
                             showMouseTouchpad = false
                             exitGamepadMode()

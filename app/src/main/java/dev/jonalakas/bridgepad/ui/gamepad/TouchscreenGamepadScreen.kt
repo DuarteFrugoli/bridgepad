@@ -49,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.ui.home.labelResource
-import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
@@ -93,7 +92,6 @@ fun TouchscreenGamepadScreen(
 
 @Composable
 fun MouseTouchpadScreen(
-    hidState: HidSessionState,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -107,42 +105,14 @@ fun MouseTouchpadScreen(
             .padding(12.dp),
     ) {
         MouseTouchpad(modifier = Modifier.fillMaxSize())
-        Surface(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(12.dp),
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-            tonalElevation = 4.dp,
-        ) {
-            Text(
-                text = stringResource(hidState.status.labelResource()) + " · " +
-                    stringResource(
-                        if (hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
-                            R.string.background_usb_mode
-                        } else {
-                            R.string.compatibility_mode
-                        },
-                    ),
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        Surface(
+        Text(
+            text = stringResource(R.string.mouse_touchpad_back_hint),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(12.dp),
-            shape = RoundedCornerShape(50),
-            color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.88f),
-            tonalElevation = 4.dp,
-        ) {
-            Text(
-                text = stringResource(R.string.mouse_touchpad_back_hint),
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                color = MaterialTheme.colorScheme.inverseOnSurface,
-                style = MaterialTheme.typography.labelMedium,
-            )
-        }
+                .padding(16.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
 
