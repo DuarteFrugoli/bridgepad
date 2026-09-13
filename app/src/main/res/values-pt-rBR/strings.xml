@@ -40,7 +40,7 @@
     <string name="open_touch_controller">Abrir controle virtual</string>
     <string name="open_mouse_touchpad">Abrir touchpad do mouse</string>
     <string name="mouse_touchpad_instructions">Arraste para mover o ponteiro do PC. Toque para clicar com o botão esquerdo.</string>
-    <string name="close_touchpad">Menu da sessão</string>
+    <string name="mouse_touchpad_back_hint">Use o botão ou gesto Voltar do Android para abrir o menu da sessão.</string>
     <string name="onboarding_title">Seu celular, seu controle</string>
     <string name="onboarding_description">Escolha o destino, a conexão e a entrada. Atualmente, o BridgePad envia seus comandos para um PC por Bluetooth.</string>
     <string name="before_you_start">Antes de começar</string>

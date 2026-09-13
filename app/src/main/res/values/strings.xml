@@ -40,7 +40,7 @@
     <string name="open_touch_controller">Open touchscreen controller</string>
     <string name="open_mouse_touchpad">Open mouse touchpad</string>
     <string name="mouse_touchpad_instructions">Drag anywhere to move the PC pointer. Tap for a left click.</string>
-    <string name="close_touchpad">Session menu</string>
+    <string name="mouse_touchpad_back_hint">Use Android\'s Back button or gesture to open the session menu.</string>
     <string name="onboarding_title">Your phone, your controller</string>
     <string name="onboarding_description">Choose your destination, connection and input. BridgePad currently sends your controls to a PC over Bluetooth.</string>
     <string name="before_you_start">Before you start</string>

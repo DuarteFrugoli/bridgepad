@@ -29,10 +29,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -57,6 +59,7 @@ import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.session.SessionState as HidSessionState
 import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
+import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -94,10 +97,23 @@ fun TouchscreenGamepadScreen(
 @Composable
 fun MouseTouchpadScreen(
     hidState: HidSessionState,
+    showBackNavigationHint: Boolean,
+    onBackNavigationHintShown: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var backNavigationHintVisible by rememberSaveable {
+        mutableStateOf(showBackNavigationHint)
+    }
+    LaunchedEffect(Unit) {
+        if (backNavigationHintVisible) {
+            onBackNavigationHintShown()
+            delay(BACK_NAVIGATION_HINT_DURATION_MILLIS)
+            backNavigationHintVisible = false
+        }
+    }
     BackHandler(onBack = onExit)
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -105,28 +121,49 @@ fun MouseTouchpadScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(12.dp),
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+        MouseTouchpad(modifier = Modifier.fillMaxSize())
+        Surface(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(12.dp),
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+            tonalElevation = 4.dp,
         ) {
             Text(
                 text = stringResource(hidState.status.labelResource()) + " · " +
-                    stringResource(if (hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) R.string.background_usb_active else R.string.compatibility_input_active),
+                    stringResource(
+                        if (hidState.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
+                            R.string.background_usb_mode
+                        } else {
+                            R.string.compatibility_mode
+                        },
+                    ),
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            MouseTouchpad(
+        }
+        if (backNavigationHintVisible) {
+            Surface(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            )
-            TouchButton(
-                label = stringResource(R.string.close_touchpad),
-                onPressedChange = { pressed -> if (pressed) onExit() },
-                modifier = Modifier.fillMaxWidth(),
-            )
+                    .align(Alignment.BottomCenter)
+                    .padding(12.dp),
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.94f),
+                tonalElevation = 6.dp,
+            ) {
+                Text(
+                    text = stringResource(R.string.mouse_touchpad_back_hint),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }
+
+private const val BACK_NAVIGATION_HINT_DURATION_MILLIS = 4_000L
 
 @Composable
 private fun LeftControls(modifier: Modifier = Modifier) {
