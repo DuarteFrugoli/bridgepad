@@ -6,12 +6,12 @@ import dev.jonalakas.bridgepad.core.gamepad.SourceId
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 
 data class TouchGamepadSnapshot(
     val active: Boolean = false,
@@ -24,9 +24,9 @@ object TouchGamepadStore {
     val sourceId = SourceId("touchscreen")
 
     private val mutableState = MutableStateFlow(TouchGamepadSnapshot())
-    private val mutableUpdates = MutableSharedFlow<TouchGamepadSnapshot>(extraBufferCapacity = 64)
+    private val updateChannel = Channel<TouchGamepadSnapshot>(Channel.UNLIMITED)
     val state: StateFlow<TouchGamepadSnapshot> = mutableState.asStateFlow()
-    val updates: SharedFlow<TouchGamepadSnapshot> = mutableUpdates.asSharedFlow()
+    val updates: Flow<TouchGamepadSnapshot> = updateChannel.receiveAsFlow()
 
     fun activate() = publish(mutableState.value.copy(active = true, gamepad = VirtualGamepadState()))
 
@@ -92,6 +92,6 @@ object TouchGamepadStore {
 
     private fun publish(snapshot: TouchGamepadSnapshot) {
         mutableState.value = snapshot
-        mutableUpdates.tryEmit(snapshot)
+        check(updateChannel.trySend(snapshot).isSuccess) { "Touch input channel is unavailable." }
     }
 }

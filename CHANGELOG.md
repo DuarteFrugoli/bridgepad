@@ -8,8 +8,14 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Moved Bluetooth HID report scheduling to a dedicated output thread and removed
+  Android notification updates from the high-frequency controller input path.
+- Serialized input routing, made source delivery lossless and synchronized the
+  scheduler so rapid button transitions survive concurrent input and output.
+- Throttled live metric publication and added maximum output-loop delay to
+  settings and diagnostic reports.
 - Reordered the Home setup into a progressive destination, connection, device
-  and input flow, with unavailable platforms and transports marked as upcoming.
+  and input flow, with unavailable connection methods marked as upcoming.
 - Mapping instructions now resolve string resources during Compose rendering so
   language changes are reflected correctly and Compose resource lint passes.
 - Refactored session setup around destination, connection, target and input.
@@ -180,8 +186,8 @@ The project follows [Semantic Versioning](https://semver.org/).
   gamepad input.
 - The post-MVP roadmap now includes configurable analog touchscreen triggers
   driven by touch position or drag distance.
-- The post-MVP roadmap now includes a mouse touchpad and research into a
-  PlayStation-style clickable touch surface for Steam Input.
+- The post-MVP roadmap now includes a mouse touchpad and a high-resolution
+  clickable touch surface for Steam Input.
 
 ## [0.1.0]
 

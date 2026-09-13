@@ -2,8 +2,7 @@
 
 The Home screen progressively reveals three choices on one page:
 
-1. **Destination**: PC is available. PlayStation and Xbox are visible but marked
-   as future work and cannot be selected yet.
+1. **Destination**: PC running Windows or Linux.
 2. **Connection**: the compatible methods for the selected destination. For PC,
    Bluetooth is available while Wi-Fi and USB are visible as future work. With
    PC and Bluetooth selected, this step also asks for an already paired computer

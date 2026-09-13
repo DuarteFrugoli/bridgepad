@@ -20,6 +20,7 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
@@ -38,20 +39,20 @@ import dev.jonalakas.bridgepad.core.session.OutputAdapterIds
 import dev.jonalakas.bridgepad.core.output.OutputScheduler
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import dev.jonalakas.bridgepad.session.InputRouter
+import dev.jonalakas.bridgepad.session.InputSubscription
 import dev.jonalakas.bridgepad.session.RoutedInputState
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 @SuppressLint("MissingPermission")
 class BluetoothHidService : Service() {
     private var adapter: BluetoothAdapter? = null
+    @Volatile
     private var hidDevice: BluetoothHidDevice? = null
+    @Volatile
     private var connectedDevice: BluetoothDevice? = null
     private val profileRegistry = BluetoothHidProfileRegistry(listOf(GenericCompositeHidProfile))
+    @Volatile
     private var activeProfile: BluetoothHidProfile = GenericCompositeHidProfile
     private var activeDestination = DestinationType.PC
     private val outputTransport = BluetoothHidOutputTransport(
@@ -62,28 +63,45 @@ class BluetoothHidService : Service() {
     )
     private var requestedHostAddress: String? = null
     private var lastHostAddress: String? = null
+    @Volatile
     private var shuttingDown = false
     private val handler = Handler(Looper.getMainLooper())
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val outputThread = HandlerThread("BridgePad-HID-Output").apply { start() }
+    private val outputHandler = Handler(outputThread.looper)
+    private val outputRunning = AtomicBoolean(false)
+    private val transportLock = Any()
     private val outputScheduler = OutputScheduler(OUTPUT_RATE_HZ)
     private lateinit var inputRouter: InputRouter
+    private var inputSubscription: InputSubscription? = null
     private var discoverabilityTimeout: Runnable? = null
     private var pendingConnection: Runnable? = null
-    private var latestInputState = RoutedInputState()
-    private var lastObservedInputCount = 0L
-    private var pendingInputTimestampNanos: Long? = null
+    private var lastCaptureState: CaptureState? = null
+    private val lastObservedInputCount = AtomicLong(0L)
+    private val inputEventsSinceConnection = AtomicLong(0L)
+    private val pendingInputTimestampNanos = AtomicLong(NO_INPUT_TIMESTAMP)
     private var metricsStartedNanos = 0L
-    private var inputEventsSinceConnection = 0L
     private var reportsSinceConnection = 0L
     private var lastMetricsUpdateNanos = 0L
+    private var latestLatencyMs: Float? = null
+    private var expectedOutputTickNanos = 0L
+    private var maxOutputDelayNanos = 0L
     private val outputTick = object : Runnable {
         override fun run() {
-            if (shuttingDown) return
+            if (shuttingDown || !outputRunning.get()) return
+            recordOutputDelay()
             sendScheduledReport()
             sendMouseReport()
-            handler.postDelayed(this, OUTPUT_INTERVAL_MS)
+            if (!shuttingDown && outputRunning.get()) {
+                outputHandler.postDelayed(this, OUTPUT_INTERVAL_MS)
+            }
         }
     }
+
+    private data class CaptureState(
+        val active: Boolean,
+        val message: LocalizedMessage?,
+        val error: Boolean,
+    )
 
     private val bluetoothStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -355,7 +373,9 @@ class BluetoothHidService : Service() {
         cancelDiscoverabilityMessage()
         cancelPendingConnection()
         stopOutputPipeline()
-        serviceScope.cancel()
+        inputSubscription?.cancel()
+        inputSubscription = null
+        outputThread.quitSafely()
         releaseProfile()
         runCatching { unregisterReceiver(bluetoothStateReceiver) }
         if (!stateWasFinalized) {
@@ -388,7 +408,9 @@ class BluetoothHidService : Service() {
 
     private fun selectInput(touchSelected: Boolean) {
         inputRouter.clearPointer()
-        if (connectedDevice != null) outputTransport.sendGamepad(VirtualGamepadState())
+        if (connectedDevice != null) {
+            synchronized(transportLock) { outputTransport.sendGamepad(VirtualGamepadState()) }
+        }
         HidSessionStore.update {
             it.copy(
                 touchInputSelected = touchSelected,
@@ -558,95 +580,118 @@ class BluetoothHidService : Service() {
                 feedbackLevel = HidFeedbackLevel.INFO,
             )
         }
+        syncCaptureState(inputRouter.current, force = true)
         startOutputPipeline()
     }
 
     private fun observeInputRouter() {
-        latestInputState = inputRouter.current
-        lastObservedInputCount = latestInputState.inputEventCount
-        outputScheduler.submit(latestInputState.gamepad)
-        serviceScope.launch {
-            inputRouter.updates.collect { state ->
-                latestInputState = state
-                outputScheduler.submit(state.gamepad)
-                HidSessionStore.update {
-                    val showCaptureMessage = state.captureError ||
-                        (it.status == HidSessionStatus.CONNECTED &&
-                            it.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB)
-                    it.copy(
-                        directUsbActive = state.directUsbActive,
-                        message = if (showCaptureMessage) state.captureMessage ?: it.message else it.message,
-                        feedbackLevel = if (state.captureError) {
-                            HidFeedbackLevel.WARNING
-                        } else {
-                            it.feedbackLevel
-                        },
-                    )
-                }
-                updateNotification()
-                if (state.inputEventCount != lastObservedInputCount) {
-                    if (connectedDevice != null) inputEventsSinceConnection++
-                    lastObservedInputCount = state.inputEventCount
-                    pendingInputTimestampNanos = state.lastInputTimestampNanos
-                }
+        val initial = inputRouter.current
+        lastObservedInputCount.set(initial.inputEventCount)
+        outputScheduler.submit(initial.gamepad)
+        inputSubscription = inputRouter.observe { state ->
+            outputScheduler.submit(state.gamepad)
+            val previousCount = lastObservedInputCount.getAndSet(state.inputEventCount)
+            val newEvents = (state.inputEventCount - previousCount).coerceAtLeast(0L)
+            if (newEvents > 0L && connectedDevice != null) {
+                inputEventsSinceConnection.addAndGet(newEvents)
+                state.lastInputTimestampNanos?.let(pendingInputTimestampNanos::set)
+            }
+            syncCaptureState(state)
+        }
+    }
+
+    private fun syncCaptureState(state: RoutedInputState, force: Boolean = false) {
+        val capture = CaptureState(state.directUsbActive, state.captureMessage, state.captureError)
+        val previous = lastCaptureState
+        if (!force && capture == previous) return
+        lastCaptureState = capture
+        HidSessionStore.update { session ->
+            val showCaptureMessage = capture.error ||
+                (session.status == HidSessionStatus.CONNECTED &&
+                    session.physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB)
+            session.copy(
+                directUsbActive = capture.active,
+                message = if (showCaptureMessage) capture.message ?: session.message else session.message,
+                feedbackLevel = if (capture.error) HidFeedbackLevel.WARNING else session.feedbackLevel,
+            )
+        }
+        if (previous?.active != capture.active && !shuttingDown) {
+            handler.post {
+                if (!shuttingDown) updateNotification()
             }
         }
     }
 
     private fun startOutputPipeline() {
-        handler.removeCallbacks(outputTick)
+        outputRunning.set(false)
+        outputHandler.removeCallbacks(outputTick)
         outputScheduler.stop()
         outputScheduler.submit(inputRouter.current.gamepad)
         metricsStartedNanos = monotonicNanos()
         lastMetricsUpdateNanos = metricsStartedNanos
-        inputEventsSinceConnection = 0
+        lastObservedInputCount.set(inputRouter.current.inputEventCount)
+        inputEventsSinceConnection.set(0L)
         reportsSinceConnection = 0
-        pendingInputTimestampNanos = null
-        handler.post(outputTick)
+        pendingInputTimestampNanos.set(NO_INPUT_TIMESTAMP)
+        latestLatencyMs = null
+        expectedOutputTickNanos = metricsStartedNanos
+        maxOutputDelayNanos = 0L
+        outputRunning.set(true)
+        outputHandler.post(outputTick)
     }
 
     private fun sendScheduledReport() {
         if (connectedDevice == null) return
         val now = monotonicNanos()
         val state = outputScheduler.poll(now) ?: return
-        val sent = outputTransport.sendGamepad(state)
+        val sent = synchronized(transportLock) { outputTransport.sendGamepad(state) }
         if (!sent) {
             update(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_report_failed))
             return
         }
         reportsSinceConnection++
-        val latency = pendingInputTimestampNanos?.let { timestamp ->
-            ((now - timestamp).coerceAtLeast(0L) / 1_000_000f).also {
-                pendingInputTimestampNanos = null
-            }
+        val timestamp = pendingInputTimestampNanos.getAndSet(NO_INPUT_TIMESTAMP)
+        if (timestamp != NO_INPUT_TIMESTAMP) {
+            latestLatencyMs = (now - timestamp).coerceAtLeast(0L) / 1_000_000f
         }
-        if (now - lastMetricsUpdateNanos >= METRICS_UPDATE_INTERVAL_NANOS || latency != null) {
+        if (now - lastMetricsUpdateNanos >= METRICS_UPDATE_INTERVAL_NANOS) {
             val elapsedSeconds = ((now - metricsStartedNanos).coerceAtLeast(1L)) / 1_000_000_000f
             HidSessionStore.update {
                 it.copy(
-                    inputRateHz = inputEventsSinceConnection / elapsedSeconds,
+                    inputRateHz = inputEventsSinceConnection.get() / elapsedSeconds,
                     outputRateHz = reportsSinceConnection / elapsedSeconds,
-                    lastLatencyMs = latency ?: it.lastLatencyMs,
+                    lastLatencyMs = latestLatencyMs ?: it.lastLatencyMs,
+                    maxOutputDelayMs = maxOutputDelayNanos / 1_000_000f,
                 )
             }
             lastMetricsUpdateNanos = now
+            maxOutputDelayNanos = 0L
         }
     }
 
     private fun sendMouseReport() {
         if (connectedDevice == null) return
         val report = inputRouter.consumePointer() ?: return
-        val sent = outputTransport.sendPointer(report)
+        val sent = synchronized(transportLock) { outputTransport.sendPointer(report) }
         if (!sent) {
             SessionLog.record("MOUSE", "A mouse report could not be sent")
         }
     }
 
     private fun stopOutputPipeline() {
-        handler.removeCallbacks(outputTick)
+        outputRunning.set(false)
+        outputHandler.removeCallbacks(outputTick)
         outputScheduler.stop()
-        pendingInputTimestampNanos = null
+        pendingInputTimestampNanos.set(NO_INPUT_TIMESTAMP)
         inputRouter.clearPointer()
+    }
+
+    private fun recordOutputDelay() {
+        val now = monotonicNanos()
+        if (expectedOutputTickNanos > 0L) {
+            maxOutputDelayNanos = maxOf(maxOutputDelayNanos, (now - expectedOutputTickNanos).coerceAtLeast(0L))
+        }
+        expectedOutputTickNanos = now + OUTPUT_INTERVAL_NANOS
     }
 
     private fun monotonicNanos(): Long = SystemClock.uptimeMillis() * 1_000_000L
@@ -657,8 +702,10 @@ class BluetoothHidService : Service() {
         cancelPendingConnection()
         stopOutputPipeline()
         if (connectedDevice != null) {
-            outputTransport.sendGamepad(VirtualGamepadState())
-            outputTransport.disconnect()
+            synchronized(transportLock) {
+                outputTransport.sendGamepad(VirtualGamepadState())
+                outputTransport.disconnect()
+            }
         }
         SessionLog.record("SESSION", "Session ended safely with a neutral report")
         releaseProfile()
@@ -816,7 +863,9 @@ class BluetoothHidService : Service() {
         private const val POST_PAIR_CONNECTION_DELAY_MS = 500L
         private const val OUTPUT_RATE_HZ = 100
         private const val OUTPUT_INTERVAL_MS = 10L
+        private const val OUTPUT_INTERVAL_NANOS = OUTPUT_INTERVAL_MS * 1_000_000L
         private const val METRICS_UPDATE_INTERVAL_NANOS = 500_000_000L
+        private const val NO_INPUT_TIMESTAMP = -1L
         fun intent(context: Context, action: String) =
             Intent(context, BluetoothHidService::class.java).setAction(action)
     }

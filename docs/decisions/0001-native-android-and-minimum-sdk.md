@@ -25,5 +25,3 @@ introducing a cross-platform abstraction before the core behavior is proven.
 - Devices older than Android 9 are outside the supported scope.
 - Bluetooth HID behavior can still vary by manufacturer, so support claims
   require tests on real hardware and a published compatibility matrix.
-- A future iOS implementation will be a separate native application and may
-  reuse protocol and domain concepts, not Android code.

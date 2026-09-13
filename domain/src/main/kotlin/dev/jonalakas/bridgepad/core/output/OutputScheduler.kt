@@ -15,6 +15,7 @@ class OutputScheduler(reportRateHz: Int) {
         intervalNanos = 1_000_000_000L / reportRateHz
     }
 
+    @Synchronized
     fun submit(state: VirtualGamepadState) {
         if (state.pressedButtons != lastSubmitted.pressedButtons || state.dpad != lastSubmitted.dpad) {
             transitions.addLast(state)
@@ -23,6 +24,7 @@ class OutputScheduler(reportRateHz: Int) {
         lastSubmitted = state
     }
 
+    @Synchronized
     fun poll(nowNanos: Long): VirtualGamepadState? {
         val lastEmission = lastEmissionNanos
         if (lastEmission != null && nowNanos - lastEmission < intervalNanos) return null
@@ -31,6 +33,7 @@ class OutputScheduler(reportRateHz: Int) {
         return if (transitions.isEmpty()) latest else transitions.removeFirst()
     }
 
+    @Synchronized
     fun stop(): VirtualGamepadState {
         transitions.clear()
         latest = VirtualGamepadState()

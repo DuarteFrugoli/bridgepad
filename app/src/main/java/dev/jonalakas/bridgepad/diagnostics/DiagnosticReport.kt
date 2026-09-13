@@ -27,6 +27,7 @@ object DiagnosticReport {
         appendLine("Input rate: ${hidState.inputRateHz} Hz")
         appendLine("Output rate: ${hidState.outputRateHz} Hz")
         appendLine("Last latency: ${hidState.lastLatencyMs ?: "not measured"} ms")
+        appendLine("Maximum output scheduling delay: ${hidState.maxOutputDelayMs} ms")
         appendLine()
         appendLine("Recent session log (Bluetooth addresses are never included):")
         SessionLog.snapshot().forEach(::appendLine)

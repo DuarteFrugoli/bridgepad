@@ -30,6 +30,16 @@ class OutputSchedulerTest {
     }
 
     @Test
+    fun coalescesIntermediateAnalogPositions() {
+        val scheduler = OutputScheduler(reportRateHz = 100)
+        scheduler.submit(VirtualGamepadState(leftStickX = -1f))
+        scheduler.submit(VirtualGamepadState(leftStickX = 0.25f))
+        scheduler.submit(VirtualGamepadState(leftStickX = 1f))
+
+        assertEquals(1f, scheduler.poll(0L)!!.leftStickX)
+    }
+
+    @Test
     fun stopClearsQueuedInputAndReturnsNeutralState() {
         val scheduler = OutputScheduler(reportRateHz = 100)
         scheduler.submit(VirtualGamepadState(setOf(VirtualControl.START)))

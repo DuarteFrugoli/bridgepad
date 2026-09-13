@@ -3,11 +3,11 @@ package dev.jonalakas.bridgepad.input.android
 import dev.jonalakas.bridgepad.core.gamepad.SourceId
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 
 data class PhysicalGamepadInfo(
     val deviceId: Int,
@@ -39,12 +39,12 @@ data class PhysicalGamepadState(
 
 object PhysicalGamepadStore {
     private val mutableState = MutableStateFlow(PhysicalGamepadState())
-    private val mutableUpdates = MutableSharedFlow<PhysicalGamepadState>(extraBufferCapacity = 64)
+    private val updateChannel = Channel<PhysicalGamepadState>(Channel.UNLIMITED)
     val state: StateFlow<PhysicalGamepadState> = mutableState.asStateFlow()
-    val updates: SharedFlow<PhysicalGamepadState> = mutableUpdates.asSharedFlow()
+    val updates: Flow<PhysicalGamepadState> = updateChannel.receiveAsFlow()
 
     fun set(value: PhysicalGamepadState) {
         mutableState.value = value
-        mutableUpdates.tryEmit(value)
+        check(updateChannel.trySend(value).isSuccess) { "Physical input channel is unavailable." }
     }
 }

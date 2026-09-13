@@ -8,9 +8,8 @@ import dev.jonalakas.bridgepad.core.session.OutputAdapterId
 /**
  * A device personality registered with Android's Bluetooth HID host API.
  *
- * Console experiments implement this contract without changing the generic PC
- * profile or the input pipeline. Protocol-specific callbacks can be added here
- * when a destination proves that it requires them.
+ * PC HID implementations use this contract without coupling their descriptors
+ * or host callbacks to the input pipeline.
  */
 interface BluetoothHidProfile {
     val adapter: OutputAdapterDescriptor

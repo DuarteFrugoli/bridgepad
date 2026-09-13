@@ -4,7 +4,7 @@ enum class InputMode { TOUCHSCREEN, PHYSICAL_GAMEPAD }
 
 enum class PhysicalCaptureMode { COMPATIBILITY, BACKGROUND_USB }
 
-enum class DestinationType { PC, PLAYSTATION, XBOX }
+enum class DestinationType { PC }
 
 enum class ConnectionMethod { BLUETOOTH, WIFI, USB }
 
@@ -19,9 +19,6 @@ object OutputAdapterIds {
     val GENERIC_BLUETOOTH_HID = OutputAdapterId("bluetooth-hid.generic-composite")
     val DESKTOP_WIFI = OutputAdapterId("desktop-bridge.wifi")
     val DESKTOP_USB = OutputAdapterId("desktop-bridge.usb")
-    val DUALSHOCK4_BLUETOOTH = OutputAdapterId("bluetooth-hid.dualshock4")
-    val DUALSENSE_BLUETOOTH = OutputAdapterId("bluetooth-hid.dualsense")
-    val XBOX = OutputAdapterId("xbox.research")
 }
 
 enum class TargetSelectionMode { NONE, PAIRED_OR_NEW, RECEIVER }

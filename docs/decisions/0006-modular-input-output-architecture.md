@@ -6,10 +6,10 @@
 ## Context
 
 The MVP proved Android input and Bluetooth HID output, but the application must
-later support Wi-Fi and USB desktop bridges, Windows and Linux receivers, and
-research into console destinations. The original single-module structure allowed
-the Bluetooth service to coordinate concrete input implementations and allowed
-UI code to depend on Bluetooth session types.
+later support Wi-Fi and USB desktop bridges plus Windows and Linux receivers.
+The original single-module structure allowed the Bluetooth service to coordinate
+concrete input implementations and allowed UI code to depend on Bluetooth
+session types.
 
 ## Decision
 
@@ -34,5 +34,5 @@ and isolation are concrete requirements.
 - Bluetooth behavior remains unchanged but no longer owns the input pipeline.
 - Some Android orchestration remains in `MainActivity` and can be moved into
   view models/use cases incrementally without changing module boundaries.
-- Desktop and console implementations remain separate deliverables with their
-  own platform restrictions.
+- Windows and Linux receiver implementations can evolve independently while
+  sharing the same versioned protocol.

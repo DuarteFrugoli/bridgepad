@@ -18,9 +18,6 @@ import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
 import dev.jonalakas.bridgepad.input.usb.DirectUsbState
 import dev.jonalakas.bridgepad.localization.LocalizedMessage
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
@@ -33,11 +30,17 @@ data class RoutedInputState(
     val captureError: Boolean = false,
 )
 
+fun interface InputSubscription {
+    fun cancel()
+}
+
 /**
  * Android composition root for input adapters. Output transports consume only
  * the normalized state exposed here and never depend on a concrete input API.
  */
 class InputRouter(scope: CoroutineScope) {
+    private val stateLock = Any()
+    private val observers = linkedSetOf<(RoutedInputState) -> Unit>()
     private var inputMode = InputMode.TOUCHSCREEN
     private var captureMode = PhysicalCaptureMode.COMPATIBILITY
     private var physical = PhysicalGamepadStore.state.value
@@ -47,56 +50,70 @@ class InputRouter(scope: CoroutineScope) {
     private var lastTouchCount = touch.inputEventCount
     private var lastDirectUsbCount = directUsb.inputEventCount
     private var routedEventCount = 0L
+    @Volatile
     private var latest = buildState(null)
-    private val mutableUpdates = MutableSharedFlow<RoutedInputState>(
-        replay = 1,
-        extraBufferCapacity = 64,
-    ).also { it.tryEmit(latest) }
-
-    val updates: SharedFlow<RoutedInputState> = mutableUpdates.asSharedFlow()
     val current: RoutedInputState get() = latest
 
     init {
         scope.launch {
             PhysicalGamepadStore.updates.collect { state ->
-                val changed = state.inputEventCount != lastPhysicalCount
-                lastPhysicalCount = state.inputEventCount
-                physical = state
-                publish(if (changed && usesCompatibilityInput()) state.lastInputTimestampNanos else null)
+                synchronized(stateLock) {
+                    val changed = state.inputEventCount != lastPhysicalCount
+                    lastPhysicalCount = state.inputEventCount
+                    physical = state
+                    publishLocked(if (changed && usesCompatibilityInput()) state.lastInputTimestampNanos else null)
+                }
             }
         }
         scope.launch {
             TouchGamepadStore.updates.collect { state ->
-                val changed = state.inputEventCount != lastTouchCount
-                lastTouchCount = state.inputEventCount
-                touch = state
-                publish(if (changed && inputMode == InputMode.TOUCHSCREEN) state.lastInputTimestampNanos else null)
+                synchronized(stateLock) {
+                    val changed = state.inputEventCount != lastTouchCount
+                    lastTouchCount = state.inputEventCount
+                    touch = state
+                    publishLocked(if (changed && inputMode == InputMode.TOUCHSCREEN) state.lastInputTimestampNanos else null)
+                }
             }
         }
         scope.launch {
-            DirectUsbGamepadStore.state.collect { state ->
-                val changed = state.inputEventCount != lastDirectUsbCount
-                lastDirectUsbCount = state.inputEventCount
-                directUsb = state
-                publish(if (changed && usesDirectUsbInput()) state.lastInputTimestampNanos else null)
+            DirectUsbGamepadStore.updates.collect { state ->
+                synchronized(stateLock) {
+                    val changed = state.inputEventCount != lastDirectUsbCount
+                    lastDirectUsbCount = state.inputEventCount
+                    directUsb = state
+                    publishLocked(if (changed && usesDirectUsbInput()) state.lastInputTimestampNanos else null)
+                }
             }
         }
     }
 
     fun select(inputMode: InputMode, captureMode: PhysicalCaptureMode?) {
-        this.inputMode = inputMode
-        this.captureMode = captureMode ?: PhysicalCaptureMode.COMPATIBILITY
-        publish(null)
+        synchronized(stateLock) {
+            this.inputMode = inputMode
+            this.captureMode = captureMode ?: PhysicalCaptureMode.COMPATIBILITY
+            publishLocked(null)
+        }
+    }
+
+    fun observe(observer: (RoutedInputState) -> Unit): InputSubscription {
+        synchronized(stateLock) {
+            observers += observer
+            observer(latest)
+        }
+        return InputSubscription {
+            synchronized(stateLock) { observers -= observer }
+        }
     }
 
     fun consumePointer(): PointerReport? = TouchMouseStore.consume()
 
     fun clearPointer() = TouchMouseStore.clear()
 
-    private fun publish(eventTimestampNanos: Long?) {
+    /** Called with [stateLock] held so inputs from independent adapters remain ordered. */
+    private fun publishLocked(eventTimestampNanos: Long?) {
         if (eventTimestampNanos != null) routedEventCount++
         latest = buildState(eventTimestampNanos ?: latest.lastInputTimestampNanos)
-        mutableUpdates.tryEmit(latest)
+        observers.forEach { it(latest) }
     }
 
     private fun buildState(timestampNanos: Long?): RoutedInputState {

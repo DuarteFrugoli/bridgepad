@@ -24,12 +24,13 @@ class SessionPlannerTest {
             physicalCaptureMode = PhysicalCaptureMode.BACKGROUND_USB,
         )
 
-        val changedDestination = complete.selectDestination(DestinationType.PLAYSTATION)
+        val changedConnection = complete.selectConnection(ConnectionMethod.WIFI)
 
-        assertEquals(DestinationType.PLAYSTATION, changedDestination.destinationType)
-        assertEquals(null, changedDestination.connectionMethod)
-        assertEquals(null, changedDestination.destinationTarget)
-        assertEquals(null, changedDestination.inputMode)
+        assertEquals(DestinationType.PC, changedConnection.destinationType)
+        assertEquals(ConnectionMethod.WIFI, changedConnection.connectionMethod)
+        assertEquals(null, changedConnection.outputAdapterId)
+        assertEquals(null, changedConnection.destinationTarget)
+        assertEquals(null, changedConnection.inputMode)
     }
 
     @Test
@@ -54,12 +55,12 @@ class SessionPlannerTest {
     }
 
     @Test
-    fun unsupportedConsoleDoesNotFallBackToGenericPcHid() {
+    fun unsupportedConnectionDoesNotFallBackToBluetoothHid() {
         val result = SessionPlanner.plan(
             draft = SessionDraft(
-                destinationType = DestinationType.PLAYSTATION,
-                connectionMethod = ConnectionMethod.BLUETOOTH,
-                destinationTarget = DestinationTarget(DestinationTargetKind.NEW_PAIRING),
+                destinationType = DestinationType.PC,
+                connectionMethod = ConnectionMethod.WIFI,
+                destinationTarget = DestinationTarget(DestinationTargetKind.EXISTING, "pc"),
                 inputMode = InputMode.TOUCHSCREEN,
             ),
             adapters = catalog,

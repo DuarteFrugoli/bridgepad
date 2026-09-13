@@ -6,8 +6,8 @@
 ## Context
 
 BridgePad needs a simple touchscreen surface that controls the host pointer.
-Emulating a DualSense touch surface is outside the MVP scope. The Bluetooth HID
-application previously exposed only report ID 1 for the gamepad.
+The Bluetooth HID application previously exposed only report ID 1 for the
+gamepad.
 
 ## Decision
 
@@ -23,6 +23,4 @@ uses drag for pointer movement and a short tap for left click.
 - Existing Bluetooth pairings may cache the old report descriptor and need to
   be removed and created again once after this change.
 - Mouse movement is independent from the right gamepad stick.
-- Scrolling, right click, gestures and DualSense-compatible touch data remain
-  future work.
-
+- Scrolling, right click and configurable gestures remain future work.

@@ -20,9 +20,7 @@ new connection methods and destinations do not change existing input adapters.
   It depends only on `:domain`. A published wire format must remain independent
   of the desktop implementation language.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
-  generic Windows/Linux profile, descriptors and encoders. Future console HID
-  profiles can live in sibling modules that depend on this contract without
-  modifying the generic profile.
+  generic Windows/Linux profile, descriptors and encoders.
 - `:app` is the Android composition root. It owns Compose UI, permissions,
   lifecycle, hardware input adapters, persistence and adapter registration.
 
@@ -37,7 +35,7 @@ touch / Android InputDevice / direct USB
                   |
        GamepadOutputTransport
                   |
-   Bluetooth HID / Wi-Fi / USB / future adapter
+        Bluetooth HID / Wi-Fi / USB
 ```
 
 Input implementations normalize platform events and never choose a destination.
@@ -49,15 +47,23 @@ input router. The Bluetooth foreground service is only an Android lifecycle host
 for the Bluetooth adapter; it neither creates nor destroys the input pipeline and
 does not own USB capture, controller mapping or touchscreen state.
 `BluetoothHidOutputTransport` implements the same domain port intended for future
-Wi-Fi, USB and console-specific adapters.
+Wi-Fi and USB desktop adapters.
+
+Input reports form a data plane that is kept separate from the UI and service
+control plane. Source adapters enqueue every changed state, `InputRouter`
+serializes updates from independent adapters, and `OutputScheduler` retains
+button/D-pad transitions while coalescing intermediate analog positions. The
+Bluetooth service sends scheduled reports on a dedicated output thread. Session
+notices and foreground-notification updates occur only when slow lifecycle or
+capture state changes, never for each controller event.
 
 `SessionCoordinator` is the Android application boundary used by presentation
 code. It owns a catalog of `OutputSessionAdapter` implementations and selects an
 adapter by stable id. `MainActivity` does not start a transport service directly.
 
-Connection method and output-adapter identity are deliberately separate. For
-example, generic PC HID, DualShock 4 research and DualSense research can all use
-Bluetooth while keeping independent descriptors and protocol behavior.
+Connection method and output-adapter identity are deliberately separate. The
+generic Bluetooth HID profile and future Wi-Fi or USB desktop receivers can all
+target a PC while retaining independent protocol behavior.
 
 The setup model is a progressive dependency chain:
 
@@ -90,10 +96,6 @@ choice.
   Windows or Linux to create the native virtual controller.
 - Bluetooth HID remains an Android-only adapter and does not use the desktop
   protocol.
-- Each Bluetooth device identity is a `BluetoothHidProfile`. The existing
-  `GenericCompositeHidProfile` contains the Windows/Linux descriptor and report
-  encoding. Future console experiments get distinct profiles, including their
-  own SDP data and host-request callbacks, without modifying the generic profile.
-- PlayStation and Xbox support must be isolated in destination-specific adapters.
-  This architecture provides the boundary but does not bypass each platform's
-  protocol, authentication or hardware restrictions.
+- The existing `GenericCompositeHidProfile` contains the Windows/Linux Bluetooth
+  descriptor and report encoding. Additional PC profiles can implement the same
+  contract without modifying input routing or the generic profile.

@@ -109,8 +109,6 @@ fun HomeScreen(
                         R.string.destination_pc,
                         !busy && !connected,
                     ) { onDestinationChanged(DestinationType.PC) }
-                    Choice(false, R.string.destination_playstation_coming_soon, false) {}
-                    Choice(false, R.string.destination_xbox_coming_soon, false) {}
                 }
             }
             if (destinationType != null) {
@@ -273,7 +271,15 @@ fun HomeScreen(
                             Text(stringResource(R.string.diagnostic_status, stringResource(hidState.status.labelResource())))
                             Text(stringResource(R.string.diagnostic_version, appVersion, deviceInfo.displayModel, deviceInfo.androidVersion))
                             Text(stringResource(R.string.diagnostic_api, deviceInfo.sdkLevel))
-                            Text(stringResource(R.string.diagnostic_metrics, formatMetric(hidState.inputRateHz), formatMetric(hidState.outputRateHz), hidState.lastLatencyMs?.let(::formatMetric) ?: "—"))
+                            Text(
+                                stringResource(
+                                    R.string.diagnostic_metrics,
+                                    formatMetric(hidState.inputRateHz),
+                                    formatMetric(hidState.outputRateHz),
+                                    hidState.lastLatencyMs?.let(::formatMetric) ?: "—",
+                                    formatMetric(hidState.maxOutputDelayMs),
+                                ),
+                            )
                             if (physicalGamepadState.devices.isNotEmpty()) {
                                 HorizontalDivider()
                                 Text(stringResource(R.string.physical_gamepad_diagnostic), style = MaterialTheme.typography.titleMedium)

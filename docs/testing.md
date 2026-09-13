@@ -116,7 +116,14 @@ checklist. These checks are pending hardware validation for the UI redesign.
 - Use a large system font and a small screen in both languages. All actions
   should remain reachable by scrolling; translated labels must not be clipped.
 - Check **Settings** for metrics/device details, copy/share diagnostics and
-  confirm Wi-Fi, USB output and consoles are not presented as available.
+  confirm unavailable Wi-Fi and USB outputs cannot be selected.
+- Hold buttons while moving both sticks continuously for at least 30 seconds in
+  virtual, Compatibility and Background USB modes. Confirm there are no missing
+  press/release transitions or periodic pauses. In **Settings**, verify metrics
+  update at a readable rate and record **Maximum output delay** for comparison.
+- While generating continuous controller input, confirm the foreground
+  notification does not flicker or repeatedly refresh. Changing between virtual,
+  Compatibility and Background USB modes must still update its text immediately.
 
 ### Recording results
 

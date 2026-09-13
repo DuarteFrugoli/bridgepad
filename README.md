@@ -31,7 +31,7 @@ GameSir X5 Lite
       │
  Bluetooth HID
       ▼
-   Windows
+Windows / Linux
       │
       ▼
  Steam / Games
@@ -93,7 +93,6 @@ And different output methods such as:
 - Bluetooth HID
 - LAN / Wi-Fi
 - USB through a desktop companion
-- Additional output targets in the future
 
 Not every combination will be available in the first release.
 
@@ -164,14 +163,9 @@ The initial release does **not** aim to provide:
 - BridgePad Desktop
 - USB output to a computer
 - Linux support
-- Xbox console support
-- PlayStation console support
-- Nintendo console support
 
-Windows and Linux desktop support are planned first. PlayStation and Xbox are
-long-term target platforms after the desktop bridge is stable; their exact
-connection method still requires research and prototypes because console
-authentication is proprietary. macOS and iOS are not currently planned.
+Windows is the current desktop target, with Linux support planned next. Other
+desktop platforms are not currently planned.
 
 ---
 
@@ -208,7 +202,7 @@ Bluetooth HID
 Windows
 ```
 
-The initial device will be a generic HID gamepad, not an Xbox/XInput controller.
+The initial device will be a generic HID gamepad, not a native XInput device.
 
 Because of this, **Steam Input will be the primary compatibility layer for the MVP**.
 
@@ -298,7 +292,7 @@ FACE_WEST
 FACE_NORTH
 ```
 
-instead of assuming Xbox, PlayStation or Nintendo button labels.
+instead of coupling core behavior to the labels printed on a specific controller.
 
 ---
 
@@ -408,9 +402,9 @@ The network mode should work entirely on the local network and should not requir
 
 ---
 
-## Future Platforms
+## Future Work
 
-The architecture is intended to make additional platforms possible without coupling the core to them.
+Future work remains focused on Android input and Windows/Linux output.
 
 Planned future work includes:
 
@@ -418,20 +412,14 @@ Planned future work includes:
 - LAN / Wi-Fi transport
 - USB desktop companion transport
 - Linux support
-- Android TV
 - Advanced touchscreen layouts with saved user presets
 - Configurable analog touchscreen triggers using touch position or drag distance
 - Touchpad scrolling, additional mouse buttons and configurable gestures
-- Research into a PlayStation-style high-resolution touch surface with a
-  clickable pad and left/right regions for Steam Input
+- A high-resolution clickable touch surface with configurable regions for Steam
+  Input
 - Gyroscope controls
 - Controller profiles
 - Advanced remapping
-- PlayStation and Xbox research, prototypes and viable implementations
-
-Console support is a long-term project goal. Research and prototypes come first
-because Xbox and PlayStation use their own controller protocols and
-authentication mechanisms, so generic Bluetooth HID alone is not sufficient.
 
 ---
 
@@ -562,8 +550,7 @@ BridgePad is Android-first because its core functionality depends heavily on pla
 - Sensors
 - Android services
 
-The currently planned platforms are Android, Windows and Linux, followed by
-research and prototypes for PlayStation and Xbox.
+The currently planned platforms are Android, Windows and Linux.
 
 ---
 
@@ -710,7 +697,7 @@ Contributions will be welcome, especially for:
 - Bluetooth compatibility
 - Bug fixes
 - Documentation
-- Platform research
+- Windows and Linux receiver development
 
 When reporting controller compatibility, please include information such as:
 

@@ -45,9 +45,9 @@
     <string name="onboarding_description">Choose your destination, connection and input. BridgePad currently sends your controls to a PC over Bluetooth.</string>
     <string name="before_you_start">Before you start</string>
     <string name="onboarding_requirement_bluetooth">• Allow Bluetooth access when connecting.</string>
-    <string name="onboarding_requirement_pc">• For a new PC, allow phone visibility and add the phone in Windows Bluetooth settings.</string>
+    <string name="onboarding_requirement_pc">• For a new PC, allow phone visibility and add the phone in its Bluetooth settings.</string>
     <string name="onboarding_requirement_input">• Use the virtual gamepad or connect a physical controller to the phone.</string>
-    <string name="onboarding_limitation">Bluetooth HID support varies by Android device. Steam may require initial button configuration. Console, Wi-Fi and USB output are not available yet.</string>
+    <string name="onboarding_limitation">Bluetooth HID support varies by Android device. Steam may require initial button configuration. Wi-Fi and USB output are not available yet.</string>
     <string name="continue_action">Continue</string>
     <string name="choose_input">Choose input</string>
     <string name="touchscreen_input">Virtual gamepad</string>
@@ -87,9 +87,7 @@
     <string name="step_input">3 · Input</string>
     <string name="step_transport">2 · Connection</string>
     <string name="step_destination">1 · Destination</string>
-    <string name="destination_pc">PC</string>
-    <string name="destination_playstation_coming_soon">PlayStation · Coming soon</string>
-    <string name="destination_xbox_coming_soon">Xbox · Coming soon</string>
+    <string name="destination_pc">PC · Windows or Linux</string>
     <string name="wifi_coming_soon">Wi-Fi · Coming soon</string>
     <string name="usb_connection_coming_soon">USB cable · Coming soon</string>
     <string name="choose_input_hint">Choose the controls you want to use on this phone.</string>
@@ -98,7 +96,6 @@
     <string name="future_transports">Wi-Fi and USB output are planned, but not available in this version.</string>
     <string name="connected_to">Connected to %1$s</string>
     <string name="change_destination_hint">End this session before choosing another PC.</string>
-    <string name="destination_support">Windows PC · Console support is not available yet.</string>
     <string name="load_paired_pcs">Show paired PCs</string>
     <string name="selected_pc_unavailable">The selected PC is no longer available. Select another PC or pair it again.</string>
     <string name="hid_unavailable">This Android device does not provide the required Bluetooth HID features.</string>
@@ -114,7 +111,7 @@
     <string name="change_language">Change app language</string>
     <string name="diagnostic_status">Session: %1$s</string>
     <string name="diagnostic_version">BridgePad %1$s · %2$s · Android %3$s</string>
-    <string name="diagnostic_metrics">Input: %1$s Hz\nOutput: %2$s Hz\nLast event latency: %3$s ms</string>
+    <string name="diagnostic_metrics">Input: %1$s Hz\nOutput: %2$s Hz\nLast event latency: %3$s ms\nMaximum output delay: %4$s ms</string>
     <string name="diagnostics_technical_note">Technical reports keep identifiers and event logs for troubleshooting. Review the report before sharing it.</string>
     <string name="state_idle">Not connected</string>
     <string name="state_ready">Ready to connect</string>

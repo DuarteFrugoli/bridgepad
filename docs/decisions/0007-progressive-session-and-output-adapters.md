@@ -1,15 +1,15 @@
-# ADR 0007: Progressive session planning and destination-specific output adapters
+# ADR 0007: Progressive session planning and output adapters
 
 - Status: Accepted
 - Date: 2026-09-05
 
 ## Context
 
-Connection method alone cannot identify an output implementation. Generic PC
-HID and future PlayStation experiments may all use Bluetooth but require
-different descriptors, device identities and host protocol behavior. The
-existing setup validator and activity orchestration were specific to a paired
-Windows PC over Bluetooth.
+Connection method alone cannot identify an output implementation. Generic
+Bluetooth HID and future desktop receivers use different protocols, lifecycle
+rules and target selection even when they all send input to a PC. The existing
+setup validator and activity orchestration were specific to a paired Windows PC
+over Bluetooth.
 
 ## Decision
 
@@ -25,14 +25,11 @@ Windows PC over Bluetooth.
   `BluetoothHidProfile`, including SDP metadata, report descriptor, encoders and
   host-request hooks.
 - Keep the generic Windows/Linux HID implementation in the independent
-  `:transport-bluetooth-hid` Android library. Console experiments belong in
-  sibling adapter/profile modules.
+  `:transport-bluetooth-hid` Android library.
 
 ## Consequences
 
 - The UI can be redesigned independently around the progressive setup model.
 - Multiple Bluetooth profiles no longer collide under one generic transport id.
-- Unsupported destination/connection combinations cannot silently fall back to
-  the generic Windows/Linux HID profile.
-- Adding a console profile still depends on protocol research and hardware
-  feasibility; modularity does not guarantee that a console will accept it.
+- Unsupported connection combinations cannot silently fall back to the generic
+  Windows/Linux HID profile.

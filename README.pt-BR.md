@@ -36,18 +36,15 @@ O primeiro MVP permitirá:
 - controlar o mouse do PC com um touchpad relativo e toque para clique esquerdo.
 
 O MVP não inclui LAN, aplicativo desktop, XInput nativo, rumble, layouts
-editáveis, macros, consoles ou compatibilidade garantida com todos os
-aparelhos Android.
+editáveis, macros ou compatibilidade garantida com todos os aparelhos Android.
 
 Depois do MVP, o roadmap inclui layouts touchscreen editáveis com presets
 personalizados e gatilhos L2/R2 analógicos cuja intensidade pode ser definida
 pela posição do toque ou pelo deslocamento do dedo. Também estão previstas
-expansões do touchpad para rolagem, botões adicionais e gestos, além da
-pesquisa de um modo semelhante ao touchpad do PlayStation para a Steam Input.
-Depois do aplicativo Android, o plano é criar o BridgePad Desktop primeiro para
-Windows e depois Linux. PlayStation e Xbox são objetivos posteriores, começando
-por pesquisa e protótipos dos protocolos e requisitos de autenticação. macOS e
-iOS não fazem parte do planejamento atual.
+expansões do touchpad para rolagem, botões adicionais, gestos e regiões
+clicáveis configuráveis para a Steam Input. Depois do aplicativo Android, o
+plano é criar o BridgePad Desktop primeiro para Windows e depois Linux. Outros
+sistemas desktop não fazem parte do planejamento atual.
 
 ## Modos de captura do controle físico
 
