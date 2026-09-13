@@ -43,8 +43,8 @@ The phone must be added from Windows Bluetooth settings during discoverability.
 After the HID connection is confirmed, virtual input opens the virtual gamepad;
 physical input opens a mouse touchpad that fills the usable screen. The physical
 touchpad has no permanent menu button: Android's Back button or gesture returns
-to Home without ending the Bluetooth session. A temporary localized hint explains
-this navigation the first time the touchpad opens. **Resume game** reopens the
+to Home without ending the Bluetooth session. A compact localized hint remains
+visible in a corner of the touchpad. **Resume game** reopens the
 appropriate input screen, and **End session** explicitly releases the connection.
 
 ## Contextual options

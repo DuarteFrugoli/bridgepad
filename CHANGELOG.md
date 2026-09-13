@@ -10,7 +10,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 - Expanded the physical-controller mouse touchpad to the full usable screen and
   replaced its permanent menu button with Android Back navigation plus a
-  one-time localized hint.
+  compact localized hint in the corner.
 - Moved Bluetooth HID report scheduling to a dedicated output thread and removed
   Android notification updates from the high-frequency controller input path.
 - Serialized input routing, made source delivery lossless and synchronized the

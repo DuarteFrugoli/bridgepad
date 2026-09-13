@@ -91,9 +91,6 @@ class MainActivity : ComponentActivity() {
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
-                var mouseTouchpadBackHintSeen by rememberSaveable {
-                    mutableStateOf(preferences.getBoolean(KEY_MOUSE_TOUCHPAD_BACK_HINT_SEEN, false))
-                }
                 var inputModeName by rememberSaveable {
                     mutableStateOf<String?>(null)
                 }
@@ -396,13 +393,6 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(Unit) { enterGamepadMode() }
                     MouseTouchpadScreen(
                         hidState = hidState,
-                        showBackNavigationHint = !mouseTouchpadBackHintSeen,
-                        onBackNavigationHintShown = {
-                            preferences.edit()
-                                .putBoolean(KEY_MOUSE_TOUCHPAD_BACK_HINT_SEEN, true)
-                                .apply()
-                            mouseTouchpadBackHintSeen = true
-                        },
                         onExit = {
                             showMouseTouchpad = false
                             exitGamepadMode()
@@ -646,6 +636,5 @@ class MainActivity : ComponentActivity() {
         private const val NEW_PC = DestinationSelection.NEW_PC
         private const val PREFERENCES_NAME = "bridgepad_preferences"
         private const val KEY_ONBOARDING_COMPLETE = "onboarding_complete"
-        private const val KEY_MOUSE_TOUCHPAD_BACK_HINT_SEEN = "mouse_touchpad_back_hint_seen"
     }
 }

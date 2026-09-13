@@ -29,12 +29,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -59,7 +57,6 @@ import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.session.SessionState as HidSessionState
 import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
-import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -97,21 +94,9 @@ fun TouchscreenGamepadScreen(
 @Composable
 fun MouseTouchpadScreen(
     hidState: HidSessionState,
-    showBackNavigationHint: Boolean,
-    onBackNavigationHintShown: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var backNavigationHintVisible by rememberSaveable {
-        mutableStateOf(showBackNavigationHint)
-    }
-    LaunchedEffect(Unit) {
-        if (backNavigationHintVisible) {
-            onBackNavigationHintShown()
-            delay(BACK_NAVIGATION_HINT_DURATION_MILLIS)
-            backNavigationHintVisible = false
-        }
-    }
     BackHandler(onBack = onExit)
 
     Box(
@@ -143,27 +128,23 @@ fun MouseTouchpadScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
-        if (backNavigationHintVisible) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(12.dp),
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.94f),
-                tonalElevation = 6.dp,
-            ) {
-                Text(
-                    text = stringResource(R.string.mouse_touchpad_back_hint),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    color = MaterialTheme.colorScheme.inverseOnSurface,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(12.dp),
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.88f),
+            tonalElevation = 4.dp,
+        ) {
+            Text(
+                text = stringResource(R.string.mouse_touchpad_back_hint),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.inverseOnSurface,
+                style = MaterialTheme.typography.labelMedium,
+            )
         }
     }
 }
-
-private const val BACK_NAVIGATION_HINT_DURATION_MILLIS = 4_000L
 
 @Composable
 private fun LeftControls(modifier: Modifier = Modifier) {
