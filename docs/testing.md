@@ -333,6 +333,9 @@ first-run flow.
 12. Press Android Back or use the system Back gesture from the touchpad. Confirm
     that Home opens while the Bluetooth session remains active and **Resume game**
     reopens the touchpad.
+13. With Bluetooth enabled and a physical USB controller attached, select a
+    paired PC and virtual input. Confirm that no stale Bluetooth-off notice is
+    shown and that the physical controller does not affect connection readiness.
 
 Record the phone, Android version, PC version and gamepad used. Phase 6 passes
 when a new user can complete the flow from the app guidance and all failures

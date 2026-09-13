@@ -1,5 +1,6 @@
 package dev.jonalakas.bridgepad.session
 
+import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.localization.LocalizedMessage
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.session.ConnectionMethod
@@ -50,3 +51,23 @@ object SessionStore {
         mutableState.update(transform)
     }
 }
+
+/** Removes Bluetooth-off feedback when current observations contradict that diagnosis. */
+internal fun SessionState.reconcileBluetoothAvailability(
+    enabled: Boolean,
+    permissionGranted: Boolean = true,
+): SessionState {
+    val bluetoothOffNotice = message?.resourceId in BLUETOOTH_OFF_NOTICE_IDS
+    val resolvedNotice = bluetoothOffNotice && (enabled || !permissionGranted)
+    if (bluetoothEnabled == enabled && !resolvedNotice) return this
+    return copy(
+        bluetoothEnabled = enabled,
+        message = if (resolvedNotice) null else message,
+        feedbackLevel = if (resolvedNotice) FeedbackLevel.INFO else feedbackLevel,
+    )
+}
+
+private val BLUETOOTH_OFF_NOTICE_IDS = setOf(
+    R.string.bluetooth_required,
+    R.string.hid_bluetooth_off,
+)

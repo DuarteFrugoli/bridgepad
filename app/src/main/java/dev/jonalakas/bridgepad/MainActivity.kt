@@ -15,6 +15,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import dev.jonalakas.bridgepad.session.PairedHost
+import dev.jonalakas.bridgepad.session.reconcileBluetoothAvailability
 import dev.jonalakas.bridgepad.core.session.SessionStatus as HidSessionStatus
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -250,6 +251,12 @@ class MainActivity : ComponentActivity() {
                     if (!bluetoothEnabled || !bluetoothPermissionGranted) {
                         pairNewPcSelected = false
                     }
+                    sessionCoordinator.updateState {
+                        it.reconcileBluetoothAvailability(
+                            enabled = bluetoothEnabled && bluetoothPermissionGranted,
+                            permissionGranted = bluetoothPermissionGranted,
+                        )
+                    }
                 }
                 LaunchedEffect(connectionGate) {
                     if (connectionGate == "bluetooth_starting") {
@@ -474,8 +481,16 @@ class MainActivity : ComponentActivity() {
                         pendingDestination = DestinationSelection.CHOOSE_PC
                     },
                     onPlay = {
+                        val bluetoothPermissionsReady = hasBluetoothPermission()
+                        bluetoothPermissionGranted = bluetoothPermissionsReady
                         val bluetoothReady = isBluetoothEnabled()
                         bluetoothEnabled = bluetoothReady
+                        sessionCoordinator.updateState {
+                            it.reconcileBluetoothAvailability(
+                                enabled = bluetoothReady,
+                                permissionGranted = bluetoothPermissionsReady,
+                            )
+                        }
                         val currentHosts = readPairedHosts()
                         pairedHosts = currentHosts
                         if (SessionSetup.canConnect(

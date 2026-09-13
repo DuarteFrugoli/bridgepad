@@ -62,6 +62,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Cleared stale Bluetooth-off notices when Android reports that Bluetooth is
+  currently enabled, including before starting a new paired-PC session.
+
 - Bluetooth notices no longer expose the internal Windows connection grace
   period or report a failed attempt as a lost connection. Failed attempts now
   suggest checking PC Bluetooth and range, while established disconnects use a

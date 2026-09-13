@@ -27,6 +27,7 @@ import dev.jonalakas.bridgepad.session.SessionState as HidSessionState
 import dev.jonalakas.bridgepad.ui.components.NoticeCard
 import dev.jonalakas.bridgepad.ui.components.NoticeTone
 import dev.jonalakas.bridgepad.session.SessionSetup
+import dev.jonalakas.bridgepad.session.reconcileBluetoothAvailability
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -69,6 +70,10 @@ fun HomeScreen(
 ) {
     var panel by rememberSaveable { mutableStateOf<String?>(null) }
     val connected = hidState.status == HidSessionStatus.CONNECTED
+    val visibleHidState = hidState.reconcileBluetoothAvailability(
+        enabled = bluetoothEnabled && bluetoothPermissionGranted,
+        permissionGranted = bluetoothPermissionGranted,
+    )
     val bluetoothSelected = connectionMethod == ConnectionMethod.BLUETOOTH
     val targetChosen = connected || (
         destinationType == DestinationType.PC &&
@@ -214,9 +219,9 @@ fun HomeScreen(
                 }
             }
             if (!hidCompatible) item { NoticeCard(stringResource(R.string.hid_unavailable), NoticeTone.ERROR) }
-            if (hidState.message != null) {
+            if (visibleHidState.message != null) {
                 item {
-                    NoticeCard(stringResource(hidState.message.resourceId, *hidState.message.arguments.toTypedArray()), when (hidState.feedbackLevel) {
+                    NoticeCard(stringResource(visibleHidState.message.resourceId, *visibleHidState.message.arguments.toTypedArray()), when (visibleHidState.feedbackLevel) {
                         HidFeedbackLevel.ERROR -> NoticeTone.ERROR
                         HidFeedbackLevel.WARNING -> NoticeTone.WARNING
                         HidFeedbackLevel.INFO -> NoticeTone.SUCCESS
