@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,19 +39,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.platform.LocalDensity
 import dev.jonalakas.bridgepad.R
 import kotlin.math.roundToInt
 
@@ -127,6 +128,18 @@ fun TouchscreenLayoutEditorScreen(
         ) {
             Text(stringResource(R.string.layout_editor_title), style = MaterialTheme.typography.titleLarge)
             Text(stringResource(R.string.layout_editor_instructions), style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider()
+            Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
+            TouchscreenLayoutPreset.entries.forEach { preset ->
+                val presetLayout = BuiltInTouchscreenLayouts.layout(preset)
+                FilterChip(
+                    selected = draft == presetLayout,
+                    onClick = { updateDraft(presetLayout) },
+                    label = { Text(presetLabel(preset)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(stringResource(R.string.layout_preset_hint), style = MaterialTheme.typography.bodySmall)
             HorizontalDivider()
             Text(
                 stringResource(R.string.layout_selected_control, controlLabel(selected)),
@@ -285,6 +298,15 @@ internal fun controlLabel(control: TouchControlId): String = when (control) {
     TouchControlId.RIGHT_STICK_BUTTON -> "R3"
     TouchControlId.SESSION_MENU -> stringResource(R.string.session_menu)
 }
+
+@Composable
+private fun presetLabel(preset: TouchscreenLayoutPreset): String = stringResource(
+    when (preset) {
+        TouchscreenLayoutPreset.SYMMETRIC -> R.string.layout_preset_symmetric
+        TouchscreenLayoutPreset.ASYMMETRIC -> R.string.layout_preset_asymmetric
+        TouchscreenLayoutPreset.MOBILE -> R.string.layout_preset_mobile
+    },
+)
 
 private fun controlShape(control: TouchControlId) = when (control) {
     TouchControlId.LEFT_STICK,

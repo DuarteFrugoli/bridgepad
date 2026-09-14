@@ -55,7 +55,9 @@ appropriate input screen, and **End session** explicitly releases the connection
   can be selected, dragged and resized. Saving immediately replaces the active
   layout and persists it across launches; canceling discards the draft. **Reset
   to standard** restores the built-in arrangement in the draft, which is only
-  persisted when saved. Named presets remain future work.
+  persisted when saved. **Symmetric**, **Asymmetric** and **Mobile** are built-in
+  starting layouts; choosing one updates only the draft, and every control can
+  still be moved or resized before saving.
 - Physical-controller capture is selected directly inside the Input step, before
   connecting. It can also be changed during an active session without reconnecting
   the Bluetooth HID output.

@@ -23,6 +23,12 @@ enum class TouchControlId(
     SESSION_MENU(116f, 48f),
 }
 
+enum class TouchscreenLayoutPreset {
+    SYMMETRIC,
+    ASYMMETRIC,
+    MOBILE,
+}
+
 data class TouchControlPlacement(
     val centerX: Float,
     val centerY: Float,
@@ -64,8 +70,52 @@ data class TouchscreenLayout(
     ): TouchscreenLayout = copy(placements = placements + (control to transform(placement(control))))
 }
 
-object DefaultTouchscreenLayout {
-    val value = TouchscreenLayout(
+object BuiltInTouchscreenLayouts {
+    val symmetric = TouchscreenLayout(
+        mapOf(
+            TouchControlId.MOUSE_TOUCHPAD to TouchControlPlacement(0.50f, 0.24f, 0.88f),
+            TouchControlId.DPAD to TouchControlPlacement(0.15f, 0.43f, 0.95f),
+            TouchControlId.LEFT_STICK to TouchControlPlacement(0.36f, 0.79f, 0.92f),
+            TouchControlId.RIGHT_STICK to TouchControlPlacement(0.64f, 0.79f, 0.92f),
+            TouchControlId.LEFT_TRIGGER to TouchControlPlacement(0.07f, 0.08f),
+            TouchControlId.LEFT_BUMPER to TouchControlPlacement(0.18f, 0.08f),
+            TouchControlId.RIGHT_BUMPER to TouchControlPlacement(0.82f, 0.08f),
+            TouchControlId.RIGHT_TRIGGER to TouchControlPlacement(0.93f, 0.08f),
+            TouchControlId.FACE_NORTH to TouchControlPlacement(0.85f, 0.28f),
+            TouchControlId.FACE_WEST to TouchControlPlacement(0.78f, 0.43f),
+            TouchControlId.FACE_EAST to TouchControlPlacement(0.92f, 0.43f),
+            TouchControlId.FACE_SOUTH to TouchControlPlacement(0.85f, 0.58f),
+            TouchControlId.SELECT to TouchControlPlacement(0.44f, 0.43f, 0.82f),
+            TouchControlId.START to TouchControlPlacement(0.56f, 0.43f, 0.82f),
+            TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.44f, 0.60f, 0.75f),
+            TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.56f, 0.60f, 0.75f),
+            TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.87f, 0.70f),
+        ),
+    )
+
+    val asymmetric = TouchscreenLayout(
+        mapOf(
+            TouchControlId.MOUSE_TOUCHPAD to TouchControlPlacement(0.50f, 0.23f, 0.82f),
+            TouchControlId.DPAD to TouchControlPlacement(0.24f, 0.76f, 0.92f),
+            TouchControlId.LEFT_STICK to TouchControlPlacement(0.15f, 0.39f),
+            TouchControlId.RIGHT_STICK to TouchControlPlacement(0.76f, 0.76f, 0.92f),
+            TouchControlId.LEFT_TRIGGER to TouchControlPlacement(0.07f, 0.08f),
+            TouchControlId.LEFT_BUMPER to TouchControlPlacement(0.18f, 0.08f),
+            TouchControlId.RIGHT_BUMPER to TouchControlPlacement(0.82f, 0.08f),
+            TouchControlId.RIGHT_TRIGGER to TouchControlPlacement(0.93f, 0.08f),
+            TouchControlId.FACE_NORTH to TouchControlPlacement(0.85f, 0.24f),
+            TouchControlId.FACE_WEST to TouchControlPlacement(0.78f, 0.39f),
+            TouchControlId.FACE_EAST to TouchControlPlacement(0.92f, 0.39f),
+            TouchControlId.FACE_SOUTH to TouchControlPlacement(0.85f, 0.54f),
+            TouchControlId.SELECT to TouchControlPlacement(0.44f, 0.46f, 0.82f),
+            TouchControlId.START to TouchControlPlacement(0.56f, 0.46f, 0.82f),
+            TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.44f, 0.62f, 0.75f),
+            TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.56f, 0.62f, 0.75f),
+            TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.84f, 0.70f),
+        ),
+    )
+
+    val mobile = TouchscreenLayout(
         mapOf(
             TouchControlId.MOUSE_TOUCHPAD to TouchControlPlacement(0.50f, 0.26f),
             TouchControlId.DPAD to TouchControlPlacement(0.16f, 0.39f),
@@ -86,6 +136,16 @@ object DefaultTouchscreenLayout {
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.90f),
         ),
     )
+
+    fun layout(preset: TouchscreenLayoutPreset): TouchscreenLayout = when (preset) {
+        TouchscreenLayoutPreset.SYMMETRIC -> symmetric
+        TouchscreenLayoutPreset.ASYMMETRIC -> asymmetric
+        TouchscreenLayoutPreset.MOBILE -> mobile
+    }
+}
+
+object DefaultTouchscreenLayout {
+    val value = BuiltInTouchscreenLayouts.mobile
 }
 
 internal object TouchscreenLayoutCodec {

@@ -76,7 +76,7 @@ its evidence recorded here.
 - Rapid pointer changes without cross-control interference: PASS
 - Menu, background, screen lock and gesture cancellation neutralization: PASS
 - No stuck input or inaccessible control was observed
-- The fixed layout is accepted for the MVP; editable layouts, presets and
+- The fixed layout was accepted for the MVP; user-created named presets and
   analog touchscreen triggers remain post-MVP roadmap items
 
 ### 2026-09-04 — Background USB capture

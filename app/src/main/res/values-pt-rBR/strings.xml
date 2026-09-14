@@ -96,6 +96,11 @@
     <string name="virtual_gamepad_settings_description">Personalize a posição e o tamanho dos controles mostrados durante o jogo.</string>
     <string name="layout_editor_title">Editar layout</string>
     <string name="layout_editor_instructions">Toque em um controle para selecioná-lo e arraste para mover. Use o controle deslizante para mudar o tamanho.</string>
+    <string name="layout_presets">Layout inicial</string>
+    <string name="layout_preset_symmetric">Simétrico</string>
+    <string name="layout_preset_asymmetric">Assimétrico</string>
+    <string name="layout_preset_mobile">Mobile</string>
+    <string name="layout_preset_hint">Escolha um layout pronto e personalize-o se quiser. As mudanças só são aplicadas ao salvar.</string>
     <string name="layout_selected_control">Selecionado: %1$s</string>
     <string name="layout_control_size">Tamanho: %1$d%%</string>
     <string name="reset_layout">Restaurar padrão</string>

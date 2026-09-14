@@ -13,6 +13,36 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun everyBuiltInPresetContainsEveryControl() {
+        TouchscreenLayoutPreset.entries.forEach { preset ->
+            assertEquals(
+                TouchControlId.entries.toSet(),
+                BuiltInTouchscreenLayouts.layout(preset).placements.keys,
+            )
+        }
+    }
+
+    @Test
+    fun builtInPresetsHaveDistinctStickArrangements() {
+        val symmetric = BuiltInTouchscreenLayouts.symmetric
+        val asymmetric = BuiltInTouchscreenLayouts.asymmetric
+        val mobile = BuiltInTouchscreenLayouts.mobile
+
+        assertEquals(
+            symmetric.placement(TouchControlId.LEFT_STICK).centerY,
+            symmetric.placement(TouchControlId.RIGHT_STICK).centerY,
+        )
+        assertTrue(
+            asymmetric.placement(TouchControlId.LEFT_STICK).centerY <
+                asymmetric.placement(TouchControlId.RIGHT_STICK).centerY,
+        )
+        assertTrue(
+            mobile.placement(TouchControlId.LEFT_STICK).centerX <
+                mobile.placement(TouchControlId.RIGHT_STICK).centerX,
+        )
+    }
+
+    @Test
     fun layoutCodecRoundTripsPlacements() {
         val expected = DefaultTouchscreenLayout.value
             .move(TouchControlId.LEFT_STICK, 0.05f, -0.04f)

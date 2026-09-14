@@ -107,6 +107,9 @@ checklist. These checks are pending hardware validation for the UI redesign.
   and the layout survives rotation and an app restart. Reopen the editor, change
   the draft and cancel; the saved layout must remain unchanged. Finally restore
   the standard draft, save it and confirm the built-in arrangement returns.
+- Load the **Symmetric**, **Asymmetric** and **Mobile** starting layouts. Confirm
+  their previews differ, each remains editable, cancel does not apply a selected
+  preset, and saving each preset changes the gameplay arrangement.
 - Select physical input and confirm **Connect and play** remains disabled until
   either Compatibility or Background USB is selected. Choose each capture mode
   before connecting, then configure buttons in both modes. Verify cancellation,
@@ -306,8 +309,8 @@ Procedure:
 11. Play through Steam Input using only the touchscreen for at least 30 minutes.
 
 Record any inaccessible control, missed pointer, stuck state or uncomfortable
-placement. Visual polish and editable presets are intentionally outside the MVP
-phase; this check validates the fixed default layout and touch behavior.
+placement. This check validates the default layout and touch behavior; the later
+regression checklist covers the editable layouts and built-in starting presets.
 
 ## Phase 6 session UX and resilience
 

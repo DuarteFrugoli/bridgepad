@@ -93,6 +93,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 - A persistent virtual-gamepad layout editor with normalized drag positioning,
   per-control scaling, cancel-safe drafts and restoration of the standard layout.
+- Symmetric, asymmetric and mobile built-in layouts that can be used as editable
+  starting points for the virtual gamepad.
 - A large, dedicated mouse touchpad that can be used alongside a physical
   gamepad without changing the active gamepad input source.
 - Initial Android project using Kotlin and Jetpack Compose.
