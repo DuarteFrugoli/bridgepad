@@ -103,9 +103,6 @@
     <string name="layout_preset_asymmetric">Asymmetric</string>
     <string name="layout_preset_mobile">Mobile</string>
     <string name="layout_preset_hint">Choose a ready-made layout, then customize it if you want. Changes are only applied when saved.</string>
-    <string name="layout_selected_control">Selected: %1$s</string>
-    <string name="layout_resize_independent_hint">Side handles change width or height independently. Corner handles change both.</string>
-    <string name="layout_resize_proportional_hint">This control keeps its proportions and can be resized from the corner handles.</string>
     <string name="resize_control">Resize %1$s</string>
     <string name="reset_layout">Reset to standard</string>
     <string name="save_layout">Save layout</string>

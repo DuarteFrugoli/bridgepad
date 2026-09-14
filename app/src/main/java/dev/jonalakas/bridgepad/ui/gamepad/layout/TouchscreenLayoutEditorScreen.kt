@@ -180,7 +180,6 @@ fun TouchscreenLayoutEditorScreen(
 
         if (toolbarExpanded) {
             EditorToolbar(
-                selectedControl = controlLabel(selected),
                 optionsVisible = optionsVisible,
                 onCollapse = { toolbarExpanded = false },
                 onToggleOptions = { optionsVisible = !optionsVisible },
@@ -198,7 +197,6 @@ fun TouchscreenLayoutEditorScreen(
         if (toolbarExpanded && optionsVisible) {
             EditorOptionsPanel(
                 draft = draft,
-                selected = selected,
                 onSelectPreset = ::replaceDraft,
                 onReset = { replaceDraft(DefaultTouchscreenLayout.value) },
                 onHorizontalDrag = { delta ->
@@ -232,7 +230,6 @@ fun TouchscreenLayoutEditorScreen(
 
 @Composable
 private fun EditorToolbar(
-    selectedControl: String,
     optionsVisible: Boolean,
     onCollapse: () -> Unit,
     onToggleOptions: () -> Unit,
@@ -263,11 +260,6 @@ private fun EditorToolbar(
             TextButton(onClick = onCancel) {
                 Text(stringResource(R.string.cancel_action))
             }
-            Text(
-                selectedControl,
-                modifier = Modifier.padding(horizontal = 8.dp),
-                style = MaterialTheme.typography.labelLarge,
-            )
             TextButton(onClick = onToggleOptions) {
                 Text(
                     stringResource(
@@ -314,7 +306,6 @@ private fun CollapsedEditorToolbar(
 @Composable
 private fun EditorOptionsPanel(
     draft: TouchscreenLayout,
-    selected: TouchControlId,
     onSelectPreset: (TouchscreenLayout) -> Unit,
     onReset: () -> Unit,
     onHorizontalDrag: (Float) -> Unit,
@@ -363,21 +354,6 @@ private fun EditorOptionsPanel(
                 )
             }
             Text(stringResource(R.string.layout_preset_hint), style = MaterialTheme.typography.bodySmall)
-            HorizontalDivider()
-            Text(
-                stringResource(R.string.layout_selected_control, controlLabel(selected)),
-                style = MaterialTheme.typography.titleSmall,
-            )
-            Text(
-                stringResource(
-                    if (selected.lockAspectRatio) {
-                        R.string.layout_resize_proportional_hint
-                    } else {
-                        R.string.layout_resize_independent_hint
-                    },
-                ),
-                style = MaterialTheme.typography.bodySmall,
-            )
             OutlinedButton(
                 onClick = onReset,
                 modifier = Modifier.fillMaxWidth(),
