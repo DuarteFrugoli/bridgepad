@@ -8,6 +8,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The Android launch screen now uses the dark BridgePad background and brand
+  symbol instead of the default white theme splash.
 - The layout editor action panel now collapses into a compact floating button,
   and analog-stick labels use white text for better contrast.
 - Replaced the Android template launcher artwork with the BridgePad symbol

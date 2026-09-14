@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.BridgePad" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/bridgepad_splash_background</item>
+        <item name="android:windowSplashScreenBackground">@color/bridgepad_splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_launcher_brand_foreground</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/bridgepad_splash_background</item>
+    </style>
+</resources>
