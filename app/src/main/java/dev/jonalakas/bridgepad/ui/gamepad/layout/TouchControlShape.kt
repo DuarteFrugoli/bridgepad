@@ -12,5 +12,6 @@ internal fun touchControlShape(control: TouchControlId): Shape = when (control) 
     TouchControlId.FACE_WEST,
     TouchControlId.FACE_EAST,
     TouchControlId.FACE_SOUTH -> CircleShape
+    TouchControlId.MOUSE_TOUCHPAD -> RoundedCornerShape(18.dp)
     else -> RoundedCornerShape(16.dp)
 }

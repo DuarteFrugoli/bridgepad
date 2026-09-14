@@ -1,6 +1,7 @@
 package dev.jonalakas.bridgepad.ui.gamepad.layout
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -566,11 +567,22 @@ private fun ControlPreview(control: TouchControlId, modifier: Modifier = Modifie
                 style = MaterialTheme.typography.labelSmall,
             )
         }
+        TouchControlId.MOUSE_TOUCHPAD -> Surface(
+            modifier = modifier,
+            shape = touchControlShape(control),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            border = BorderStroke(2.dp, MaterialTheme.colorScheme.outline),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(label, style = MaterialTheme.typography.labelMedium)
+            }
+        }
         else -> Surface(
             modifier = modifier,
             shape = touchControlShape(control),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = if (control == TouchControlId.MOUSE_TOUCHPAD) 0.dp else 2.dp,
+            tonalElevation = 2.dp,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Text(label, style = MaterialTheme.typography.labelMedium)

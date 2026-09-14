@@ -271,7 +271,7 @@ private fun MouseTouchpad(modifier: Modifier = Modifier) {
                     }
                 }
             },
-        shape = RoundedCornerShape(18.dp),
+        shape = touchControlShape(TouchControlId.MOUSE_TOUCHPAD),
         color = container,
         border = androidx.compose.foundation.BorderStroke(2.dp, outline),
     ) {
