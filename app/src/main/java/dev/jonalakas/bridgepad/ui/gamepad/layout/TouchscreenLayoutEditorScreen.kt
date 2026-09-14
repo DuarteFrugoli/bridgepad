@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
@@ -50,6 +51,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.jonalakas.bridgepad.R
@@ -71,8 +76,13 @@ fun TouchscreenLayoutEditorScreen(
     }
     val selected = TouchControlId.valueOf(selectedName)
 
-    fun updateDraft(layout: TouchscreenLayout) {
+    fun replaceDraft(layout: TouchscreenLayout) {
         encodedDraft = TouchscreenLayoutCodec.encode(layout)
+    }
+
+    fun updateDraft(transform: (TouchscreenLayout) -> TouchscreenLayout) {
+        val current = TouchscreenLayoutCodec.decode(encodedDraft) ?: DefaultTouchscreenLayout.value
+        encodedDraft = TouchscreenLayoutCodec.encode(transform(current))
     }
 
     BackHandler(onBack = onCancel)
@@ -113,7 +123,13 @@ fun TouchscreenLayoutEditorScreen(
                     previewScale = previewScale,
                     onSelect = { selectedName = control.name },
                     onMove = { deltaX, deltaY ->
-                        updateDraft(draft.move(control, deltaX, deltaY))
+                        updateDraft { it.move(control, deltaX, deltaY) }
+                    },
+                    onResize = { scaleDelta, centerDeltaX, centerDeltaY ->
+                        updateDraft { current ->
+                            val scale = current.placement(control).scale + scaleDelta
+                            current.resize(control, scale).move(control, centerDeltaX, centerDeltaY)
+                        }
                     },
                 )
             }
@@ -134,7 +150,7 @@ fun TouchscreenLayoutEditorScreen(
                 val presetLayout = BuiltInTouchscreenLayouts.layout(preset)
                 FilterChip(
                     selected = draft == presetLayout,
-                    onClick = { updateDraft(presetLayout) },
+                    onClick = { replaceDraft(presetLayout) },
                     label = { Text(presetLabel(preset)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -154,11 +170,11 @@ fun TouchscreenLayoutEditorScreen(
             )
             Slider(
                 value = draft.placement(selected).scale,
-                onValueChange = { updateDraft(draft.resize(selected, it)) },
+                onValueChange = { scale -> updateDraft { it.resize(selected, scale) } },
                 valueRange = MIN_CONTROL_SCALE..MAX_CONTROL_SCALE,
             )
             OutlinedButton(
-                onClick = { updateDraft(DefaultTouchscreenLayout.value) },
+                onClick = { replaceDraft(DefaultTouchscreenLayout.value) },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(stringResource(R.string.reset_layout)) }
             TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
@@ -181,6 +197,7 @@ private fun BoxWithConstraintsScope.EditableControl(
     previewScale: Float,
     onSelect: () -> Unit,
     onMove: (Float, Float) -> Unit,
+    onResize: (Float, Float, Float) -> Unit,
 ) {
     val density = LocalDensity.current
     val width = (control.baseWidthDp * placement.scale * previewScale).dp
@@ -189,6 +206,7 @@ private fun BoxWithConstraintsScope.EditableControl(
     val heightPixels = with(density) { height.toPx() }
     val currentOnSelect by rememberUpdatedState(onSelect)
     val currentOnMove by rememberUpdatedState(onMove)
+    val currentOnResize by rememberUpdatedState(onResize)
     val offset = controlOffset(
         placement = placement,
         containerWidth = canvasWidthPixels,
@@ -201,37 +219,147 @@ private fun BoxWithConstraintsScope.EditableControl(
         modifier = Modifier
             .zIndex(if (selected) 1f else 0f)
             .offset { offset }
-            .size(width, height)
-            .pointerInput(control, canvasWidthPixels, canvasHeightPixels) {
+            .size(width, height),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(control, canvasWidthPixels, canvasHeightPixels) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        currentOnSelect()
+                        val pointerId = down.id
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
+                                ?: break
+                            if (!change.pressed) break
+                            val delta = change.positionChange()
+                            if (delta != Offset.Zero) {
+                                currentOnMove(
+                                    delta.x / canvasWidthPixels,
+                                    delta.y / canvasHeightPixels,
+                                )
+                            }
+                            change.consume()
+                        }
+                    }
+                },
+        ) {
+            ControlPreview(control, Modifier.fillMaxSize())
+        }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                    shape = RoundedCornerShape(6.dp),
+                ),
+        )
+        ResizeCorner.entries.forEach { corner ->
+            ResizeHandle(
+                corner = corner,
+                controlLabel = controlLabel(control),
+                selected = selected,
+                currentScale = placement.scale,
+                baseControlWidthPixels = with(density) {
+                    (control.baseWidthDp * previewScale).dp.toPx()
+                },
+                baseControlHeightPixels = with(density) {
+                    (control.baseHeightDp * previewScale).dp.toPx()
+                },
+                canvasWidthPixels = canvasWidthPixels,
+                canvasHeightPixels = canvasHeightPixels,
+                onSelect = currentOnSelect,
+                onResize = currentOnResize,
+            )
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.ResizeHandle(
+    corner: ResizeCorner,
+    controlLabel: String,
+    selected: Boolean,
+    currentScale: Float,
+    baseControlWidthPixels: Float,
+    baseControlHeightPixels: Float,
+    canvasWidthPixels: Float,
+    canvasHeightPixels: Float,
+    onSelect: () -> Unit,
+    onResize: (Float, Float, Float) -> Unit,
+) {
+    val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentOnResize by rememberUpdatedState(onResize)
+    val latestScale by rememberUpdatedState(currentScale)
+    val resizeDescription = stringResource(R.string.resize_control, controlLabel)
+    Box(
+        modifier = Modifier
+            .align(corner.alignment)
+            .offset(
+                x = (corner.horizontalDirection * HANDLE_RADIUS_DP).dp,
+                y = (corner.verticalDirection * HANDLE_RADIUS_DP).dp,
+            )
+            .size(HANDLE_SIZE_DP.dp)
+            .background(
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surface
+                },
+                shape = CircleShape,
+            )
+            .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape)
+            .semantics {
+                contentDescription = resizeDescription
+                role = Role.Button
+            }
+            .pointerInput(
+                corner,
+                baseControlWidthPixels,
+                baseControlHeightPixels,
+                canvasWidthPixels,
+                canvasHeightPixels,
+            ) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     currentOnSelect()
                     val pointerId = down.id
+                    var gestureScale = latestScale
                     while (true) {
                         val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
                             ?: break
                         if (!change.pressed) break
                         val delta = change.positionChange()
                         if (delta != Offset.Zero) {
-                            currentOnMove(
-                                delta.x / canvasWidthPixels,
-                                delta.y / canvasHeightPixels,
+                            val resize = cornerResizeDelta(
+                                currentScale = gestureScale,
+                                horizontalDirection = corner.horizontalDirection,
+                                verticalDirection = corner.verticalDirection,
+                                pointerDeltaX = delta.x,
+                                pointerDeltaY = delta.y,
+                                baseControlWidth = baseControlWidthPixels,
+                                baseControlHeight = baseControlHeightPixels,
+                                containerWidth = canvasWidthPixels,
+                                containerHeight = canvasHeightPixels,
+                            )
+                            gestureScale += resize.scaleDelta
+                            currentOnResize(
+                                resize.scaleDelta,
+                                resize.centerDeltaX,
+                                resize.centerDeltaY,
                             )
                         }
                         change.consume()
                     }
                 }
             },
-    ) {
-        ControlPreview(control, Modifier.fillMaxSize())
-        if (selected) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .border(3.dp, MaterialTheme.colorScheme.primary, controlShape(control)),
-            )
-        }
-    }
+    )
 }
 
 @Composable
@@ -318,5 +446,18 @@ private fun controlShape(control: TouchControlId) = when (control) {
     else -> RoundedCornerShape(16.dp)
 }
 
+private enum class ResizeCorner(
+    val horizontalDirection: Int,
+    val verticalDirection: Int,
+    val alignment: Alignment,
+) {
+    TOP_LEFT(-1, -1, Alignment.TopStart),
+    TOP_RIGHT(1, -1, Alignment.TopEnd),
+    BOTTOM_LEFT(-1, 1, Alignment.BottomStart),
+    BOTTOM_RIGHT(1, 1, Alignment.BottomEnd),
+}
+
 private const val REFERENCE_WIDTH_DP = 780f
 private const val REFERENCE_HEIGHT_DP = 360f
+private const val HANDLE_SIZE_DP = 20f
+private const val HANDLE_RADIUS_DP = HANDLE_SIZE_DP / 2f

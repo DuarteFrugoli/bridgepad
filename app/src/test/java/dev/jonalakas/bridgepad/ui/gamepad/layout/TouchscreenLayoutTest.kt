@@ -98,6 +98,44 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun bottomRightResizeGrowsAndMovesCenterTowardDraggedCorner() {
+        val resize = cornerResizeDelta(
+            currentScale = 1f,
+            horizontalDirection = 1,
+            verticalDirection = 1,
+            pointerDeltaX = 20f,
+            pointerDeltaY = 20f,
+            baseControlWidth = 100f,
+            baseControlHeight = 100f,
+            containerWidth = 800f,
+            containerHeight = 400f,
+        )
+
+        assertEquals(0.2f, resize.scaleDelta, 0.0001f)
+        assertEquals(0.0125f, resize.centerDeltaX, 0.0001f)
+        assertEquals(0.025f, resize.centerDeltaY, 0.0001f)
+    }
+
+    @Test
+    fun topLeftResizeStopsAtMinimumScaleWithoutMovingPastIt() {
+        val resize = cornerResizeDelta(
+            currentScale = MIN_CONTROL_SCALE,
+            horizontalDirection = -1,
+            verticalDirection = -1,
+            pointerDeltaX = 100f,
+            pointerDeltaY = 100f,
+            baseControlWidth = 100f,
+            baseControlHeight = 100f,
+            containerWidth = 800f,
+            containerHeight = 400f,
+        )
+
+        assertEquals(0f, resize.scaleDelta, 0f)
+        assertEquals(0f, resize.centerDeltaX, 0f)
+        assertEquals(0f, resize.centerDeltaY, 0f)
+    }
+
+    @Test
     fun invalidValuesAreSanitized() {
         val decoded = TouchscreenLayoutCodec.decode("1\nLEFT_STICK,NaN,4.0,99.0\n")
         val placement = decoded?.placement(TouchControlId.LEFT_STICK)
