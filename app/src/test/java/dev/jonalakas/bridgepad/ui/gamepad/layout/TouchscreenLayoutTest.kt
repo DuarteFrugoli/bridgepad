@@ -128,6 +128,18 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun optionsPanelMovesOppositeToAControlEnteringItsSide() {
+        assertEquals(0f, optionsPanelCenterAfterControlMove(0.75f, 0.8f), 0f)
+        assertEquals(1f, optionsPanelCenterAfterControlMove(0.25f, 0.2f), 0f)
+    }
+
+    @Test
+    fun optionsPanelStaysPutWhileControlIsOnTheOppositeSide() {
+        assertEquals(0.8f, optionsPanelCenterAfterControlMove(0.25f, 0.8f), 0f)
+        assertEquals(0.2f, optionsPanelCenterAfterControlMove(0.75f, 0.2f), 0f)
+    }
+
+    @Test
     fun bottomRightResizeGrowsAndMovesCenterTowardDraggedCorner() {
         val resize = controlResizeDelta(
             currentWidthScale = 1f,

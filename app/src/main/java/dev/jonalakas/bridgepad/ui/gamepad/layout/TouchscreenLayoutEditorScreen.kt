@@ -161,11 +161,18 @@ fun TouchscreenLayoutEditorScreen(
                 canvasHeightPixels = heightPixels,
                 onSelect = { selectedName = control.name },
                 onMove = { deltaX, deltaY ->
-                    toolbarExpanded = false
-                    updateDraft { it.move(control, deltaX, deltaY) }
+                    val updated = (TouchscreenLayoutCodec.decode(encodedDraft)
+                        ?: DefaultTouchscreenLayout.value)
+                        .move(control, deltaX, deltaY)
+                    if (toolbarExpanded && optionsVisible) {
+                        optionsCenterX = optionsPanelCenterAfterControlMove(
+                            controlCenterX = updated.placement(control).centerX,
+                            currentOptionsCenterX = optionsCenterX,
+                        )
+                    }
+                    replaceDraft(updated)
                 },
                 onResize = { widthDelta, heightDelta, centerDeltaX, centerDeltaY ->
-                    toolbarExpanded = false
                     updateDraft { current ->
                         val placement = current.placement(control)
                         current.resize(
@@ -561,7 +568,7 @@ private fun ControlPreview(control: TouchControlId, modifier: Modifier = Modifie
         }
         else -> Surface(
             modifier = modifier,
-            shape = controlShape(control),
+            shape = touchControlShape(control),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = if (control == TouchControlId.MOUSE_TOUCHPAD) 0.dp else 2.dp,
         ) {
@@ -613,16 +620,6 @@ private fun presetLabel(preset: TouchscreenLayoutPreset): String = stringResourc
         TouchscreenLayoutPreset.MOBILE -> R.string.layout_preset_mobile
     },
 )
-
-private fun controlShape(control: TouchControlId) = when (control) {
-    TouchControlId.LEFT_STICK,
-    TouchControlId.RIGHT_STICK,
-    TouchControlId.FACE_NORTH,
-    TouchControlId.FACE_WEST,
-    TouchControlId.FACE_EAST,
-    TouchControlId.FACE_SOUTH -> CircleShape
-    else -> RoundedCornerShape(16.dp)
-}
 
 private enum class ResizeAnchor(
     val horizontalDirection: Int,

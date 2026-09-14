@@ -8,6 +8,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Layout options now move to the opposite side when a dragged control enters
+  their side of the editor, and runtime buttons share the editor's shapes so
+  the A, B, X and Y controls remain circular during gameplay.
 - Removed redundant selected-control labels and resize guidance from the layout
   editor overlays; the selection outline now communicates that state directly.
 - The collapsed and expanded layout editor toolbar can now be moved throughout

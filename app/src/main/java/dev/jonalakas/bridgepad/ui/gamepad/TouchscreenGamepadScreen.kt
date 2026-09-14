@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -53,6 +54,7 @@ import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlId
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlPlacement
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
 import dev.jonalakas.bridgepad.ui.gamepad.layout.controlOffset
+import dev.jonalakas.bridgepad.ui.gamepad.layout.touchControlShape
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -128,21 +130,82 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
                 stringResource(R.string.right_stick),
                 Modifier.fillMaxSize(),
             )
-            TouchControlId.LEFT_TRIGGER -> TriggerButton("L2", VirtualAxis.LEFT_TRIGGER, Modifier.fillMaxSize())
-            TouchControlId.LEFT_BUMPER -> GamepadButton("L1", VirtualControl.LEFT_BUMPER, Modifier.fillMaxSize())
-            TouchControlId.RIGHT_BUMPER -> GamepadButton("R1", VirtualControl.RIGHT_BUMPER, Modifier.fillMaxSize())
-            TouchControlId.RIGHT_TRIGGER -> TriggerButton("R2", VirtualAxis.RIGHT_TRIGGER, Modifier.fillMaxSize())
-            TouchControlId.FACE_NORTH -> GamepadButton("Y", VirtualControl.FACE_NORTH, Modifier.fillMaxSize())
-            TouchControlId.FACE_WEST -> GamepadButton("X", VirtualControl.FACE_WEST, Modifier.fillMaxSize())
-            TouchControlId.FACE_EAST -> GamepadButton("B", VirtualControl.FACE_EAST, Modifier.fillMaxSize())
-            TouchControlId.FACE_SOUTH -> GamepadButton("A", VirtualControl.FACE_SOUTH, Modifier.fillMaxSize())
-            TouchControlId.SELECT -> GamepadButton("Select", VirtualControl.SELECT, Modifier.fillMaxSize())
-            TouchControlId.START -> GamepadButton("Start", VirtualControl.START, Modifier.fillMaxSize())
-            TouchControlId.LEFT_STICK_BUTTON -> GamepadButton("L3", VirtualControl.LEFT_STICK_BUTTON, Modifier.fillMaxSize())
-            TouchControlId.RIGHT_STICK_BUTTON -> GamepadButton("R3", VirtualControl.RIGHT_STICK_BUTTON, Modifier.fillMaxSize())
+            TouchControlId.LEFT_TRIGGER -> TriggerButton(
+                "L2",
+                VirtualAxis.LEFT_TRIGGER,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.LEFT_BUMPER -> GamepadButton(
+                "L1",
+                VirtualControl.LEFT_BUMPER,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.RIGHT_BUMPER -> GamepadButton(
+                "R1",
+                VirtualControl.RIGHT_BUMPER,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.RIGHT_TRIGGER -> TriggerButton(
+                "R2",
+                VirtualAxis.RIGHT_TRIGGER,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.FACE_NORTH -> GamepadButton(
+                "Y",
+                VirtualControl.FACE_NORTH,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.FACE_WEST -> GamepadButton(
+                "X",
+                VirtualControl.FACE_WEST,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.FACE_EAST -> GamepadButton(
+                "B",
+                VirtualControl.FACE_EAST,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.FACE_SOUTH -> GamepadButton(
+                "A",
+                VirtualControl.FACE_SOUTH,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.SELECT -> GamepadButton(
+                "Select",
+                VirtualControl.SELECT,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.START -> GamepadButton(
+                "Start",
+                VirtualControl.START,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.LEFT_STICK_BUTTON -> GamepadButton(
+                "L3",
+                VirtualControl.LEFT_STICK_BUTTON,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.RIGHT_STICK_BUTTON -> GamepadButton(
+                "R3",
+                VirtualControl.RIGHT_STICK_BUTTON,
+                touchControlShape(control),
+                Modifier.fillMaxSize(),
+            )
             TouchControlId.SESSION_MENU -> TouchButton(
                 label = stringResource(R.string.session_menu),
                 onPressedChange = { pressed -> if (pressed) onExit() },
+                shape = touchControlShape(control),
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -226,10 +289,12 @@ private fun MouseTouchpad(modifier: Modifier = Modifier) {
 private fun GamepadButton(
     label: String,
     control: VirtualControl,
+    shape: Shape,
     modifier: Modifier = Modifier,
 ) {
     TouchButton(
         label = label,
+        shape = shape,
         modifier = modifier,
         onPressedChange = { TouchGamepadStore.setButton(control, it) },
     )
@@ -239,10 +304,12 @@ private fun GamepadButton(
 private fun TriggerButton(
     label: String,
     axis: VirtualAxis,
+    shape: Shape,
     modifier: Modifier = Modifier,
 ) {
     TouchButton(
         label = label,
+        shape = shape,
         modifier = modifier,
         onPressedChange = { TouchGamepadStore.setTrigger(axis, it) },
     )
@@ -252,6 +319,7 @@ private fun TriggerButton(
 private fun TouchButton(
     label: String,
     onPressedChange: (Boolean) -> Unit,
+    shape: Shape,
     modifier: Modifier = Modifier,
 ) {
     var pressed by remember { mutableStateOf(false) }
@@ -285,7 +353,7 @@ private fun TouchButton(
                     },
                 )
             },
-        shape = RoundedCornerShape(18.dp),
+        shape = shape,
         color = containerColor,
         contentColor = contentColor,
     ) {
