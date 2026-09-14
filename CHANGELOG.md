@@ -92,8 +92,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 ### Added
 
 - A persistent virtual-gamepad layout editor with normalized drag positioning,
-  per-control scaling, direct four-corner resize handles, cancel-safe drafts and
-  restoration of the standard layout.
+  independent width and height resizing, proportional stick scaling, selected-only
+  resize handles, cancel-safe drafts and restoration of the standard layout.
 - Symmetric, asymmetric and mobile built-in layouts that can be used as editable
   starting points for the virtual gamepad.
 - A large, dedicated mouse touchpad that can be used alongside a physical

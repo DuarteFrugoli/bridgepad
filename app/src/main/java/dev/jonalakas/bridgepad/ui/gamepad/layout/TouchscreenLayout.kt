@@ -3,11 +3,12 @@ package dev.jonalakas.bridgepad.ui.gamepad.layout
 enum class TouchControlId(
     val baseWidthDp: Float,
     val baseHeightDp: Float,
+    val lockAspectRatio: Boolean = false,
 ) {
     MOUSE_TOUCHPAD(210f, 92f),
     DPAD(132f, 132f),
-    LEFT_STICK(132f, 132f),
-    RIGHT_STICK(132f, 132f),
+    LEFT_STICK(132f, 132f, lockAspectRatio = true),
+    RIGHT_STICK(132f, 132f, lockAspectRatio = true),
     LEFT_TRIGGER(76f, 52f),
     LEFT_BUMPER(76f, 52f),
     RIGHT_BUMPER(76f, 52f),
@@ -32,13 +33,26 @@ enum class TouchscreenLayoutPreset {
 data class TouchControlPlacement(
     val centerX: Float,
     val centerY: Float,
-    val scale: Float = 1f,
+    val widthScale: Float = 1f,
+    val heightScale: Float = widthScale,
 ) {
-    fun sanitized(fallback: TouchControlPlacement): TouchControlPlacement = TouchControlPlacement(
-        centerX = centerX.finiteOr(fallback.centerX).coerceIn(0f, 1f),
-        centerY = centerY.finiteOr(fallback.centerY).coerceIn(0f, 1f),
-        scale = scale.finiteOr(fallback.scale).coerceIn(MIN_CONTROL_SCALE, MAX_CONTROL_SCALE),
-    )
+    fun sanitized(
+        control: TouchControlId,
+        fallback: TouchControlPlacement,
+    ): TouchControlPlacement {
+        val safeWidthScale = widthScale.finiteOr(fallback.widthScale).coerceAtLeast(MIN_CONTROL_SCALE)
+        val safeHeightScale = if (control.lockAspectRatio) {
+            safeWidthScale
+        } else {
+            heightScale.finiteOr(fallback.heightScale).coerceAtLeast(MIN_CONTROL_SCALE)
+        }
+        return TouchControlPlacement(
+            centerX = centerX.finiteOr(fallback.centerX).coerceIn(0f, 1f),
+            centerY = centerY.finiteOr(fallback.centerY).coerceIn(0f, 1f),
+            widthScale = safeWidthScale,
+            heightScale = safeHeightScale,
+        )
+    }
 }
 
 data class TouchscreenLayout(
@@ -55,12 +69,28 @@ data class TouchscreenLayout(
             )
         }
 
-    fun resize(control: TouchControlId, scale: Float): TouchscreenLayout =
-        update(control) { it.copy(scale = scale.coerceIn(MIN_CONTROL_SCALE, MAX_CONTROL_SCALE)) }
+    fun resize(
+        control: TouchControlId,
+        widthScale: Float,
+        heightScale: Float = widthScale,
+    ): TouchscreenLayout = update(control) {
+        val safeWidthScale = widthScale.coerceAtLeast(MIN_CONTROL_SCALE)
+        it.copy(
+            widthScale = safeWidthScale,
+            heightScale = if (control.lockAspectRatio) {
+                safeWidthScale
+            } else {
+                heightScale.coerceAtLeast(MIN_CONTROL_SCALE)
+            },
+        )
+    }
 
     fun sanitized(): TouchscreenLayout = TouchscreenLayout(
         TouchControlId.entries.associateWith { control ->
-            placement(control).sanitized(DefaultTouchscreenLayout.value.placements.getValue(control))
+            placement(control).sanitized(
+                control,
+                DefaultTouchscreenLayout.value.placements.getValue(control),
+            )
         },
     )
 
@@ -149,30 +179,36 @@ object DefaultTouchscreenLayout {
 }
 
 internal object TouchscreenLayoutCodec {
-    private const val VERSION = "1"
+    private const val VERSION = "2"
 
     fun encode(layout: TouchscreenLayout): String = buildString {
         appendLine(VERSION)
         layout.sanitized().placements.forEach { (control, placement) ->
-            appendLine("${control.name},${placement.centerX},${placement.centerY},${placement.scale}")
+            appendLine(
+                "${control.name},${placement.centerX},${placement.centerY}," +
+                    "${placement.widthScale},${placement.heightScale}",
+            )
         }
     }
 
     fun decode(value: String?): TouchscreenLayout? {
         if (value.isNullOrBlank()) return null
         val lines = value.lineSequence().toList()
-        if (lines.firstOrNull() != VERSION) return null
+        val version = lines.firstOrNull()
+        if (version != "1" && version != VERSION) return null
         val placements = buildMap {
             lines.drop(1).forEach { line ->
                 val parts = line.split(',')
-                if (parts.size != 4) return@forEach
+                if (parts.size != if (version == "1") 4 else 5) return@forEach
                 runCatching {
+                    val widthScale = parts[3].toFloat()
                     put(
                         TouchControlId.valueOf(parts[0]),
                         TouchControlPlacement(
                             centerX = parts[1].toFloat(),
                             centerY = parts[2].toFloat(),
-                            scale = parts[3].toFloat(),
+                            widthScale = widthScale,
+                            heightScale = if (version == "1") widthScale else parts[4].toFloat(),
                         ),
                     )
                 }
@@ -183,6 +219,5 @@ internal object TouchscreenLayoutCodec {
 }
 
 const val MIN_CONTROL_SCALE = 0.65f
-const val MAX_CONTROL_SCALE = 1.50f
 
 private fun Float.finiteOr(fallback: Float): Float = if (isFinite()) this else fallback

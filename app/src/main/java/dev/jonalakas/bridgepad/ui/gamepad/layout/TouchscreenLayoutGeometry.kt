@@ -22,14 +22,16 @@ internal fun controlOffset(
     )
 }
 
-internal data class CornerResizeDelta(
-    val scaleDelta: Float,
+internal data class ControlResizeDelta(
+    val widthScaleDelta: Float,
+    val heightScaleDelta: Float,
     val centerDeltaX: Float,
     val centerDeltaY: Float,
 )
 
-internal fun cornerResizeDelta(
-    currentScale: Float,
+internal fun controlResizeDelta(
+    currentWidthScale: Float,
+    currentHeightScale: Float,
     horizontalDirection: Int,
     verticalDirection: Int,
     pointerDeltaX: Float,
@@ -38,22 +40,48 @@ internal fun cornerResizeDelta(
     baseControlHeight: Float,
     containerWidth: Float,
     containerHeight: Float,
-): CornerResizeDelta {
+    lockAspectRatio: Boolean,
+): ControlResizeDelta {
     val safeBaseWidth = baseControlWidth.coerceAtLeast(1f)
     val safeBaseHeight = baseControlHeight.coerceAtLeast(1f)
-    val requestedScaleDelta = (
-        pointerDeltaX * horizontalDirection / safeBaseWidth +
-            pointerDeltaY * verticalDirection / safeBaseHeight
-        ) / 2f
-    val targetScale = (currentScale + requestedScaleDelta)
-        .coerceIn(MIN_CONTROL_SCALE, MAX_CONTROL_SCALE)
-    val appliedScaleDelta = targetScale - currentScale
+    val requestedWidthDelta = if (horizontalDirection == 0) {
+        0f
+    } else {
+        pointerDeltaX * horizontalDirection / safeBaseWidth
+    }
+    val requestedHeightDelta = if (verticalDirection == 0) {
+        0f
+    } else {
+        pointerDeltaY * verticalDirection / safeBaseHeight
+    }
+    val (widthScaleDelta, heightScaleDelta) = if (lockAspectRatio) {
+        val activeDeltas = buildList {
+            if (horizontalDirection != 0) add(requestedWidthDelta)
+            if (verticalDirection != 0) add(requestedHeightDelta)
+        }
+        val requestedUniformDelta = if (activeDeltas.isEmpty()) {
+            0f
+        } else {
+            activeDeltas.average().toFloat()
+        }
+        val currentScale = minOf(currentWidthScale, currentHeightScale)
+        val appliedUniformDelta = (currentScale + requestedUniformDelta)
+            .coerceAtLeast(MIN_CONTROL_SCALE) - currentScale
+        appliedUniformDelta to appliedUniformDelta
+    } else {
+        val appliedWidthDelta = (currentWidthScale + requestedWidthDelta)
+            .coerceAtLeast(MIN_CONTROL_SCALE) - currentWidthScale
+        val appliedHeightDelta = (currentHeightScale + requestedHeightDelta)
+            .coerceAtLeast(MIN_CONTROL_SCALE) - currentHeightScale
+        appliedWidthDelta to appliedHeightDelta
+    }
 
-    return CornerResizeDelta(
-        scaleDelta = appliedScaleDelta,
-        centerDeltaX = horizontalDirection * safeBaseWidth * appliedScaleDelta /
+    return ControlResizeDelta(
+        widthScaleDelta = widthScaleDelta,
+        heightScaleDelta = heightScaleDelta,
+        centerDeltaX = horizontalDirection * safeBaseWidth * widthScaleDelta /
             (2f * containerWidth.coerceAtLeast(1f)),
-        centerDeltaY = verticalDirection * safeBaseHeight * appliedScaleDelta /
+        centerDeltaY = verticalDirection * safeBaseHeight * heightScaleDelta /
             (2f * containerHeight.coerceAtLeast(1f)),
     )
 }

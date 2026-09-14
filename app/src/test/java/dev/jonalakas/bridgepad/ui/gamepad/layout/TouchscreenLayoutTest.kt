@@ -46,7 +46,7 @@ class TouchscreenLayoutTest {
     fun layoutCodecRoundTripsPlacements() {
         val expected = DefaultTouchscreenLayout.value
             .move(TouchControlId.LEFT_STICK, 0.05f, -0.04f)
-            .resize(TouchControlId.FACE_SOUTH, 1.25f)
+            .resize(TouchControlId.FACE_SOUTH, widthScale = 1.25f, heightScale = 0.8f)
 
         val decoded = TouchscreenLayoutCodec.decode(TouchscreenLayoutCodec.encode(expected))
 
@@ -60,6 +60,8 @@ class TouchscreenLayoutTest {
         assertNotNull(decoded)
         assertEquals(TouchControlId.entries.size, decoded?.placements?.size)
         assertEquals(0.5f, decoded?.placement(TouchControlId.FACE_SOUTH)?.centerX)
+        assertEquals(1.2f, decoded?.placement(TouchControlId.FACE_SOUTH)?.widthScale)
+        assertEquals(1.2f, decoded?.placement(TouchControlId.FACE_SOUTH)?.heightScale)
         assertEquals(
             DefaultTouchscreenLayout.value.placement(TouchControlId.LEFT_STICK),
             decoded?.placement(TouchControlId.LEFT_STICK),
@@ -72,15 +74,16 @@ class TouchscreenLayoutTest {
     }
 
     @Test
-    fun movementAndSizeStayInsideSupportedRanges() {
+    fun movementIsBoundedButSizeOnlyHasAMinimum() {
         val layout = DefaultTouchscreenLayout.value
             .move(TouchControlId.DPAD, -5f, 8f)
-            .resize(TouchControlId.DPAD, 12f)
+            .resize(TouchControlId.DPAD, widthScale = 12f, heightScale = -4f)
         val placement = layout.placement(TouchControlId.DPAD)
 
         assertEquals(0f, placement.centerX)
         assertEquals(1f, placement.centerY)
-        assertEquals(MAX_CONTROL_SCALE, placement.scale)
+        assertEquals(12f, placement.widthScale)
+        assertEquals(MIN_CONTROL_SCALE, placement.heightScale)
     }
 
     @Test
@@ -99,8 +102,9 @@ class TouchscreenLayoutTest {
 
     @Test
     fun bottomRightResizeGrowsAndMovesCenterTowardDraggedCorner() {
-        val resize = cornerResizeDelta(
-            currentScale = 1f,
+        val resize = controlResizeDelta(
+            currentWidthScale = 1f,
+            currentHeightScale = 1f,
             horizontalDirection = 1,
             verticalDirection = 1,
             pointerDeltaX = 20f,
@@ -109,17 +113,20 @@ class TouchscreenLayoutTest {
             baseControlHeight = 100f,
             containerWidth = 800f,
             containerHeight = 400f,
+            lockAspectRatio = false,
         )
 
-        assertEquals(0.2f, resize.scaleDelta, 0.0001f)
+        assertEquals(0.2f, resize.widthScaleDelta, 0.0001f)
+        assertEquals(0.2f, resize.heightScaleDelta, 0.0001f)
         assertEquals(0.0125f, resize.centerDeltaX, 0.0001f)
         assertEquals(0.025f, resize.centerDeltaY, 0.0001f)
     }
 
     @Test
     fun topLeftResizeStopsAtMinimumScaleWithoutMovingPastIt() {
-        val resize = cornerResizeDelta(
-            currentScale = MIN_CONTROL_SCALE,
+        val resize = controlResizeDelta(
+            currentWidthScale = MIN_CONTROL_SCALE,
+            currentHeightScale = MIN_CONTROL_SCALE,
             horizontalDirection = -1,
             verticalDirection = -1,
             pointerDeltaX = 100f,
@@ -128,11 +135,44 @@ class TouchscreenLayoutTest {
             baseControlHeight = 100f,
             containerWidth = 800f,
             containerHeight = 400f,
+            lockAspectRatio = false,
         )
 
-        assertEquals(0f, resize.scaleDelta, 0f)
+        assertEquals(0f, resize.widthScaleDelta, 0f)
+        assertEquals(0f, resize.heightScaleDelta, 0f)
         assertEquals(0f, resize.centerDeltaX, 0f)
         assertEquals(0f, resize.centerDeltaY, 0f)
+    }
+
+    @Test
+    fun sideHandleOnlyChangesOneDimension() {
+        val resize = controlResizeDelta(
+            currentWidthScale = 1f,
+            currentHeightScale = 1f,
+            horizontalDirection = 1,
+            verticalDirection = 0,
+            pointerDeltaX = 50f,
+            pointerDeltaY = 80f,
+            baseControlWidth = 100f,
+            baseControlHeight = 100f,
+            containerWidth = 800f,
+            containerHeight = 400f,
+            lockAspectRatio = false,
+        )
+
+        assertEquals(0.5f, resize.widthScaleDelta, 0f)
+        assertEquals(0f, resize.heightScaleDelta, 0f)
+        assertEquals(0f, resize.centerDeltaY, 0f)
+    }
+
+    @Test
+    fun analogStickAlwaysKeepsItsAspectRatio() {
+        val placement = DefaultTouchscreenLayout.value
+            .resize(TouchControlId.LEFT_STICK, widthScale = 2f, heightScale = 4f)
+            .placement(TouchControlId.LEFT_STICK)
+
+        assertEquals(2f, placement.widthScale)
+        assertEquals(2f, placement.heightScale)
     }
 
     @Test
@@ -143,6 +183,7 @@ class TouchscreenLayoutTest {
         assertNotNull(placement)
         assertTrue(placement!!.centerX.isFinite())
         assertEquals(1f, placement.centerY)
-        assertEquals(MAX_CONTROL_SCALE, placement.scale)
+        assertEquals(99f, placement.widthScale)
+        assertEquals(99f, placement.heightScale)
     }
 }

@@ -99,8 +99,8 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
     onExit: () -> Unit,
 ) {
     val density = LocalDensity.current
-    val width = (control.baseWidthDp * placement.scale).dp
-    val height = (control.baseHeightDp * placement.scale).dp
+    val width = (control.baseWidthDp * placement.widthScale).dp
+    val height = (control.baseHeightDp * placement.heightScale).dp
     val offset = controlOffset(
         placement = placement,
         containerWidth = containerWidthPixels,

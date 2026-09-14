@@ -52,10 +52,12 @@ appropriate input screen, and **End session** explicitly releases the connection
 
 - **Edit virtual layout**, available from Settings and the selected virtual-input
   options, opens a landscape preview where every virtual control
-  has a visible bounding box and four corner resize handles. Controls can be
-  dragged, proportionally resized from any corner, or sized precisely with the
-  slider. Saving immediately replaces the active
-  layout and persists it across launches; canceling discards the draft. **Reset
+  can be selected and dragged. Only the selected control shows its bounding box:
+  side handles resize width or height independently and corner handles change
+  both dimensions. Analog sticks expose only corner handles and always keep their
+  proportions. Resizing has a minimum but no maximum. Saving immediately
+  replaces the active layout and persists it across launches; canceling discards
+  the draft. **Reset
   to standard** restores the built-in arrangement in the draft, which is only
   persisted when saved. **Symmetric**, **Asymmetric** and **Mobile** are built-in
   starting layouts; choosing one updates only the draft, and every control can

@@ -95,14 +95,15 @@
     <string name="virtual_gamepad_settings">Virtual gamepad</string>
     <string name="virtual_gamepad_settings_description">Customize the position and size of the controls shown while playing.</string>
     <string name="layout_editor_title">Edit layout</string>
-    <string name="layout_editor_instructions">Drag a control to move it. Drag any corner handle to resize it, or use the slider for precise adjustments.</string>
+    <string name="layout_editor_instructions">Tap a control to select it. Drag the side handles to change one dimension or a corner handle to change both.</string>
     <string name="layout_presets">Starting layout</string>
     <string name="layout_preset_symmetric">Symmetric</string>
     <string name="layout_preset_asymmetric">Asymmetric</string>
     <string name="layout_preset_mobile">Mobile</string>
     <string name="layout_preset_hint">Choose a ready-made layout, then customize it if you want. Changes are only applied when saved.</string>
     <string name="layout_selected_control">Selected: %1$s</string>
-    <string name="layout_control_size">Size: %1$d%%</string>
+    <string name="layout_resize_independent_hint">Side handles change width or height independently. Corner handles change both.</string>
+    <string name="layout_resize_proportional_hint">This control keeps its proportions and can be resized from the corner handles.</string>
     <string name="resize_control">Resize %1$s</string>
     <string name="reset_layout">Reset to standard</string>
     <string name="save_layout">Save layout</string>
