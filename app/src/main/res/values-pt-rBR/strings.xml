@@ -109,6 +109,8 @@
     <string name="resize_control">Redimensionar %1$s</string>
     <string name="reset_layout">Restaurar padrão</string>
     <string name="save_layout">Salvar layout</string>
+    <string name="expand_layout_editor_actions">Abrir ações do editor de layout</string>
+    <string name="collapse_layout_editor_actions">Recolher ações do editor de layout</string>
     <string name="mouse_label">Mouse</string>
     <string name="transport_description">Envia os comandos do controle e do mouse deste celular para o PC.</string>
     <string name="future_transports">As saídas por Wi-Fi e USB estão planejadas, mas não estão disponíveis nesta versão.</string>

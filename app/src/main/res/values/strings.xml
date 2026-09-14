@@ -109,6 +109,8 @@
     <string name="resize_control">Resize %1$s</string>
     <string name="reset_layout">Reset to standard</string>
     <string name="save_layout">Save layout</string>
+    <string name="expand_layout_editor_actions">Open layout editor actions</string>
+    <string name="collapse_layout_editor_actions">Collapse layout editor actions</string>
     <string name="mouse_label">Mouse</string>
     <string name="transport_description">Sends gamepad and mouse commands from this phone to your PC.</string>
     <string name="future_transports">Wi-Fi and USB output are planned, but not available in this version.</string>

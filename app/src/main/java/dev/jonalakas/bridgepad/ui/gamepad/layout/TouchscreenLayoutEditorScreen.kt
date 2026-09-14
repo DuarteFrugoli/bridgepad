@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -69,6 +70,7 @@ fun TouchscreenLayoutEditorScreen(
         mutableStateOf(TouchscreenLayoutCodec.encode(initialLayout))
     }
     var selectedName by rememberSaveable { mutableStateOf(TouchControlId.LEFT_STICK.name) }
+    var toolbarExpanded by rememberSaveable { mutableStateOf(false) }
     var optionsVisible by rememberSaveable { mutableStateOf(true) }
     val draft = remember(encodedDraft) {
         TouchscreenLayoutCodec.decode(encodedDraft) ?: DefaultTouchscreenLayout.value
@@ -105,11 +107,11 @@ fun TouchscreenLayoutEditorScreen(
                 canvasHeightPixels = heightPixels,
                 onSelect = { selectedName = control.name },
                 onMove = { deltaX, deltaY ->
-                    optionsVisible = false
+                    toolbarExpanded = false
                     updateDraft { it.move(control, deltaX, deltaY) }
                 },
                 onResize = { widthDelta, heightDelta, centerDeltaX, centerDeltaY ->
-                    optionsVisible = false
+                    toolbarExpanded = false
                     updateDraft { current ->
                         val placement = current.placement(control)
                         current.resize(
@@ -122,18 +124,28 @@ fun TouchscreenLayoutEditorScreen(
             )
         }
 
-        EditorToolbar(
-            selectedControl = controlLabel(selected),
-            optionsVisible = optionsVisible,
-            onToggleOptions = { optionsVisible = !optionsVisible },
-            onCancel = onCancel,
-            onSave = { onSave(draft) },
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .zIndex(EDITOR_OVERLAY_Z_INDEX),
-        )
+        if (toolbarExpanded) {
+            EditorToolbar(
+                selectedControl = controlLabel(selected),
+                optionsVisible = optionsVisible,
+                onCollapse = { toolbarExpanded = false },
+                onToggleOptions = { optionsVisible = !optionsVisible },
+                onCancel = onCancel,
+                onSave = { onSave(draft) },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(EDITOR_OVERLAY_Z_INDEX),
+            )
+        } else {
+            CollapsedEditorToolbar(
+                onExpand = { toolbarExpanded = true },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .zIndex(EDITOR_OVERLAY_Z_INDEX),
+            )
+        }
 
-        if (optionsVisible) {
+        if (toolbarExpanded && optionsVisible) {
             EditorOptionsPanel(
                 draft = draft,
                 selected = selected,
@@ -154,11 +166,13 @@ fun TouchscreenLayoutEditorScreen(
 private fun EditorToolbar(
     selectedControl: String,
     optionsVisible: Boolean,
+    onCollapse: () -> Unit,
     onToggleOptions: () -> Unit,
     onCancel: () -> Unit,
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val collapseDescription = stringResource(R.string.collapse_layout_editor_actions)
     Surface(
         modifier = modifier.widthIn(max = 620.dp),
         shape = RoundedCornerShape(24.dp),
@@ -170,6 +184,14 @@ private fun EditorToolbar(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            TextButton(
+                onClick = onCollapse,
+                modifier = Modifier.semantics {
+                    contentDescription = collapseDescription
+                },
+            ) {
+                Text(EDITOR_MENU_SYMBOL)
+            }
             TextButton(onClick = onCancel) {
                 Text(stringResource(R.string.cancel_action))
             }
@@ -188,6 +210,35 @@ private fun EditorToolbar(
             Button(onClick = onSave) {
                 Text(stringResource(R.string.save_layout))
             }
+        }
+    }
+}
+
+@Composable
+private fun CollapsedEditorToolbar(
+    onExpand: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val description = stringResource(R.string.expand_layout_editor_actions)
+    Surface(
+        onClick = onExpand,
+        modifier = modifier
+            .size(48.dp)
+            .semantics {
+                contentDescription = description
+                role = Role.Button
+            },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                EDITOR_MENU_SYMBOL,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                style = MaterialTheme.typography.titleLarge,
+            )
         }
     }
 }
@@ -440,7 +491,11 @@ private fun ControlPreview(control: TouchControlId, modifier: Modifier = Modifie
                 drawCircle(outline, radius, style = Stroke(width = 2.dp.toPx()))
                 drawCircle(knob, radius * 0.42f)
             }
-            Text(label, style = MaterialTheme.typography.labelSmall)
+            Text(
+                label,
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall,
+            )
         }
         else -> Surface(
             modifier = modifier,
@@ -526,3 +581,4 @@ private enum class ResizeAnchor(
 private const val HANDLE_SIZE_DP = 20f
 private const val HANDLE_RADIUS_DP = HANDLE_SIZE_DP / 2f
 private const val EDITOR_OVERLAY_Z_INDEX = 100f
+private const val EDITOR_MENU_SYMBOL = "⋮"

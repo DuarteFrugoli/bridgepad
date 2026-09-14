@@ -8,6 +8,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The layout editor action panel now collapses into a compact floating button,
+  and analog-stick labels use white text for better contrast.
 - Replaced the Android template launcher artwork with the BridgePad symbol
   without its wordmark, including round, adaptive, themed and notification
   variants.
