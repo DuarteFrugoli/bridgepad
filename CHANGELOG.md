@@ -8,6 +8,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The collapsed and expanded layout editor toolbar can now be moved throughout
+  the canvas. Showing layout options locks it to the top while the options panel
+  remains horizontally movable.
 - The Android launch screen now uses the dark BridgePad background and brand
   symbol instead of the default white theme splash.
 - The layout editor action panel now collapses into a compact floating button,

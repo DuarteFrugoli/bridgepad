@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -37,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -49,12 +52,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.jonalakas.bridgepad.R
@@ -72,6 +78,12 @@ fun TouchscreenLayoutEditorScreen(
     var selectedName by rememberSaveable { mutableStateOf(TouchControlId.LEFT_STICK.name) }
     var toolbarExpanded by rememberSaveable { mutableStateOf(false) }
     var optionsVisible by rememberSaveable { mutableStateOf(true) }
+    var toolbarCenterX by rememberSaveable { mutableFloatStateOf(0.5f) }
+    var toolbarCenterY by rememberSaveable { mutableFloatStateOf(0f) }
+    var optionsCenterX by rememberSaveable { mutableFloatStateOf(1f) }
+    var collapsedToolbarSize by remember { mutableStateOf(IntSize.Zero) }
+    var expandedToolbarSize by remember { mutableStateOf(IntSize.Zero) }
+    var optionsPanelSize by remember { mutableStateOf(IntSize.Zero) }
     val draft = remember(encodedDraft) {
         TouchscreenLayoutCodec.decode(encodedDraft) ?: DefaultTouchscreenLayout.value
     }
@@ -97,6 +109,48 @@ fun TouchscreenLayoutEditorScreen(
     ) {
         val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val heightPixels = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+        val toolbarLocked = toolbarExpanded && optionsVisible
+        val currentToolbarSize = if (toolbarExpanded) expandedToolbarSize else collapsedToolbarSize
+        val movableToolbarModifier = Modifier
+            .align(Alignment.TopStart)
+            .offset {
+                floatingOverlayOffset(
+                    centerX = toolbarCenterX,
+                    centerY = toolbarCenterY,
+                    containerWidth = widthPixels,
+                    containerHeight = heightPixels,
+                    overlayWidth = currentToolbarSize.width.toFloat(),
+                    overlayHeight = currentToolbarSize.height.toFloat(),
+                )
+            }
+            .pointerInput(widthPixels, heightPixels, currentToolbarSize) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    toolbarCenterX = moveFloatingOverlayCenter(
+                        currentCenter = toolbarCenterX,
+                        delta = dragAmount.x,
+                        containerSize = widthPixels,
+                        overlaySize = currentToolbarSize.width.toFloat(),
+                    )
+                    toolbarCenterY = moveFloatingOverlayCenter(
+                        currentCenter = toolbarCenterY,
+                        delta = dragAmount.y,
+                        containerSize = heightPixels,
+                        overlaySize = currentToolbarSize.height.toFloat(),
+                    )
+                }
+            }
+        val toolbarModifier = if (toolbarLocked) {
+            Modifier.align(Alignment.TopCenter)
+        } else {
+            movableToolbarModifier
+        }.onSizeChanged { size ->
+            if (toolbarExpanded) {
+                expandedToolbarSize = size
+            } else {
+                collapsedToolbarSize = size
+            }
+        }.zIndex(EDITOR_OVERLAY_Z_INDEX)
         LayoutGrid(Modifier.fillMaxSize())
         TouchControlId.entries.forEach { control ->
             EditableControl(
@@ -132,16 +186,12 @@ fun TouchscreenLayoutEditorScreen(
                 onToggleOptions = { optionsVisible = !optionsVisible },
                 onCancel = onCancel,
                 onSave = { onSave(draft) },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .zIndex(EDITOR_OVERLAY_Z_INDEX),
+                modifier = toolbarModifier,
             )
         } else {
             CollapsedEditorToolbar(
                 onExpand = { toolbarExpanded = true },
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .zIndex(EDITOR_OVERLAY_Z_INDEX),
+                modifier = toolbarModifier,
             )
         }
 
@@ -151,11 +201,29 @@ fun TouchscreenLayoutEditorScreen(
                 selected = selected,
                 onSelectPreset = ::replaceDraft,
                 onReset = { replaceDraft(DefaultTouchscreenLayout.value) },
+                onHorizontalDrag = { delta ->
+                    optionsCenterX = moveFloatingOverlayCenter(
+                        currentCenter = optionsCenterX,
+                        delta = delta,
+                        containerSize = widthPixels,
+                        overlaySize = optionsPanelSize.width.toFloat(),
+                    )
+                },
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 60.dp)
+                    .align(Alignment.TopStart)
+                    .offset {
+                        IntOffset(
+                            x = floatingOverlayAxisOffset(
+                                center = optionsCenterX,
+                                containerSize = widthPixels,
+                                overlaySize = optionsPanelSize.width.toFloat(),
+                            ),
+                            y = 60.dp.roundToPx(),
+                        )
+                    }
                     .widthIn(max = 300.dp)
                     .heightIn(max = (maxHeight - 68.dp).coerceAtLeast(120.dp))
+                    .onSizeChanged { optionsPanelSize = it }
                     .zIndex(EDITOR_OVERLAY_Z_INDEX),
             )
         }
@@ -249,8 +317,11 @@ private fun EditorOptionsPanel(
     selected: TouchControlId,
     onSelectPreset: (TouchscreenLayout) -> Unit,
     onReset: () -> Unit,
+    onHorizontalDrag: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val currentOnHorizontalDrag by rememberUpdatedState(onHorizontalDrag)
+    val moveDescription = stringResource(R.string.move_layout_options)
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
@@ -263,7 +334,22 @@ private fun EditorOptionsPanel(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(stringResource(R.string.layout_editor_title), style = MaterialTheme.typography.titleLarge)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = moveDescription }
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures { change, dragAmount ->
+                            change.consume()
+                            currentOnHorizontalDrag(dragAmount)
+                        }
+                    },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.layout_editor_title), style = MaterialTheme.typography.titleLarge)
+                Text(OPTIONS_DRAG_SYMBOL, style = MaterialTheme.typography.titleLarge)
+            }
             Text(stringResource(R.string.layout_editor_instructions), style = MaterialTheme.typography.bodySmall)
             HorizontalDivider()
             Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
@@ -582,3 +668,4 @@ private const val HANDLE_SIZE_DP = 20f
 private const val HANDLE_RADIUS_DP = HANDLE_SIZE_DP / 2f
 private const val EDITOR_OVERLAY_Z_INDEX = 100f
 private const val EDITOR_MENU_SYMBOL = "⋮"
+private const val OPTIONS_DRAG_SYMBOL = "↔"

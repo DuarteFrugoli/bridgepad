@@ -101,6 +101,33 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun floatingOverlayOffsetKeepsTheEntireOverlayInsideTheCanvas() {
+        val offset = floatingOverlayOffset(
+            centerX = 1f,
+            centerY = 1f,
+            containerWidth = 800f,
+            containerHeight = 360f,
+            overlayWidth = 300f,
+            overlayHeight = 60f,
+        )
+
+        assertEquals(500, offset.x)
+        assertEquals(300, offset.y)
+    }
+
+    @Test
+    fun floatingOverlayStartsMovingImmediatelyFromAClampedEdge() {
+        val center = moveFloatingOverlayCenter(
+            currentCenter = 0f,
+            delta = 20f,
+            containerSize = 800f,
+            overlaySize = 300f,
+        )
+
+        assertEquals(170f / 800f, center, 0.0001f)
+    }
+
+    @Test
     fun bottomRightResizeGrowsAndMovesCenterTowardDraggedCorner() {
         val resize = controlResizeDelta(
             currentWidthScale = 1f,

@@ -22,6 +22,47 @@ internal fun controlOffset(
     )
 }
 
+internal fun floatingOverlayOffset(
+    centerX: Float,
+    centerY: Float,
+    containerWidth: Float,
+    containerHeight: Float,
+    overlayWidth: Float,
+    overlayHeight: Float,
+): IntOffset {
+    return IntOffset(
+        x = floatingOverlayAxisOffset(centerX, containerWidth, overlayWidth),
+        y = floatingOverlayAxisOffset(centerY, containerHeight, overlayHeight),
+    )
+}
+
+internal fun floatingOverlayAxisOffset(
+    center: Float,
+    containerSize: Float,
+    overlaySize: Float,
+): Int {
+    val maximum = (containerSize - overlaySize).coerceAtLeast(0f)
+    return (center * containerSize - overlaySize / 2f)
+        .coerceIn(0f, maximum)
+        .roundToInt()
+}
+
+internal fun moveFloatingOverlayCenter(
+    currentCenter: Float,
+    delta: Float,
+    containerSize: Float,
+    overlaySize: Float,
+): Float {
+    val safeContainerSize = containerSize.coerceAtLeast(1f)
+    val boundedOverlaySize = overlaySize.coerceIn(0f, safeContainerSize)
+    val minimumCenter = boundedOverlaySize / 2f
+    val maximumCenter = safeContainerSize - minimumCenter
+    val currentCenterPixels = (currentCenter * safeContainerSize)
+        .coerceIn(minimumCenter, maximumCenter)
+    return ((currentCenterPixels + delta).coerceIn(minimumCenter, maximumCenter) / safeContainerSize)
+        .coerceIn(0f, 1f)
+}
+
 internal data class ControlResizeDelta(
     val widthScaleDelta: Float,
     val heightScaleDelta: Float,
