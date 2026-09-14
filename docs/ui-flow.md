@@ -70,8 +70,11 @@ appropriate input screen, and **End session** explicitly releases the connection
   logical layout apply to Compatibility and Background USB.
 - Only Background USB supports physical controller input with BridgePad hidden
   or the screen off. USB here is controller-to-phone input; output stays Bluetooth.
-- **Settings** contains language guidance, connection metrics, physical-input
-  diagnostics, app/device details and diagnostic report actions.
+- **Settings** opens as a dedicated scrollable screen rather than a Home overlay.
+  It contains virtual-controller customization, language guidance, connection
+  metrics, physical-input diagnostics, app/device details and diagnostic report
+  actions. Android Back and the visible Back action return to Home. Opening the
+  layout editor from Settings returns to Settings after either Save or Cancel.
 
 ## Languages
 

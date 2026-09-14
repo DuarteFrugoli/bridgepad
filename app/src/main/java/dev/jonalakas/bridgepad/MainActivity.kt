@@ -71,6 +71,7 @@ import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
 import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
+import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 class MainActivity : ComponentActivity() {
@@ -92,6 +93,8 @@ class MainActivity : ComponentActivity() {
                 var showMouseTouchpad by rememberSaveable { mutableStateOf(false) }
                 var showGamepadMapping by rememberSaveable { mutableStateOf(false) }
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
+                var showSettings by rememberSaveable { mutableStateOf(false) }
+                var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
@@ -383,11 +386,69 @@ class MainActivity : ComponentActivity() {
                             TouchscreenLayoutStore.save(layout)
                             showTouchscreenLayoutEditor = false
                             exitGamepadMode()
+                            if (returnToSettingsAfterLayoutEditor) showSettings = true
+                            returnToSettingsAfterLayoutEditor = false
                         },
                         onCancel = {
                             showTouchscreenLayoutEditor = false
                             exitGamepadMode()
+                            if (returnToSettingsAfterLayoutEditor) showSettings = true
+                            returnToSettingsAfterLayoutEditor = false
                         },
+                    )
+                } else if (showSettings) {
+                    SettingsScreen(
+                        appVersion = BuildConfig.VERSION_NAME,
+                        deviceInfo = deviceInfo,
+                        hidState = hidState,
+                        physicalGamepadState = physicalGamepadState,
+                        onEditTouchscreenLayout = {
+                            returnToSettingsAfterLayoutEditor = true
+                            showSettings = false
+                            showTouchscreenLayoutEditor = true
+                        },
+                        onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
+                            runCatching {
+                                startActivity(
+                                    Intent(
+                                        Settings.ACTION_APP_LOCALE_SETTINGS,
+                                        Uri.parse("package:$packageName"),
+                                    ),
+                                )
+                            }.onFailure {
+                                Toast.makeText(this, R.string.language_description, Toast.LENGTH_LONG).show()
+                            }
+                        }) else null,
+                        onCopyDiagnostics = {
+                            val report = DiagnosticReport.create(
+                                BuildConfig.VERSION_NAME,
+                                deviceInfo,
+                                hidState,
+                                physicalGamepadState,
+                            )
+                            getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("BridgePad diagnostics", report))
+                            Toast.makeText(this, R.string.diagnostics_copied, Toast.LENGTH_SHORT).show()
+                        },
+                        onShareDiagnostics = {
+                            val report = DiagnosticReport.create(
+                                BuildConfig.VERSION_NAME,
+                                deviceInfo,
+                                hidState,
+                                physicalGamepadState,
+                            )
+                            startActivity(
+                                Intent.createChooser(
+                                    Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_SUBJECT, "BridgePad diagnostic report")
+                                        putExtra(Intent.EXTRA_TEXT, report)
+                                    },
+                                    getString(R.string.share_diagnostics),
+                                ),
+                            )
+                        },
+                        onBack = { showSettings = false },
                     )
                 } else if (showGamepadMapping && mappingInput != null) {
                     GamepadMappingScreen(
@@ -423,8 +484,6 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                 } else HomeScreen(
-                    appVersion = BuildConfig.VERSION_NAME,
-                    deviceInfo = deviceInfo,
                     bluetoothPermissionGranted = bluetoothPermissionGranted,
                     bluetoothEnabled = bluetoothEnabled,
                     hidCompatible = isBluetoothHidPotentiallyAvailable(),
@@ -521,7 +580,10 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onConfigureGamepadMapping = { if (mappingInput != null) showGamepadMapping = true },
-                    onEditTouchscreenLayout = { showTouchscreenLayoutEditor = true },
+                    onEditTouchscreenLayout = {
+                        returnToSettingsAfterLayoutEditor = false
+                        showTouchscreenLayoutEditor = true
+                    },
                     onOpenTouchController = {
                         showTouchController = true
                     },
@@ -541,42 +603,7 @@ class MainActivity : ComponentActivity() {
                         openAfterConnection = false
                         if (hidState.sessionActive) sessionCoordinator.stop()
                     },
-                    onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
-                        runCatching {
-                            startActivity(Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.parse("package:$packageName")))
-                        }.onFailure {
-                            Toast.makeText(this, R.string.language_description, Toast.LENGTH_LONG).show()
-                        }
-                    }) else null,
-                    onCopyDiagnostics = {
-                        val report = DiagnosticReport.create(
-                            BuildConfig.VERSION_NAME,
-                            deviceInfo,
-                            hidState,
-                            physicalGamepadState,
-                        )
-                        getSystemService(ClipboardManager::class.java)
-                            .setPrimaryClip(ClipData.newPlainText("BridgePad diagnostics", report))
-                        Toast.makeText(this, R.string.diagnostics_copied, Toast.LENGTH_SHORT).show()
-                    },
-                    onShareDiagnostics = {
-                        val report = DiagnosticReport.create(
-                            BuildConfig.VERSION_NAME,
-                            deviceInfo,
-                            hidState,
-                            physicalGamepadState,
-                        )
-                        startActivity(
-                            Intent.createChooser(
-                                Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_SUBJECT, "BridgePad diagnostic report")
-                                    putExtra(Intent.EXTRA_TEXT, report)
-                                },
-                                getString(R.string.share_diagnostics),
-                            ),
-                        )
-                    },
+                    onOpenSettings = { showSettings = true },
                 )
             }
         }

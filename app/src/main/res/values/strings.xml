@@ -119,7 +119,7 @@
     <string name="waiting_for_pairing">Waiting for the PC…</string>
     <string name="preparing_connection">Preparing connection…</string>
     <string name="connect_and_play">Connect and play</string>
-    <string name="close_action">Close</string>
+    <string name="back_action">Back</string>
     <string name="language_title">Language</string>
     <string name="language_description">BridgePad follows your Android language: English or Brazilian Portuguese. On Android 13 or later you can choose a language just for this app.</string>
     <string name="change_language">Change app language</string>

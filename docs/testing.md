@@ -126,8 +126,10 @@ checklist. These checks are pending hardware validation for the UI redesign.
   preparing state or unrequested connection should remain.
 - Use a large system font and a small screen in both languages. All actions
   should remain reachable by scrolling; translated labels must not be clipped.
-- Check **Settings** for metrics/device details, copy/share diagnostics and
-  confirm unavailable Wi-Fi and USB outputs cannot be selected.
+- Open **Settings** and confirm it replaces Home with a dedicated scrollable
+  screen. Check metrics/device details and copy/share diagnostics. Open the layout
+  editor from Settings and confirm both Save and Cancel return to Settings; Back
+  must return to Home. Confirm unavailable Wi-Fi and USB outputs cannot be selected.
 - Hold buttons while moving both sticks continuously for at least 30 seconds in
   virtual, Compatibility and Background USB modes. Confirm there are no missing
   press/release transitions or periodic pauses. In **Settings**, verify metrics

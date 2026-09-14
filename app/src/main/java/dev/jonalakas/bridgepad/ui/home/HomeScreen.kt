@@ -2,16 +2,12 @@ package dev.jonalakas.bridgepad.ui.home
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
-import dev.jonalakas.bridgepad.diagnostics.DeviceInfo
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.usb.DirectUsbState
 import dev.jonalakas.bridgepad.core.session.InputMode
@@ -28,13 +24,10 @@ import dev.jonalakas.bridgepad.ui.components.NoticeCard
 import dev.jonalakas.bridgepad.ui.components.NoticeTone
 import dev.jonalakas.bridgepad.session.SessionSetup
 import dev.jonalakas.bridgepad.session.reconcileBluetoothAvailability
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    appVersion: String,
-    deviceInfo: DeviceInfo,
     bluetoothPermissionGranted: Boolean,
     bluetoothEnabled: Boolean,
     hidCompatible: Boolean,
@@ -64,12 +57,9 @@ fun HomeScreen(
     onOpenTouchController: () -> Unit,
     onOpenMouseTouchpad: () -> Unit,
     onStopHid: () -> Unit,
-    onCopyDiagnostics: () -> Unit,
-    onShareDiagnostics: () -> Unit,
-    onLanguageSettings: (() -> Unit)?,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var panel by rememberSaveable { mutableStateOf<String?>(null) }
     val connected = hidState.status == HidSessionStatus.CONNECTED
     val visibleHidState = hidState.reconcileBluetoothAvailability(
         enabled = bluetoothEnabled && bluetoothPermissionGranted,
@@ -95,7 +85,11 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.app_name)) },
-                actions = { TextButton(onClick = { panel = "settings" }) { Text(stringResource(R.string.settings)) } },
+                actions = {
+                    TextButton(onClick = onOpenSettings) {
+                        Text(stringResource(R.string.settings))
+                    }
+                },
             )
         },
     ) { padding ->
@@ -257,58 +251,6 @@ fun HomeScreen(
             }
         }
     }
-    if (panel != null) {
-        AlertDialog(
-            onDismissRequest = { panel = null },
-            title = { Text(stringResource(R.string.settings)) },
-            confirmButton = { TextButton(onClick = { panel = null }) { Text(stringResource(R.string.close_action)) } },
-            text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(stringResource(R.string.virtual_gamepad_settings), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.virtual_gamepad_settings_description))
-                    OutlinedButton(
-                        onClick = {
-                            panel = null
-                            onEditTouchscreenLayout()
-                        },
-                        enabled = !busy,
-                    ) { Text(stringResource(R.string.edit_controller_layout)) }
-                    HorizontalDivider()
-                    Text(stringResource(R.string.language_title), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.language_description))
-                    if (onLanguageSettings != null) TextButton(onClick = onLanguageSettings) { Text(stringResource(R.string.change_language)) }
-                    HorizontalDivider()
-                    Text(stringResource(R.string.diagnostics), style = MaterialTheme.typography.titleMedium)
-                    Text(stringResource(R.string.diagnostic_status, stringResource(hidState.status.labelResource())))
-                    Text(stringResource(R.string.diagnostic_version, appVersion, deviceInfo.displayModel, deviceInfo.androidVersion))
-                    Text(stringResource(R.string.diagnostic_api, deviceInfo.sdkLevel))
-                    Text(
-                        stringResource(
-                            R.string.diagnostic_metrics,
-                            formatMetric(hidState.inputRateHz),
-                            formatMetric(hidState.outputRateHz),
-                            hidState.lastLatencyMs?.let(::formatMetric) ?: "—",
-                            formatMetric(hidState.maxOutputDelayMs),
-                        ),
-                    )
-                    if (physicalGamepadState.devices.isNotEmpty()) {
-                        HorizontalDivider()
-                        Text(stringResource(R.string.physical_gamepad_diagnostic), style = MaterialTheme.typography.titleMedium)
-                        physicalGamepadState.devices.forEach { device ->
-                            Text(device.name, style = MaterialTheme.typography.titleSmall)
-                            Text(stringResource(R.string.diagnostic_controller_ids, device.vendorId, device.productId))
-                            Text(stringResource(R.string.diagnostic_axes, device.axes.joinToString()))
-                            Text(physicalGamepadState.sourceStates[device.sourceId]?.toString().orEmpty(), style = MaterialTheme.typography.bodySmall)
-                        }
-                        Text(physicalGamepadState.lastRawEvent, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Text(stringResource(R.string.diagnostics_technical_note), style = MaterialTheme.typography.bodySmall)
-                    OutlinedButton(onClick = onCopyDiagnostics) { Text(stringResource(R.string.copy_diagnostics)) }
-                    OutlinedButton(onClick = onShareDiagnostics) { Text(stringResource(R.string.share_diagnostics)) }
-                }
-            },
-        )
-    }
 }
 
 @Composable
@@ -325,14 +267,3 @@ private fun SetupCard(title: Int, content: @Composable ColumnScope.() -> Unit) {
 private fun Choice(selected: Boolean, label: Int, enabled: Boolean, onClick: () -> Unit) {
     FilterChip(selected = selected, onClick = onClick, enabled = enabled, label = { Text(stringResource(label)) }, modifier = Modifier.fillMaxWidth())
 }
-
-fun HidSessionStatus.labelResource(): Int = when (this) {
-    HidSessionStatus.IDLE -> R.string.state_idle
-    HidSessionStatus.STARTING, HidSessionStatus.REGISTERING, HidSessionStatus.STOPPING -> R.string.preparing_connection
-    HidSessionStatus.READY -> R.string.state_ready
-    HidSessionStatus.CONNECTING -> R.string.state_connecting
-    HidSessionStatus.CONNECTED -> R.string.state_connected
-    HidSessionStatus.ERROR -> R.string.state_error
-}
-
-private fun formatMetric(value: Float): String = String.format(Locale.getDefault(), "%.1f", value)

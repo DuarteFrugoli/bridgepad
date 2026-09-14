@@ -91,6 +91,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A dedicated, scrollable Settings screen for virtual-controller customization,
+  language controls, session diagnostics and diagnostic report actions.
 - A persistent virtual-gamepad layout editor with normalized drag positioning,
   independent width and height resizing, proportional stick scaling, selected-only
   resize handles, cancel-safe drafts and restoration of the standard layout.
