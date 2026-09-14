@@ -8,6 +8,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Replaced the Android template launcher artwork with the BridgePad brand icon,
+  including round, adaptive, themed and notification variants.
 - Expanded the physical-controller mouse touchpad to the full usable screen and
   replaced its permanent menu button with Android Back navigation plus a
   plain localized text hint in the corner. Removed the redundant status banner.

@@ -820,7 +820,7 @@ class BluetoothHidService : Service() {
             else -> getString(R.string.notification_physical_gamepad_active)
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_launcher_foreground)
+        .setSmallIcon(R.drawable.ic_notification)
         .setContentTitle(getString(R.string.app_name))
         .setContentText(message)
         .setStyle(NotificationCompat.BigTextStyle().bigText(message))
