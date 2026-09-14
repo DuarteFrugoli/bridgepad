@@ -14,14 +14,14 @@ import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -69,6 +69,7 @@ fun TouchscreenLayoutEditorScreen(
         mutableStateOf(TouchscreenLayoutCodec.encode(initialLayout))
     }
     var selectedName by rememberSaveable { mutableStateOf(TouchControlId.LEFT_STICK.name) }
+    var optionsVisible by rememberSaveable { mutableStateOf(true) }
     val draft = remember(encodedDraft) {
         TouchscreenLayoutCodec.decode(encodedDraft) ?: DefaultTouchscreenLayout.value
     }
@@ -85,62 +86,129 @@ fun TouchscreenLayoutEditorScreen(
 
     BackHandler(onBack = onCancel)
 
-    Row(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(18.dp)),
-        ) {
-            val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
-            val heightPixels = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-            val density = LocalDensity.current
-            val previewScale = with(density) {
-                minOf(
-                    1f,
-                    constraints.maxWidth.toDp().value / REFERENCE_WIDTH_DP,
-                    constraints.maxHeight.toDp().value / REFERENCE_HEIGHT_DP,
-                )
-            }
-            LayoutGrid(Modifier.fillMaxSize())
-            TouchControlId.entries.forEach { control ->
-                EditableControl(
-                    control = control,
-                    placement = draft.placement(control),
-                    selected = selected == control,
-                    canvasWidthPixels = widthPixels,
-                    canvasHeightPixels = heightPixels,
-                    previewScale = previewScale,
-                    onSelect = { selectedName = control.name },
-                    onMove = { deltaX, deltaY ->
-                        updateDraft { it.move(control, deltaX, deltaY) }
-                    },
-                    onResize = { widthDelta, heightDelta, centerDeltaX, centerDeltaY ->
-                        updateDraft { current ->
-                            val placement = current.placement(control)
-                            current.resize(
-                                control = control,
-                                widthScale = placement.widthScale + widthDelta,
-                                heightScale = placement.heightScale + heightDelta,
-                            ).move(control, centerDeltaX, centerDeltaY)
-                        }
-                    },
-                )
-            }
+        val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
+        val heightPixels = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+        LayoutGrid(Modifier.fillMaxSize())
+        TouchControlId.entries.forEach { control ->
+            EditableControl(
+                control = control,
+                placement = draft.placement(control),
+                selected = selected == control,
+                canvasWidthPixels = widthPixels,
+                canvasHeightPixels = heightPixels,
+                onSelect = { selectedName = control.name },
+                onMove = { deltaX, deltaY ->
+                    optionsVisible = false
+                    updateDraft { it.move(control, deltaX, deltaY) }
+                },
+                onResize = { widthDelta, heightDelta, centerDeltaX, centerDeltaY ->
+                    optionsVisible = false
+                    updateDraft { current ->
+                        val placement = current.placement(control)
+                        current.resize(
+                            control = control,
+                            widthScale = placement.widthScale + widthDelta,
+                            heightScale = placement.heightScale + heightDelta,
+                        ).move(control, centerDeltaX, centerDeltaY)
+                    }
+                },
+            )
         }
 
+        EditorToolbar(
+            selectedControl = controlLabel(selected),
+            optionsVisible = optionsVisible,
+            onToggleOptions = { optionsVisible = !optionsVisible },
+            onCancel = onCancel,
+            onSave = { onSave(draft) },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(EDITOR_OVERLAY_Z_INDEX),
+        )
+
+        if (optionsVisible) {
+            EditorOptionsPanel(
+                draft = draft,
+                selected = selected,
+                onSelectPreset = ::replaceDraft,
+                onReset = { replaceDraft(DefaultTouchscreenLayout.value) },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 60.dp)
+                    .widthIn(max = 300.dp)
+                    .heightIn(max = (maxHeight - 68.dp).coerceAtLeast(120.dp))
+                    .zIndex(EDITOR_OVERLAY_Z_INDEX),
+            )
+        }
+    }
+}
+
+@Composable
+private fun EditorToolbar(
+    selectedControl: String,
+    optionsVisible: Boolean,
+    onToggleOptions: () -> Unit,
+    onCancel: () -> Unit,
+    onSave: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.widthIn(max = 620.dp),
+        shape = RoundedCornerShape(24.dp),
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onCancel) {
+                Text(stringResource(R.string.cancel_action))
+            }
+            Text(
+                selectedControl,
+                modifier = Modifier.padding(horizontal = 8.dp),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            TextButton(onClick = onToggleOptions) {
+                Text(
+                    stringResource(
+                        if (optionsVisible) R.string.hide_layout_options else R.string.show_layout_options,
+                    ),
+                )
+            }
+            Button(onClick = onSave) {
+                Text(stringResource(R.string.save_layout))
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorOptionsPanel(
+    draft: TouchscreenLayout,
+    selected: TouchControlId,
+    onSelectPreset: (TouchscreenLayout) -> Unit,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+    ) {
         Column(
             modifier = Modifier
-                .width(220.dp)
-                .fillMaxHeight()
+                .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -152,7 +220,7 @@ fun TouchscreenLayoutEditorScreen(
                 val presetLayout = BuiltInTouchscreenLayouts.layout(preset)
                 FilterChip(
                     selected = draft == presetLayout,
-                    onClick = { replaceDraft(presetLayout) },
+                    onClick = { onSelectPreset(presetLayout) },
                     label = { Text(presetLabel(preset)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -174,14 +242,10 @@ fun TouchscreenLayoutEditorScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             OutlinedButton(
-                onClick = { replaceDraft(DefaultTouchscreenLayout.value) },
+                onClick = onReset,
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(stringResource(R.string.reset_layout)) }
-            TextButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.cancel_action))
-            }
-            Button(onClick = { onSave(draft) }, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.save_layout))
+            ) {
+                Text(stringResource(R.string.reset_layout))
             }
         }
     }
@@ -194,14 +258,13 @@ private fun BoxWithConstraintsScope.EditableControl(
     selected: Boolean,
     canvasWidthPixels: Float,
     canvasHeightPixels: Float,
-    previewScale: Float,
     onSelect: () -> Unit,
     onMove: (Float, Float) -> Unit,
     onResize: (Float, Float, Float, Float) -> Unit,
 ) {
     val density = LocalDensity.current
-    val width = (control.baseWidthDp * placement.widthScale * previewScale).dp
-    val height = (control.baseHeightDp * placement.heightScale * previewScale).dp
+    val width = (control.baseWidthDp * placement.widthScale).dp
+    val height = (control.baseHeightDp * placement.heightScale).dp
     val widthPixels = with(density) { width.toPx() }
     val heightPixels = with(density) { height.toPx() }
     val currentOnSelect by rememberUpdatedState(onSelect)
@@ -262,10 +325,10 @@ private fun BoxWithConstraintsScope.EditableControl(
                         currentWidthScale = placement.widthScale,
                         currentHeightScale = placement.heightScale,
                         baseControlWidthPixels = with(density) {
-                            (control.baseWidthDp * previewScale).dp.toPx()
+                            control.baseWidthDp.dp.toPx()
                         },
                         baseControlHeightPixels = with(density) {
-                            (control.baseHeightDp * previewScale).dp.toPx()
+                            control.baseHeightDp.dp.toPx()
                         },
                         canvasWidthPixels = canvasWidthPixels,
                         canvasHeightPixels = canvasHeightPixels,
@@ -460,7 +523,6 @@ private enum class ResizeAnchor(
     BOTTOM_RIGHT(1, 1, Alignment.BottomEnd, true),
 }
 
-private const val REFERENCE_WIDTH_DP = 780f
-private const val REFERENCE_HEIGHT_DP = 360f
 private const val HANDLE_SIZE_DP = 20f
 private const val HANDLE_RADIUS_DP = HANDLE_SIZE_DP / 2f
+private const val EDITOR_OVERLAY_Z_INDEX = 100f

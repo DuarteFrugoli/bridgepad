@@ -51,8 +51,13 @@ appropriate input screen, and **End session** explicitly releases the connection
 ## Contextual options
 
 - **Edit virtual layout**, available from Settings and the selected virtual-input
-  options, opens a landscape preview where every virtual control
-  can be selected and dragged. Only the selected control shows its bounding box:
+  options, opens a landscape canvas with the exact same safe area, margins and
+  control sizes used during gameplay. Editor actions float above this canvas and
+  never reduce or rescale it. A persistent compact bar provides Cancel, Save and
+  an options toggle; the scrollable options panel contains instructions, presets
+  and Reset to standard, and collapses automatically when a control is moved or
+  resized. Every virtual control can be selected and dragged. Only the selected
+  control shows its bounding box:
   side handles resize width or height independently and corner handles change
   both dimensions. Analog sticks expose only corner handles and always keep their
   proportions. Resizing has a minimum but no maximum. Saving immediately

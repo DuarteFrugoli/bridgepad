@@ -102,7 +102,10 @@ checklist. These checks are pending hardware validation for the UI redesign.
   Confirm the PC remains connected, inactive controls are released, and both
   mouse touchpads still move/click correctly.
 - Select virtual input and open **Edit virtual layout**. Move every control,
-  confirm only the selected item shows resize handles, and resize representative
+  confirm the canvas uses the same full usable area and component sizes as the
+  gameplay screen, and confirm the floating options never shift the controls.
+  Collapse and reopen the panel, then verify it closes automatically when editing.
+  Confirm only the selected item shows resize handles, and resize representative
   buttons, the D-pad and mouse surface horizontally, vertically and from corners.
   Confirm analog sticks only resize proportionally from corners, then save.
   Confirm the gameplay screen applies the layout, every control remains usable,

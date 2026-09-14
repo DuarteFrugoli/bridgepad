@@ -95,6 +95,8 @@
     <string name="virtual_gamepad_settings">Controle virtual</string>
     <string name="virtual_gamepad_settings_description">Personalize a posição e o tamanho dos controles mostrados durante o jogo.</string>
     <string name="layout_editor_title">Editar layout</string>
+    <string name="show_layout_options">Opções</string>
+    <string name="hide_layout_options">Ocultar opções</string>
     <string name="layout_editor_instructions">Toque em um controle para selecioná-lo. Arraste as alças laterais para mudar uma dimensão ou uma alça de canto para mudar ambas.</string>
     <string name="layout_presets">Layout inicial</string>
     <string name="layout_preset_symmetric">Simétrico</string>
