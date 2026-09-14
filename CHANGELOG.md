@@ -8,8 +8,10 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- The mouse touchpad preview now uses the same contrasting surface, outline and
-  rounded shape as the runtime touchpad instead of blending into the editor.
+- Layout options can now be dragged horizontally from anywhere in the panel,
+  while the arrow remains as a visual hint.
+- The mouse touchpad preview now uses the same elevated blue surface as the
+  other editor controls, retaining its visible outline and runtime shape.
 - Layout options now move to the opposite side when a dragged control enters
   their side of the editor, and runtime buttons share the editor's shapes so
   the A, B, X and Y controls remain circular during gameplay.

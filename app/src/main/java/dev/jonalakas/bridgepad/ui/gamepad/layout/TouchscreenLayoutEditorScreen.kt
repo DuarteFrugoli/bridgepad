@@ -322,7 +322,14 @@ private fun EditorOptionsPanel(
     val currentOnHorizontalDrag by rememberUpdatedState(onHorizontalDrag)
     val moveDescription = stringResource(R.string.move_layout_options)
     Surface(
-        modifier = modifier,
+        modifier = modifier
+            .semantics { contentDescription = moveDescription }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    change.consume()
+                    currentOnHorizontalDrag(dragAmount)
+                }
+            },
         shape = RoundedCornerShape(20.dp),
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
@@ -334,15 +341,7 @@ private fun EditorOptionsPanel(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = moveDescription }
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures { change, dragAmount ->
-                            change.consume()
-                            currentOnHorizontalDrag(dragAmount)
-                        }
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -570,8 +569,9 @@ private fun ControlPreview(control: TouchControlId, modifier: Modifier = Modifie
         TouchControlId.MOUSE_TOUCHPAD -> Surface(
             modifier = modifier,
             shape = touchControlShape(control),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            tonalElevation = 2.dp,
             border = BorderStroke(2.dp, MaterialTheme.colorScheme.outline),
         ) {
             Box(contentAlignment = Alignment.Center) {
