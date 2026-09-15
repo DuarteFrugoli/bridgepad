@@ -8,6 +8,8 @@ new connection methods and destinations do not change existing input adapters.
 ```text
 :app ---------------------> :protocol -----------------> :domain
   |                                                       ^
+  +----------------> :transport-network -----------------+
+  |                                                       ^
   +----------------> :transport-bluetooth-hid ------------+
   |                                                       ^
   +-------------------------------------------------------+
@@ -19,6 +21,10 @@ new connection methods and destinations do not change existing input adapters.
 - `:protocol` owns versioned messages shared with a future BridgePad receiver.
   It depends only on `:domain`. A published wire format must remain independent
   of the desktop implementation language.
+- `:transport-network` owns the platform-independent encrypted socket client.
+  Its first API is a certificate-pinned diagnostic probe; discovery, trust
+  persistence and product session lifecycle will build on it without entering
+  Compose or Bluetooth modules.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
 - `:app` is the Android composition root. It owns Compose UI, permissions,

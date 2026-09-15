@@ -72,6 +72,7 @@ import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
 import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
+import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 class MainActivity : ComponentActivity() {
@@ -94,6 +95,7 @@ class MainActivity : ComponentActivity() {
                 var showGamepadMapping by rememberSaveable { mutableStateOf(false) }
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var showSettings by rememberSaveable { mutableStateOf(false) }
+                var showNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
@@ -396,6 +398,13 @@ class MainActivity : ComponentActivity() {
                             returnToSettingsAfterLayoutEditor = false
                         },
                     )
+                } else if (showNetworkDiagnostic) {
+                    NetworkDiagnosticScreen(
+                        onBack = {
+                            showNetworkDiagnostic = false
+                            showSettings = true
+                        },
+                    )
                 } else if (showSettings) {
                     SettingsScreen(
                         appVersion = BuildConfig.VERSION_NAME,
@@ -406,6 +415,10 @@ class MainActivity : ComponentActivity() {
                             returnToSettingsAfterLayoutEditor = true
                             showSettings = false
                             showTouchscreenLayoutEditor = true
+                        },
+                        onOpenNetworkDiagnostic = {
+                            showSettings = false
+                            showNetworkDiagnostic = true
                         },
                         onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
                             runCatching {

@@ -233,4 +233,17 @@
     <string name="mapping_save_hint">Salve este perfil para aplicá-lo automaticamente quando este controle for conectado.</string>
     <string name="mapping_save">Salvar mapeamento</string>
     <string name="cancel_action">Cancelar</string>
+    <string name="network_diagnostic_title">Teste de rede criptografada</string>
+    <string name="network_diagnostic_settings_description">Teste a futura conexão com o BridgePad Desktop pela rede local.</string>
+    <string name="open_network_diagnostic">Abrir teste de rede</string>
+    <string name="network_diagnostic_description">Inicie o receptor diagnóstico do BridgePad Desktop em um PC conectado à mesma rede. Digite abaixo o IP local, a porta e a fingerprint do certificado. O teste envia 250 amostras Ping/Pong criptografadas a 125 Hz.</string>
+    <string name="network_host">Endereço IP do computador</string>
+    <string name="network_port">Porta</string>
+    <string name="network_certificate_fingerprint">SHA-256 do certificado</string>
+    <string name="network_fingerprint_hint">Copie a fingerprint completa mostrada pelo BridgePad Desktop. Um certificado diferente será recusado.</string>
+    <string name="network_test_action">Executar teste criptografado</string>
+    <string name="network_test_running">Testando…</string>
+    <string name="network_test_success">Conexão criptografada concluída</string>
+    <string name="network_test_result">%1$s · handshake %2$s ms\nRTT p50 %3$s ms · p95 %4$s ms · p99 %5$s ms\n%6$d amostras</string>
+    <string name="network_test_failed">A conexão criptografada falhou</string>
 </resources>

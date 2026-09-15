@@ -233,4 +233,17 @@
     <string name="mapping_save_hint">Save this profile to apply it automatically whenever this controller is connected.</string>
     <string name="mapping_save">Save mapping</string>
     <string name="cancel_action">Cancel</string>
+    <string name="network_diagnostic_title">Encrypted network test</string>
+    <string name="network_diagnostic_settings_description">Test the upcoming BridgePad Desktop connection over your local network.</string>
+    <string name="open_network_diagnostic">Open network test</string>
+    <string name="network_diagnostic_description">Start the diagnostic BridgePad Desktop receiver on a PC connected to the same network. Enter its local IP address, port and certificate fingerprint below. The test sends 250 encrypted Ping/Pong samples at 125 Hz.</string>
+    <string name="network_host">Desktop IP address</string>
+    <string name="network_port">Port</string>
+    <string name="network_certificate_fingerprint">Certificate SHA-256</string>
+    <string name="network_fingerprint_hint">Copy the complete fingerprint printed by BridgePad Desktop. A different certificate will be rejected.</string>
+    <string name="network_test_action">Run encrypted test</string>
+    <string name="network_test_running">Testing…</string>
+    <string name="network_test_success">Encrypted connection succeeded</string>
+    <string name="network_test_result">%1$s · handshake %2$s ms\nRTT p50 %3$s ms · p95 %4$s ms · p99 %5$s ms\n%6$d samples</string>
+    <string name="network_test_failed">Encrypted connection failed</string>
 </resources>

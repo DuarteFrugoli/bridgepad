@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/bridgepad-daemon",
     "crates/bridgepad-protocol",
     "crates/bridgepad-transport-spike",
 ]

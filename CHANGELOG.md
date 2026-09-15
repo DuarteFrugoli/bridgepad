@@ -8,6 +8,9 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Added a certificate-pinned Android TLS probe and a minimal Rust desktop
+  receiver for measuring 125 Hz encrypted Ping/Pong latency by manual IP.
+- Added independent Windows and Linux receiver artifacts to GitHub Actions.
 - Added shared Kotlin/Rust protocol vectors and deterministic sequence,
   heartbeat, session-state and packet-loss accounting foundations.
 - Recorded the encrypted transport spike: compare TLS/TCP with QUIC now, use

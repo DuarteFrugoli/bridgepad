@@ -27,7 +27,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run unit tests and lint
-        run: ./gradlew :domain:test :protocol:test :transport-bluetooth-hid:testDebugUnitTest :transport-bluetooth-hid:lintDebug :app:testDebugUnitTest :app:lintDebug
+        run: ./gradlew :domain:test :protocol:test :transport-network:test :transport-bluetooth-hid:testDebugUnitTest :transport-bluetooth-hid:lintDebug :app:testDebugUnitTest :app:lintDebug
 
   build:
     name: Build debug APK
@@ -67,3 +67,34 @@ jobs:
 
       - name: Test desktop workspace
         run: cargo test --locked --manifest-path desktop/Cargo.toml
+
+  desktop-build:
+    name: Build desktop receiver (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            artifact: bridgepad-desktop-windows
+            binary: desktop/target/release/bridgepad-daemon.exe
+          - name: Linux
+            os: ubuntu-latest
+            artifact: bridgepad-desktop-linux
+            binary: desktop/target/release/bridgepad-daemon
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@1.88.0
+
+      - name: Build desktop receiver
+        run: cargo build --locked --release --manifest-path desktop/Cargo.toml -p bridgepad-daemon
+
+      - name: Upload desktop receiver
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}

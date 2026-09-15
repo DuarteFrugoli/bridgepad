@@ -36,6 +36,7 @@ fun SettingsScreen(
     hidState: SessionState,
     physicalGamepadState: PhysicalGamepadState,
     onEditTouchscreenLayout: () -> Unit,
+    onOpenNetworkDiagnostic: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
@@ -71,6 +72,17 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.edit_controller_layout))
+                    }
+                }
+            }
+            item {
+                SettingsCard(title = stringResource(R.string.network_diagnostic_title)) {
+                    Text(stringResource(R.string.network_diagnostic_settings_description))
+                    OutlinedButton(
+                        onClick = onOpenNetworkDiagnostic,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.open_network_diagnostic))
                     }
                 }
             }

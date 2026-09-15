@@ -26,4 +26,5 @@ rootProject.name = "BridgePad"
 include(":domain")
 include(":protocol")
 include(":transport-bluetooth-hid")
+include(":transport-network")
 include(":app")

@@ -8,7 +8,7 @@ phase is complete only when its automated and hardware evidence is recorded.
 Run from the repository root on Windows:
 
 ```powershell
-.\gradlew.bat :domain:test :protocol:test :transport-bluetooth-hid:testDebugUnitTest :app:testDebugUnitTest
+.\gradlew.bat :domain:test :protocol:test :transport-network:test :transport-bluetooth-hid:testDebugUnitTest :app:testDebugUnitTest
 .\gradlew.bat :transport-bluetooth-hid:lintDebug :app:lintDebug
 .\gradlew.bat :app:assembleDebug
 ```
@@ -20,6 +20,49 @@ app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The same checks run as independent jobs in GitHub Actions after every push.
+
+## Encrypted Android-to-desktop network probe
+
+The probe validates TLS, certificate pinning and protocol v1 Ping/Pong before
+Wi-Fi is exposed as a gameplay connection.
+
+1. Build or download the `bridgepad-daemon` Windows artifact described in
+   [`desktop/README.md`](../desktop/README.md).
+2. Start the receiver and allow it through Windows Firewall on **private
+   networks only**.
+3. Run `ipconfig` and note the PC's local IPv4 address.
+4. Install and open the current Android debug build.
+5. Open **Settings > Encrypted network test**.
+6. Enter the PC address, port `39393`, and the complete certificate SHA-256
+   fingerprint printed by the receiver.
+7. Run the test and record TLS version, handshake, RTT p50, p95 and p99.
+8. Change one fingerprint digit and confirm that the connection is rejected.
+9. Repeat on 2.4 GHz, 5 GHz and, when possible, a congested network.
+
+The initial target is the Samsung A35 on Android 16/API 36. The application's
+minimum API level is 28, meaning Android 9 devices are currently allowed to
+install it. TLS 1.3 is native from API 29; API 28 must therefore negotiate the
+secure TLS 1.2 fallback or be removed from the supported range before release.
+
+### Observed Wi-Fi baseline — 2026-09-15
+
+The Samsung A35 on Android 16/API 36 completed all 250 sequential Ping/Pong
+samples against the native Windows daemon over the local Wi-Fi network:
+
+- TLS: `TLSv1.3`;
+- cipher suite: `TLS_AES_128_GCM_SHA256`;
+- connect and handshake: `63.182 ms`;
+- RTT p50: `9.114 ms`;
+- RTT p95: `14.597 ms`;
+- RTT p99: `16.553 ms`.
+
+The first attempt timed out because the diagnostic firewall rule applied only to
+private networks while Windows classified the current network as public. Changing
+the trusted home network to private allowed the spike to complete. This is a
+diagnostic limitation, not the intended product flow: the desktop installer must
+eventually manage narrowly scoped rules for both profiles after mutual device
+authentication is implemented. The invalid-fingerprint and identity-persistence
+checks remain pending.
 
 ## Installing from VS Code on a physical device
 
