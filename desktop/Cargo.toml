@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "crates/bridgepad-protocol",
+    "crates/bridgepad-transport-spike",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/DuarteFrugoli/bridgepad"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

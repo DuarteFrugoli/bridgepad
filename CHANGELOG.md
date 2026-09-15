@@ -8,6 +8,12 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Added shared Kotlin/Rust protocol vectors and deterministic sequence,
+  heartbeat, session-state and packet-loss accounting foundations.
+- Recorded the encrypted transport spike: compare TLS/TCP with QUIC now, use
+  QR or matching short-code trust confirmation, and never ship plaintext mode.
+- Started the Windows/Linux Rust workspace with cross-language protocol tests,
+  independent CI and a reproducible TLS 1.3/TCP versus QUIC datagram benchmark.
 - Started the transport-independent BridgePad protocol v1 with a fixed binary
   envelope, capability negotiation, session and input messages, strict decoding,
   a public wire specification and deterministic codec tests.

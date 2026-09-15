@@ -96,6 +96,9 @@ choice.
 
 - Wi-Fi and phone-to-PC USB use `:protocol` and require a BridgePad receiver on
   Windows or Linux to create the native virtual controller.
+- `desktop/` is a Rust workspace. Its protocol crate consumes the same normative
+  binary vectors as Kotlin; transport and virtual-device crates must depend on
+  it instead of duplicating wire logic.
 - Bluetooth HID remains an Android-only adapter and does not use the desktop
   protocol.
 - The existing `GenericCompositeHidProfile` contains the Windows/Linux Bluetooth

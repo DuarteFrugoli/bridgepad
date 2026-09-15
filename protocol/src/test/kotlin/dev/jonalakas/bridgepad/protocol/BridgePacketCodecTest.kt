@@ -10,6 +10,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Properties
 
 class BridgePacketCodecTest {
     @Test
@@ -23,13 +24,30 @@ class BridgePacketCodecTest {
             ),
         )
 
-        assertEquals(
-            "42504431010020000000000000000001000000020000000000000003000800000000000000000004",
-            encoded.toHex(),
-        )
+        assertEquals(goldenVectors.getProperty("ping"), encoded.toHex())
         assertEquals(
             BridgePacket(1, 2, 3, BridgeMessage.Ping(4)),
             BridgePacketCodec.decode(encoded),
+        )
+    }
+
+    @Test
+    fun pointer_matchesLanguageNeutralGoldenVector() {
+        val encoded = BridgePacketCodec.encode(
+            BridgePacket(
+                sessionId = 1,
+                sequence = 2,
+                timestampMicros = 3,
+                message = BridgeMessage.PointerFrame(
+                    PointerReport(buttons = 3, deltaX = -250, deltaY = 500),
+                ),
+            ),
+        )
+
+        assertEquals(goldenVectors.getProperty("pointer"), encoded.toHex())
+        assertEquals(
+            PointerReport(buttons = 3, deltaX = -250, deltaY = 500),
+            (BridgePacketCodec.decode(encoded).message as BridgeMessage.PointerFrame).report,
         )
     }
 
@@ -173,5 +191,12 @@ class BridgePacketCodecTest {
 
     companion object {
         private const val NORMALIZED_TOLERANCE = 0.00002f
+
+        private val goldenVectors: Properties = Properties().apply {
+            BridgePacketCodecTest::class.java.getResourceAsStream("/v1.properties").use { input ->
+                requireNotNull(input) { "Missing shared v1 protocol vectors" }
+                load(input)
+            }
+        }
     }
 }

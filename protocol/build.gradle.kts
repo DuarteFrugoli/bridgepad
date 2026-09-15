@@ -17,3 +17,9 @@ dependencies {
     implementation(project(":domain"))
     testImplementation(libs.junit)
 }
+
+sourceSets {
+    test {
+        resources.srcDir(rootProject.file("protocol-spec/vectors"))
+    }
+}
