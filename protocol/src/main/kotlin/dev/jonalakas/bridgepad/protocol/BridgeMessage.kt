@@ -3,35 +3,84 @@ package dev.jonalakas.bridgepad.protocol
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.PointerReport
 
-/**
- * Language-neutral messages exchanged with a BridgePad receiver.
- *
- * Wire encoders belong in this module so Android and desktop implementations can
- * evolve independently while sharing a versioned contract.
- */
+/** Transport-independent messages exchanged by BridgePad peers. */
 sealed interface BridgeMessage {
-    val sequence: Long
+    val type: BridgeMessageType
 
     data class Hello(
-        override val sequence: Long,
-        val protocolVersion: Int = BridgeProtocol.CURRENT_VERSION,
-        val clientName: String,
-    ) : BridgeMessage
+        val peerId: PeerId,
+        val capabilities: BridgeCapabilities,
+        val peerName: String,
+        val appVersion: String,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.HELLO
+    }
 
-    data class GamepadFrame(
-        override val sequence: Long,
-        val state: VirtualGamepadState,
-    ) : BridgeMessage
+    data class HelloAck(
+        val peerId: PeerId,
+        val capabilities: BridgeCapabilities,
+        val peerName: String,
+        val appVersion: String,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.HELLO_ACK
+    }
+
+    data class SessionStart(
+        val inputKind: BridgeInputKind,
+        val requestedCapabilities: BridgeCapabilities,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.SESSION_START
+    }
+
+    data class SessionReady(val enabledCapabilities: BridgeCapabilities) : BridgeMessage {
+        override val type = BridgeMessageType.SESSION_READY
+    }
+
+    data class SessionStop(val reason: BridgeStopReason) : BridgeMessage {
+        override val type = BridgeMessageType.SESSION_STOP
+    }
+
+    data class GamepadSnapshot(val state: VirtualGamepadState) : BridgeMessage {
+        override val type = BridgeMessageType.GAMEPAD_SNAPSHOT
+    }
 
     data class PointerFrame(
-        override val sequence: Long,
         val report: PointerReport,
-    ) : BridgeMessage
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.POINTER
+    }
 
-    data class Heartbeat(override val sequence: Long) : BridgeMessage
-}
+    data class Ping(val nonce: Long) : BridgeMessage {
+        override val type = BridgeMessageType.PING
+    }
 
-object BridgeProtocol {
-    const val CURRENT_VERSION = 1
-    const val SERVICE_ID = "bridgepad"
+    data class Pong(val nonce: Long) : BridgeMessage {
+        override val type = BridgeMessageType.PONG
+    }
+
+    data class Status(val status: BridgeStatusCode, val detail: String = "") : BridgeMessage {
+        override val type = BridgeMessageType.STATUS
+    }
+
+    data class Error(
+        val code: BridgeErrorCode,
+        val fatal: Boolean,
+        val detail: String,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.ERROR
+    }
+
+    data class Rumble(
+        val lowFrequency: Float,
+        val highFrequency: Float,
+        val durationMillis: Int,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.RUMBLE
+
+        init {
+            require(durationMillis in 0..0xffff) {
+                "durationMillis must fit in an unsigned 16-bit integer"
+            }
+        }
+    }
 }

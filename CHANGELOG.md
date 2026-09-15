@@ -8,6 +8,10 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Started the transport-independent BridgePad protocol v1 with a fixed binary
+  envelope, capability negotiation, session and input messages, strict decoding,
+  a public wire specification and deterministic codec tests.
+
 - Layout options can now be dragged horizontally from anywhere in the panel,
   while the arrow remains as a visual hint.
 - The mouse touchpad preview now uses the same elevated blue surface as the
