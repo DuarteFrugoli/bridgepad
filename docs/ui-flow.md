@@ -60,9 +60,10 @@ appropriate input screen, and **End session** explicitly releases the connection
   control shows its bounding box:
   side handles resize width or height independently and corner handles change
   both dimensions. Analog sticks expose only corner handles and always keep their
-  proportions. Resizing has a minimum but no maximum. Saving immediately
-  replaces the active layout and persists it across launches; canceling discards
-  the draft. **Reset
+  proportions. Selecting an analog stick also exposes its independently saved
+  deadzone setting; the default is 5%. Resizing has a minimum but no maximum.
+  Saving immediately replaces the active layout and persists it across launches;
+  canceling discards the draft. **Reset
   to standard** restores the built-in arrangement in the draft, which is only
   persisted when saved. **Symmetric**, **Asymmetric** and **Mobile** are built-in
   starting layouts; choosing one updates only the draft, and every control can

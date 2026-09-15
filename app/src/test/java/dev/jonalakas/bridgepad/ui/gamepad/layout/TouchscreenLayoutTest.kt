@@ -46,6 +46,7 @@ class TouchscreenLayoutTest {
     fun layoutCodecRoundTripsPlacements() {
         val expected = DefaultTouchscreenLayout.value
             .move(TouchControlId.LEFT_STICK, 0.05f, -0.04f)
+            .setDeadzone(TouchControlId.LEFT_STICK, 0.17f)
             .resize(TouchControlId.FACE_SOUTH, widthScale = 1.25f, heightScale = 0.8f)
 
         val decoded = TouchscreenLayoutCodec.decode(TouchscreenLayoutCodec.encode(expected))
@@ -55,13 +56,13 @@ class TouchscreenLayoutTest {
 
     @Test
     fun partialSavedLayoutUsesDefaultsForMissingControls() {
-        val decoded = TouchscreenLayoutCodec.decode("1\nFACE_SOUTH,0.5,0.5,1.2\n")
+        val decoded = TouchscreenLayoutCodec.decode("3\nFACE_SOUTH,0.5,0.5,1.2,0.8,0.05\n")
 
         assertNotNull(decoded)
         assertEquals(TouchControlId.entries.size, decoded?.placements?.size)
         assertEquals(0.5f, decoded?.placement(TouchControlId.FACE_SOUTH)?.centerX)
         assertEquals(1.2f, decoded?.placement(TouchControlId.FACE_SOUTH)?.widthScale)
-        assertEquals(1.2f, decoded?.placement(TouchControlId.FACE_SOUTH)?.heightScale)
+        assertEquals(0.8f, decoded?.placement(TouchControlId.FACE_SOUTH)?.heightScale)
         assertEquals(
             DefaultTouchscreenLayout.value.placement(TouchControlId.LEFT_STICK),
             decoded?.placement(TouchControlId.LEFT_STICK),
@@ -71,6 +72,16 @@ class TouchscreenLayoutTest {
     @Test
     fun malformedVersionIsRejected() {
         assertNull(TouchscreenLayoutCodec.decode("99\nLEFT_STICK,0.5,0.5,1.0"))
+    }
+
+    @Test
+    fun stickDeadzonesAreIndependentAndBounded() {
+        val layout = DefaultTouchscreenLayout.value
+            .setDeadzone(TouchControlId.LEFT_STICK, -1f)
+            .setDeadzone(TouchControlId.RIGHT_STICK, 1f)
+
+        assertEquals(MIN_STICK_DEADZONE, layout.placement(TouchControlId.LEFT_STICK).deadzone)
+        assertEquals(MAX_STICK_DEADZONE, layout.placement(TouchControlId.RIGHT_STICK).deadzone)
     }
 
     @Test
@@ -216,7 +227,7 @@ class TouchscreenLayoutTest {
 
     @Test
     fun invalidValuesAreSanitized() {
-        val decoded = TouchscreenLayoutCodec.decode("1\nLEFT_STICK,NaN,4.0,99.0\n")
+        val decoded = TouchscreenLayoutCodec.decode("3\nLEFT_STICK,NaN,4.0,99.0,99.0,NaN\n")
         val placement = decoded?.placement(TouchControlId.LEFT_STICK)
 
         assertNotNull(placement)
@@ -224,5 +235,6 @@ class TouchscreenLayoutTest {
         assertEquals(1f, placement.centerY)
         assertEquals(99f, placement.widthScale)
         assertEquals(99f, placement.heightScale)
+        assertEquals(DEFAULT_STICK_DEADZONE, placement.deadzone)
     }
 }

@@ -110,6 +110,8 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Added an independently persisted deadzone setting for each virtual analog
+  stick in the layout editor, with a smaller 5% default.
 - A dedicated, scrollable Settings screen for virtual-controller customization,
   language controls, session diagnostics and diagnostic report actions.
 - A persistent virtual-gamepad layout editor with normalized drag positioning,

@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.jonalakas.bridgepad.R
+import kotlin.math.roundToInt
 
 @Composable
 fun TouchscreenLayoutEditorScreen(
@@ -205,7 +206,11 @@ fun TouchscreenLayoutEditorScreen(
         if (toolbarExpanded && optionsVisible) {
             EditorOptionsPanel(
                 draft = draft,
+                selectedControl = selected,
                 onSelectPreset = ::replaceDraft,
+                onDeadzoneChange = { deadzone ->
+                    updateDraft { it.setDeadzone(selected, deadzone) }
+                },
                 onReset = { replaceDraft(DefaultTouchscreenLayout.value) },
                 onHorizontalDrag = { delta ->
                     optionsCenterX = moveFloatingOverlayCenter(
@@ -314,7 +319,9 @@ private fun CollapsedEditorToolbar(
 @Composable
 private fun EditorOptionsPanel(
     draft: TouchscreenLayout,
+    selectedControl: TouchControlId,
     onSelectPreset: (TouchscreenLayout) -> Unit,
+    onDeadzoneChange: (Float) -> Unit,
     onReset: () -> Unit,
     onHorizontalDrag: (Float) -> Unit,
     modifier: Modifier = Modifier,
@@ -349,6 +356,49 @@ private fun EditorOptionsPanel(
                 Text(OPTIONS_DRAG_SYMBOL, style = MaterialTheme.typography.titleLarge)
             }
             Text(stringResource(R.string.layout_editor_instructions), style = MaterialTheme.typography.bodySmall)
+            if (selectedControl.adjustableDeadzone) {
+                val deadzone = draft.placement(selectedControl).deadzone
+                val selectedControlLabel = controlLabel(selectedControl)
+                val decreaseDescription = "$selectedControlLabel: ${stringResource(R.string.decrease_deadzone)}"
+                val increaseDescription = "$selectedControlLabel: ${stringResource(R.string.increase_deadzone)}"
+                HorizontalDivider()
+                Text(stringResource(R.string.stick_deadzone), style = MaterialTheme.typography.titleSmall)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = { onDeadzoneChange(deadzone - STICK_DEADZONE_STEP) },
+                        enabled = deadzone > MIN_STICK_DEADZONE,
+                        modifier = Modifier.semantics {
+                            contentDescription = decreaseDescription
+                        },
+                    ) {
+                        Text("−")
+                    }
+                    Text(
+                        stringResource(
+                            R.string.stick_deadzone_value,
+                            (deadzone * 100f).roundToInt(),
+                        ),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    TextButton(
+                        onClick = { onDeadzoneChange(deadzone + STICK_DEADZONE_STEP) },
+                        enabled = deadzone < MAX_STICK_DEADZONE,
+                        modifier = Modifier.semantics {
+                            contentDescription = increaseDescription
+                        },
+                    ) {
+                        Text("+")
+                    }
+                }
+                Text(
+                    stringResource(R.string.stick_deadzone_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             HorizontalDivider()
             Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
             TouchscreenLayoutPreset.entries.forEach { preset ->

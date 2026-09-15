@@ -48,6 +48,7 @@ import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
+import dev.jonalakas.bridgepad.core.mapping.AxisMath
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlId
@@ -122,12 +123,14 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
                 VirtualAxis.LEFT_X,
                 VirtualAxis.LEFT_Y,
                 stringResource(R.string.left_stick),
+                placement.deadzone,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.RIGHT_STICK -> VirtualStick(
                 VirtualAxis.RIGHT_X,
                 VirtualAxis.RIGHT_Y,
                 stringResource(R.string.right_stick),
+                placement.deadzone,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.LEFT_TRIGGER -> TriggerButton(
@@ -368,6 +371,7 @@ private fun VirtualStick(
     xAxis: VirtualAxis,
     yAxis: VirtualAxis,
     label: String,
+    deadzone: Float,
     modifier: Modifier = Modifier,
 ) {
     var position by remember { mutableStateOf(Offset.Zero) }
@@ -378,7 +382,7 @@ private fun VirtualStick(
     Canvas(
         modifier = modifier
             .semantics { contentDescription = label }
-            .pointerInput(xAxis, yAxis) {
+            .pointerInput(xAxis, yAxis, deadzone) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val pointerId = down.id
@@ -389,7 +393,12 @@ private fun VirtualStick(
                         val magnitude = hypot(delta.x, delta.y)
                         val scale = if (magnitude > radius) radius / magnitude else 1f
                         position = Offset(delta.x * scale / radius, delta.y * scale / radius)
-                        TouchGamepadStore.setStick(xAxis, yAxis, position.x, position.y)
+                        val (outputX, outputY) = AxisMath.radialDeadzone(
+                            position.x,
+                            position.y,
+                            deadzone,
+                        )
+                        TouchGamepadStore.setStick(xAxis, yAxis, outputX, outputY)
                     }
                     try {
                         update(down.position)

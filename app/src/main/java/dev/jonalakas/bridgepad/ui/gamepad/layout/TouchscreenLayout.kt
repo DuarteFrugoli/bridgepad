@@ -4,11 +4,12 @@ enum class TouchControlId(
     val baseWidthDp: Float,
     val baseHeightDp: Float,
     val lockAspectRatio: Boolean = false,
+    val adjustableDeadzone: Boolean = false,
 ) {
     MOUSE_TOUCHPAD(210f, 92f),
     DPAD(132f, 132f),
-    LEFT_STICK(132f, 132f, lockAspectRatio = true),
-    RIGHT_STICK(132f, 132f, lockAspectRatio = true),
+    LEFT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true),
+    RIGHT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true),
     LEFT_TRIGGER(76f, 52f),
     LEFT_BUMPER(76f, 52f),
     RIGHT_BUMPER(76f, 52f),
@@ -35,6 +36,7 @@ data class TouchControlPlacement(
     val centerY: Float,
     val widthScale: Float = 1f,
     val heightScale: Float = widthScale,
+    val deadzone: Float = DEFAULT_STICK_DEADZONE,
 ) {
     fun sanitized(
         control: TouchControlId,
@@ -51,6 +53,11 @@ data class TouchControlPlacement(
             centerY = centerY.finiteOr(fallback.centerY).coerceIn(0f, 1f),
             widthScale = safeWidthScale,
             heightScale = safeHeightScale,
+            deadzone = if (control.adjustableDeadzone) {
+                deadzone.finiteOr(fallback.deadzone).coerceIn(MIN_STICK_DEADZONE, MAX_STICK_DEADZONE)
+            } else {
+                DEFAULT_STICK_DEADZONE
+            },
         )
     }
 }
@@ -83,6 +90,13 @@ data class TouchscreenLayout(
                 heightScale.coerceAtLeast(MIN_CONTROL_SCALE)
             },
         )
+    }
+
+    fun setDeadzone(control: TouchControlId, deadzone: Float): TouchscreenLayout {
+        require(control.adjustableDeadzone) { "Only analog sticks have an adjustable deadzone." }
+        return update(control) {
+            it.copy(deadzone = deadzone.coerceIn(MIN_STICK_DEADZONE, MAX_STICK_DEADZONE))
+        }
     }
 
     fun sanitized(): TouchscreenLayout = TouchscreenLayout(
@@ -179,14 +193,14 @@ object DefaultTouchscreenLayout {
 }
 
 internal object TouchscreenLayoutCodec {
-    private const val VERSION = "2"
+    private const val VERSION = "3"
 
     fun encode(layout: TouchscreenLayout): String = buildString {
         appendLine(VERSION)
         layout.sanitized().placements.forEach { (control, placement) ->
             appendLine(
                 "${control.name},${placement.centerX},${placement.centerY}," +
-                    "${placement.widthScale},${placement.heightScale}",
+                    "${placement.widthScale},${placement.heightScale},${placement.deadzone}",
             )
         }
     }
@@ -195,20 +209,20 @@ internal object TouchscreenLayoutCodec {
         if (value.isNullOrBlank()) return null
         val lines = value.lineSequence().toList()
         val version = lines.firstOrNull()
-        if (version != "1" && version != VERSION) return null
+        if (version != VERSION) return null
         val placements = buildMap {
             lines.drop(1).forEach { line ->
                 val parts = line.split(',')
-                if (parts.size != if (version == "1") 4 else 5) return@forEach
+                if (parts.size != 6) return@forEach
                 runCatching {
-                    val widthScale = parts[3].toFloat()
                     put(
                         TouchControlId.valueOf(parts[0]),
                         TouchControlPlacement(
                             centerX = parts[1].toFloat(),
                             centerY = parts[2].toFloat(),
-                            widthScale = widthScale,
-                            heightScale = if (version == "1") widthScale else parts[4].toFloat(),
+                            widthScale = parts[3].toFloat(),
+                            heightScale = parts[4].toFloat(),
+                            deadzone = parts[5].toFloat(),
                         ),
                     )
                 }
@@ -219,5 +233,9 @@ internal object TouchscreenLayoutCodec {
 }
 
 const val MIN_CONTROL_SCALE = 0.65f
+const val DEFAULT_STICK_DEADZONE = 0.05f
+const val MIN_STICK_DEADZONE = 0f
+const val MAX_STICK_DEADZONE = 0.4f
+const val STICK_DEADZONE_STEP = 0.01f
 
 private fun Float.finiteOr(fallback: Float): Float = if (isFinite()) this else fallback

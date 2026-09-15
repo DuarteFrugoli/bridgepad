@@ -109,6 +109,11 @@
     <string name="expand_layout_editor_actions">Open layout editor actions</string>
     <string name="collapse_layout_editor_actions">Collapse layout editor actions</string>
     <string name="move_layout_options">Drag horizontally to move layout options</string>
+    <string name="stick_deadzone">Deadzone</string>
+    <string name="stick_deadzone_value">%1$d%%</string>
+    <string name="stick_deadzone_hint">Movement inside this central area is ignored. Adjusts only the selected stick.</string>
+    <string name="decrease_deadzone">Decrease deadzone</string>
+    <string name="increase_deadzone">Increase deadzone</string>
     <string name="mouse_label">Mouse</string>
     <string name="transport_description">Sends gamepad and mouse commands from this phone to your PC.</string>
     <string name="future_transports">Wi-Fi and USB output are planned, but not available in this version.</string>

@@ -109,6 +109,11 @@
     <string name="expand_layout_editor_actions">Abrir ações do editor de layout</string>
     <string name="collapse_layout_editor_actions">Recolher ações do editor de layout</string>
     <string name="move_layout_options">Arraste horizontalmente para mover as opções do layout</string>
+    <string name="stick_deadzone">Zona morta</string>
+    <string name="stick_deadzone_value">%1$d%%</string>
+    <string name="stick_deadzone_hint">Movimentos dentro desta área central são ignorados. O ajuste vale apenas para o analógico selecionado.</string>
+    <string name="decrease_deadzone">Diminuir zona morta</string>
+    <string name="increase_deadzone">Aumentar zona morta</string>
     <string name="mouse_label">Mouse</string>
     <string name="transport_description">Envia os comandos do controle e do mouse deste celular para o PC.</string>
     <string name="future_transports">As saídas por Wi-Fi e USB estão planejadas, mas não estão disponíveis nesta versão.</string>
