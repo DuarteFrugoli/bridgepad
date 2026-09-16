@@ -622,6 +622,10 @@ class MainActivity : ComponentActivity() {
                         networkDesktopCoordinator.forget(peerId)
                         if (selectedNetworkDesktopId == peerId) selectedNetworkDesktopId = null
                     },
+                    onRepairNetworkDesktop = { peerId ->
+                        networkDesktopCoordinator.prepareRepair(peerId)
+                        if (selectedNetworkDesktopId == peerId) selectedNetworkDesktopId = null
+                    },
                     onDismissNetworkPairingStatus = networkDesktopCoordinator::clearPairingStatus,
                     onPhysicalCaptureModeChanged = { mode ->
                         captureModeName = mode.name

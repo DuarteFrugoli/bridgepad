@@ -274,7 +274,8 @@
     <string name="wifi_pairing_failed">Pairing failed. Keep BridgePad Desktop open and try again.</string>
     <string name="wifi_identity_changed">The desktop identity changed. For your safety, BridgePad did not connect. Forget it and pair again only if you expected this change.</string>
     <string name="wifi_desktop_not_available">This desktop is not available on the current network.</string>
-    <string name="wifi_authentication_rejected">The desktop no longer trusts this phone. Forget the desktop on both devices and pair again.</string>
+    <string name="wifi_authentication_rejected">The desktop no longer recognizes this phone. Pair again to restore the secure connection.</string>
+    <string name="wifi_pair_again_action">Pair again</string>
     <string name="wifi_connection_lost">The Wi-Fi connection was lost after the automatic reconnection attempts.</string>
     <string name="wifi_protocol_error">This BridgePad Desktop version is not compatible with the app.</string>
     <string name="wifi_connection_failed">Could not connect to BridgePad Desktop. Check the network and try again.</string>

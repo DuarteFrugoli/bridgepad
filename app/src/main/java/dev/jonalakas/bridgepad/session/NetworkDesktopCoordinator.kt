@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad.session
 
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.transport.network.NetworkAuthenticationException
 import dev.jonalakas.bridgepad.transport.network.NetworkCredentials
@@ -92,6 +93,7 @@ class NetworkDesktopCoordinator(
                 trustedStore.save(desktop, result.serverName, result.sharedSecret)
                 mutablePairingStatus.value = NetworkPairingStatus.Success(peerIdHex)
             }.onFailure { error ->
+                Log.e("BridgePadNetwork", "Wi-Fi pairing failed for $peerIdHex", error)
                 val causes = generateSequence<Throwable>(error) { it.cause }.toList()
                 mutablePairingStatus.value = NetworkPairingStatus.Failed(
                     peerIdHex = peerIdHex,
@@ -121,6 +123,12 @@ class NetworkDesktopCoordinator(
         if ((pairingStatus.value as? NetworkPairingStatus.Success)?.peerIdHex == peerIdHex) {
             clearPairingStatus()
         }
+    }
+
+    fun prepareRepair(peerIdHex: String) {
+        gameplay.stop()
+        trustedStore.forget(peerIdHex)
+        clearPairingStatus()
     }
 
     fun startGameplay(peerIdHex: String, captureMode: PhysicalCaptureMode) {

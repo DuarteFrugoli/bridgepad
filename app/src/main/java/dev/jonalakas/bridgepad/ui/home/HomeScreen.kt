@@ -55,6 +55,7 @@ fun HomeScreen(
     onSelectNetworkDesktop: (String?) -> Unit,
     onPairNetworkDesktop: (String, String) -> Unit,
     onForgetNetworkDesktop: (String) -> Unit,
+    onRepairNetworkDesktop: (String) -> Unit,
     onDismissNetworkPairingStatus: () -> Unit,
     onPhysicalCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
     onPrepareBluetooth: () -> Unit,
@@ -265,7 +266,23 @@ fun HomeScreen(
                         )
                     }
                     is NetworkGamepadStatus.Failed -> item {
-                        NoticeCard(stringResource(status.reason.messageResource()), NoticeTone.ERROR)
+                        val repairPeerId = selectedNetworkDesktopId?.takeIf {
+                            status.reason == NetworkFailureReason.AUTHENTICATION_REJECTED &&
+                                selectedNetworkOnline
+                        }
+                        NoticeCard(
+                            message = stringResource(status.reason.messageResource()),
+                            tone = NoticeTone.ERROR,
+                            actionLabel = repairPeerId?.let {
+                                stringResource(R.string.wifi_pair_again_action)
+                            },
+                            onAction = repairPeerId?.let { peerId ->
+                                {
+                                    onRepairNetworkDesktop(peerId)
+                                    pairingDesktopId = peerId
+                                }
+                            },
+                        )
                     }
                     else -> Unit
                 }

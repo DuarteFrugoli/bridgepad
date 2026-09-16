@@ -5,21 +5,22 @@ mod discovery;
 mod trust;
 
 use auth::{
-    NONCE_SIZE, PBKDF2_ITERATIONS, PairingWindow, SALT_SIZE, authentication_transcript,
-    create_proof, derive_pairing_key, pairing_transcript, role_transcript, secure_array,
-    verify_proof,
+    authentication_transcript, create_proof, derive_pairing_key, pairing_transcript,
+    role_transcript, secure_array, verify_proof, PairingWindow, NONCE_SIZE, PBKDF2_ITERATIONS,
+    SALT_SIZE,
 };
 use bridgepad_protocol::{
-    CAPABILITY_GAMEPAD, CAPABILITY_POINTER, HEADER_SIZE, MAX_PAYLOAD_SIZE, MAX_PEER_NAME_SIZE,
-    MessageType, PacketHeader, decode_auth_proof, decode_auth_request, decode_gamepad_snapshot,
-    decode_packet, decode_pair_request, decode_pointer, decode_session_start, encode_packet,
+    decode_auth_proof, decode_auth_request, decode_gamepad_snapshot, decode_packet,
+    decode_pair_request, decode_pointer, decode_session_start, encode_packet, MessageType,
+    PacketHeader, CAPABILITY_GAMEPAD, CAPABILITY_POINTER, HEADER_SIZE, MAX_PAYLOAD_SIZE,
+    MAX_PEER_NAME_SIZE,
 };
 use bridgepad_virtual_device::{
     DpadDirection, GamepadReport, PointerReport, VirtualGamepadDevice, VirtualPointerDevice,
 };
 use bridgepad_windows_pointer::WindowsPointer;
 use bridgepad_windows_vigem::VigemGamepad;
-use rcgen::{CertifiedKey, generate_simple_self_signed};
+use rcgen::{generate_simple_self_signed, CertifiedKey};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 use sha2::{Digest, Sha256};
@@ -31,7 +32,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
-use trust::{PEER_ID_SIZE, SHARED_SECRET_SIZE, TrustStore, TrustedPeer, decode_array, encode_hex};
+use trust::{decode_array, encode_hex, TrustStore, TrustedPeer, PEER_ID_SIZE, SHARED_SECRET_SIZE};
 
 pub const DEFAULT_ADDRESS: &str = "0.0.0.0:39393";
 pub const DEFAULT_IDENTITY_DIRECTORY: &str = ".bridgepad-dev";
@@ -132,6 +133,9 @@ impl DesktopServer {
             while !worker_stop.load(Ordering::Relaxed) {
                 match listener.accept() {
                     Ok((socket, _)) => {
+                        if let Ok(mut last_error) = worker_state.last_error.lock() {
+                            *last_error = None;
+                        }
                         let config = Arc::clone(&config);
                         let state = Arc::clone(&worker_state);
                         thread::spawn(move || {
@@ -139,9 +143,6 @@ impl DesktopServer {
                             if let Err(error) = serve(socket, config, Arc::clone(&state)) {
                                 let message = error.to_string();
                                 eprintln!("Connection ended: {message}");
-                                if let Ok(mut last_error) = state.last_error.lock() {
-                                    *last_error = Some(message);
-                                }
                             }
                         });
                     }
@@ -320,11 +321,20 @@ fn serve(
     state: Arc<ServerState>,
 ) -> Result<(), AnyError> {
     let peer = socket.peer_addr()?;
+    // On Windows an accepted socket can inherit the listener's nonblocking
+    // mode. The listener must stay nonblocking so the desktop UI can poll it,
+    // but rustls' StreamOwned expects a blocking stream for this worker.
+    socket.set_nonblocking(false)?;
     socket.set_nodelay(true)?;
-    socket.set_read_timeout(Some(std::time::Duration::from_secs(3)))?;
+    socket.set_read_timeout(Some(Duration::from_secs(10)))?;
     let connection = ServerConnection::new(config)?;
     let mut stream = StreamOwned::new(connection, socket);
-    println!("Encrypted client connected from {peer}");
+    println!("TCP client connected from {peer}");
+    stream.conn.complete_io(&mut stream.sock)?;
+    if stream.conn.is_handshaking() {
+        return Err("TLS handshake did not finish".into());
+    }
+    println!("TLS client authenticated from {peer}");
     let mut gamepad: Option<GamepadLease> = None;
     let mut pointer: Option<PointerLease> = None;
     let mut active_session_id = None;
@@ -353,6 +363,7 @@ fn serve(
                 )?;
             }
             MessageType::PairRequest => {
+                println!("Pairing request received from {peer}");
                 if gamepad.is_some() || authenticated_peer.is_some() {
                     return Err("pairing is unavailable during an active session".into());
                 }
@@ -525,6 +536,7 @@ fn serve(
                     MessageType::SessionReady,
                     &(CAPABILITY_GAMEPAD | CAPABILITY_POINTER).to_be_bytes(),
                 )?;
+                stream.sock.set_read_timeout(Some(Duration::from_secs(3)))?;
                 println!("Playable gamepad session started for {peer}");
             }
             MessageType::GamepadSnapshot => {
@@ -749,7 +761,7 @@ fn read_packet(stream: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
     let mut header = [0_u8; HEADER_SIZE];
     match stream.read_exact(&mut header) {
         Ok(()) => {}
-        Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(error) if is_expected_disconnect(&error) => return Ok(None),
         Err(error) => return Err(error),
     }
     let payload_length = usize::from(u16::from_be_bytes([header[28], header[29]]));
@@ -762,8 +774,24 @@ fn read_packet(stream: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
     let mut packet = Vec::with_capacity(HEADER_SIZE + payload_length);
     packet.extend_from_slice(&header);
     packet.resize(HEADER_SIZE + payload_length, 0);
-    stream.read_exact(&mut packet[HEADER_SIZE..])?;
+    match stream.read_exact(&mut packet[HEADER_SIZE..]) {
+        Ok(()) => {}
+        Err(error) if is_expected_disconnect(&error) => return Ok(None),
+        Err(error) => return Err(error),
+    }
     Ok(Some(packet))
+}
+
+fn is_expected_disconnect(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::UnexpectedEof
+            | io::ErrorKind::WouldBlock
+            | io::ErrorKind::TimedOut
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::NotConnected
+    )
 }
 
 struct DiagnosticIdentity {
@@ -889,5 +917,22 @@ mod tests {
         assert!(!is_newer_sequence(Some(7), 7));
         assert!(!is_newer_sequence(Some(7), 6));
         assert!(is_newer_sequence(Some(u32::MAX), 0));
+    }
+
+    #[test]
+    fn ordinary_socket_shutdowns_are_not_reported_as_service_errors() {
+        for kind in [
+            io::ErrorKind::UnexpectedEof,
+            io::ErrorKind::WouldBlock,
+            io::ErrorKind::TimedOut,
+            io::ErrorKind::ConnectionReset,
+            io::ErrorKind::ConnectionAborted,
+            io::ErrorKind::NotConnected,
+        ] {
+            assert!(is_expected_disconnect(&io::Error::from(kind)));
+        }
+        assert!(!is_expected_disconnect(&io::Error::from(
+            io::ErrorKind::InvalidData,
+        )));
     }
 }

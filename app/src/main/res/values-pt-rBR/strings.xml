@@ -274,7 +274,8 @@
     <string name="wifi_pairing_failed">O pareamento falhou. Mantenha o BridgePad Desktop aberto e tente novamente.</string>
     <string name="wifi_identity_changed">A identidade do computador mudou. Por segurança, o BridgePad não conectou. Esqueça-o e pareie novamente somente se você esperava essa mudança.</string>
     <string name="wifi_desktop_not_available">Este computador não está disponível na rede atual.</string>
-    <string name="wifi_authentication_rejected">O computador não confia mais neste celular. Esqueça o dispositivo nos dois lados e pareie novamente.</string>
+    <string name="wifi_authentication_rejected">O computador não reconhece mais este celular. Pareie novamente para restaurar a conexão segura.</string>
+    <string name="wifi_pair_again_action">Parear novamente</string>
     <string name="wifi_connection_lost">A conexão Wi-Fi foi perdida após as tentativas automáticas de reconexão.</string>
     <string name="wifi_protocol_error">Esta versão do BridgePad Desktop não é compatível com o aplicativo.</string>
     <string name="wifi_connection_failed">Não foi possível conectar ao BridgePad Desktop. Confira a rede e tente novamente.</string>
