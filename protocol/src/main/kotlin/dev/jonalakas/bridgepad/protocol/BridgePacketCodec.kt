@@ -106,6 +106,41 @@ object BridgePacketCodec {
                     }
                     is BridgeMessage.SessionReady -> output.writeInt(message.enabledCapabilities.bits)
                     is BridgeMessage.SessionStop -> output.writeByte(message.reason.code)
+                    is BridgeMessage.PairRequest -> {
+                        output.writePeerId(message.peerId)
+                        output.writeUtf8U8(message.peerName, MAX_PEER_NAME_BYTES, "peerName")
+                        output.write(message.clientNonce)
+                    }
+                    is BridgeMessage.PairChallenge -> {
+                        output.writePeerId(message.peerId)
+                        output.write(message.serverNonce)
+                        output.write(message.salt)
+                        output.writeInt(message.iterations)
+                        output.writeShort(message.expiresInSeconds)
+                        output.write(message.serverProof)
+                    }
+                    is BridgeMessage.PairProof -> output.write(message.proof)
+                    is BridgeMessage.PairResult -> {
+                        output.writeByte(if (message.accepted) 1 else 0)
+                        output.writeByte(message.sharedSecret.size)
+                        output.write(message.sharedSecret)
+                        output.writeUtf8U8(message.peerName, MAX_PEER_NAME_BYTES, "peerName")
+                        output.writeUtf8U16(message.detail)
+                    }
+                    is BridgeMessage.AuthRequest -> {
+                        output.writePeerId(message.peerId)
+                        output.write(message.clientNonce)
+                    }
+                    is BridgeMessage.AuthChallenge -> {
+                        output.writePeerId(message.peerId)
+                        output.write(message.serverNonce)
+                    }
+                    is BridgeMessage.AuthProof -> output.write(message.proof)
+                    is BridgeMessage.AuthResult -> {
+                        output.writeByte(if (message.accepted) 1 else 0)
+                        output.writeUtf8U8(message.peerName, MAX_PEER_NAME_BYTES, "peerName")
+                        output.writeUtf8U16(message.detail)
+                    }
                     is BridgeMessage.GamepadSnapshot -> output.writeGamepad(message.state)
                     is BridgeMessage.PointerFrame -> output.writePointer(message.report)
                     is BridgeMessage.Ping -> output.writeLong(message.nonce)
@@ -143,6 +178,46 @@ object BridgePacketCodec {
                         BridgeMessage.SessionReady(BridgeCapabilities(input.readInt()))
                     BridgeMessageType.SESSION_STOP ->
                         BridgeMessage.SessionStop(BridgeStopReason.fromCode(input.readUnsignedByte()))
+                    BridgeMessageType.PAIR_REQUEST -> BridgeMessage.PairRequest(
+                        peerId = input.readPeerId(),
+                        peerName = input.readUtf8U8(MAX_PEER_NAME_BYTES, "peerName"),
+                        clientNonce = input.readSizedBytes(BridgeAuthentication.NONCE_SIZE),
+                    )
+                    BridgeMessageType.PAIR_CHALLENGE -> BridgeMessage.PairChallenge(
+                        peerId = input.readPeerId(),
+                        serverNonce = input.readSizedBytes(BridgeAuthentication.NONCE_SIZE),
+                        salt = input.readSizedBytes(BridgeAuthentication.SALT_SIZE),
+                        iterations = input.readInt(),
+                        expiresInSeconds = input.readUnsignedShort(),
+                        serverProof = input.readSizedBytes(BridgeAuthentication.PROOF_SIZE),
+                    )
+                    BridgeMessageType.PAIR_PROOF ->
+                        BridgeMessage.PairProof(input.readSizedBytes(BridgeAuthentication.PROOF_SIZE))
+                    BridgeMessageType.PAIR_RESULT -> {
+                        val accepted = input.readBooleanByte()
+                        val secretSize = input.readUnsignedByte()
+                        BridgeMessage.PairResult(
+                            accepted = accepted,
+                            sharedSecret = input.readSizedBytes(secretSize),
+                            peerName = input.readUtf8U8(MAX_PEER_NAME_BYTES, "peerName"),
+                            detail = input.readUtf8U16(),
+                        )
+                    }
+                    BridgeMessageType.AUTH_REQUEST -> BridgeMessage.AuthRequest(
+                        peerId = input.readPeerId(),
+                        clientNonce = input.readSizedBytes(BridgeAuthentication.NONCE_SIZE),
+                    )
+                    BridgeMessageType.AUTH_CHALLENGE -> BridgeMessage.AuthChallenge(
+                        peerId = input.readPeerId(),
+                        serverNonce = input.readSizedBytes(BridgeAuthentication.NONCE_SIZE),
+                    )
+                    BridgeMessageType.AUTH_PROOF ->
+                        BridgeMessage.AuthProof(input.readSizedBytes(BridgeAuthentication.PROOF_SIZE))
+                    BridgeMessageType.AUTH_RESULT -> BridgeMessage.AuthResult(
+                        accepted = input.readBooleanByte(),
+                        peerName = input.readUtf8U8(MAX_PEER_NAME_BYTES, "peerName"),
+                        detail = input.readUtf8U16(),
+                    )
                     BridgeMessageType.GAMEPAD_SNAPSHOT ->
                         BridgeMessage.GamepadSnapshot(input.readGamepad())
                     BridgeMessageType.POINTER -> BridgeMessage.PointerFrame(input.readPointer())
@@ -192,6 +267,17 @@ object BridgePacketCodec {
         writeInt(capabilities.bits)
         writeUtf8U8(peerName, MAX_PEER_NAME_BYTES, "peerName")
         writeUtf8U8(appVersion, MAX_APP_VERSION_BYTES, "appVersion")
+    }
+
+    private fun DataOutputStream.writePeerId(peerId: PeerId) {
+        writeLong(peerId.high)
+        writeLong(peerId.low)
+    }
+
+    private fun DataInputStream.readPeerId(): PeerId = try {
+        PeerId(readLong(), readLong())
+    } catch (error: IllegalArgumentException) {
+        throw BridgeProtocolException("Invalid peer ID", error)
     }
 
     private fun DataInputStream.readPeer(isAcknowledgement: Boolean): BridgeMessage {
@@ -291,6 +377,8 @@ object BridgePacketCodec {
             throw BridgeProtocolException("Invalid UTF-8 text", error)
         }
     }
+
+    private fun DataInputStream.readSizedBytes(size: Int): ByteArray = ByteArray(size).also { readFully(it) }
 
     private fun DataInputStream.readBooleanByte(): Boolean = when (val value = readUnsignedByte()) {
         0 -> false

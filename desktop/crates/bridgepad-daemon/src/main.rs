@@ -1,9 +1,18 @@
-//! Encrypted BridgePad receiver for the network probe and first playable flow.
+//! Encrypted BridgePad receiver with local discovery and paired client authentication.
 
+mod auth;
+mod discovery;
+mod trust;
+
+use auth::{
+    NONCE_SIZE, PBKDF2_ITERATIONS, PairingWindow, SALT_SIZE, authentication_transcript,
+    create_proof, derive_pairing_key, pairing_transcript, role_transcript, secure_array,
+    verify_proof,
+};
 use bridgepad_protocol::{
-    CAPABILITY_GAMEPAD, CAPABILITY_POINTER, HEADER_SIZE, MAX_PAYLOAD_SIZE, MessageType,
-    PacketHeader, decode_gamepad_snapshot, decode_packet, decode_pointer, decode_session_start,
-    encode_packet,
+    CAPABILITY_GAMEPAD, CAPABILITY_POINTER, HEADER_SIZE, MAX_PAYLOAD_SIZE, MAX_PEER_NAME_SIZE,
+    MessageType, PacketHeader, decode_auth_proof, decode_auth_request, decode_gamepad_snapshot,
+    decode_packet, decode_pair_request, decode_pointer, decode_session_start, encode_packet,
 };
 use bridgepad_virtual_device::{
     DpadDirection, GamepadReport, PointerReport, VirtualGamepadDevice, VirtualPointerDevice,
@@ -18,14 +27,38 @@ use std::fs;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Instant;
+use trust::{PEER_ID_SIZE, SHARED_SECRET_SIZE, TrustStore, TrustedPeer, decode_array, encode_hex};
 
 const DEFAULT_ADDRESS: &str = "0.0.0.0:39393";
 const DEFAULT_IDENTITY_DIRECTORY: &str = ".bridgepad-dev";
 
 type AnyError = Box<dyn std::error::Error + Send + Sync>;
+
+struct ServerState {
+    peer_id: [u8; PEER_ID_SIZE],
+    certificate_fingerprint: [u8; 32],
+    desktop_name: String,
+    trust_store: Mutex<TrustStore>,
+    pairing: Mutex<PairingWindow>,
+    allow_unpaired: bool,
+}
+
+struct PairAttempt {
+    request: bridgepad_protocol::PairRequest,
+    server_nonce: [u8; NONCE_SIZE],
+    salt: [u8; SALT_SIZE],
+    code: String,
+}
+
+struct AuthAttempt {
+    request: bridgepad_protocol::AuthRequest,
+    server_nonce: [u8; NONCE_SIZE],
+    secret: [u8; SHARED_SECRET_SIZE],
+    known_peer: bool,
+}
 
 fn main() -> Result<(), AnyError> {
     rustls::crypto::ring::default_provider()
@@ -35,8 +68,37 @@ fn main() -> Result<(), AnyError> {
     let address = argument("--listen").unwrap_or_else(|| DEFAULT_ADDRESS.to_owned());
     let identity_directory = argument("--identity-dir")
         .map_or_else(|| PathBuf::from(DEFAULT_IDENTITY_DIRECTORY), PathBuf::from);
+    let desktop_name = argument("--name").unwrap_or_else(default_desktop_name);
+    if desktop_name.as_bytes().len() > MAX_PEER_NAME_SIZE {
+        return Err(format!("desktop name exceeds {MAX_PEER_NAME_SIZE} UTF-8 bytes").into());
+    }
     let identity = load_or_create_identity(&identity_directory)?;
-    let fingerprint = sha256_fingerprint(&identity.certificate);
+    let certificate_fingerprint: [u8; 32] = Sha256::digest(&identity.certificate).into();
+    let peer_id: [u8; PEER_ID_SIZE] = certificate_fingerprint[..PEER_ID_SIZE]
+        .try_into()
+        .expect("fingerprint contains a peer id");
+    let mut trust_store = TrustStore::load(&identity_directory)?;
+
+    if argument_flag("--list-peers") {
+        print_trusted_peers(&trust_store);
+        return Ok(());
+    }
+    if let Some(id) = argument("--forget-peer") {
+        let id = decode_array::<PEER_ID_SIZE>(&id)
+            .map_err(|message| format!("invalid peer id: {message}"))?;
+        if trust_store.forget(&id)? {
+            println!("Forgot trusted device {}", encode_hex(&id));
+        } else {
+            println!("No trusted device matched {}", encode_hex(&id));
+        }
+        return Ok(());
+    }
+    if argument_flag("--forget-all") {
+        trust_store.clear()?;
+        println!("Forgot every trusted device.");
+        return Ok(());
+    }
+
     let config = ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(
@@ -44,11 +106,36 @@ fn main() -> Result<(), AnyError> {
             PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.private_key)),
         )?;
     let listener = TcpListener::bind(&address)?;
+    let local_address = listener.local_addr()?;
+    let pairing = PairingWindow::new()?;
+    let state = Arc::new(ServerState {
+        peer_id,
+        certificate_fingerprint,
+        desktop_name: desktop_name.clone(),
+        trust_store: Mutex::new(trust_store),
+        pairing: Mutex::new(pairing),
+        allow_unpaired: argument_flag("--allow-unpaired"),
+    });
+    let fingerprint_display = fingerprint_display(&state.certificate_fingerprint);
+    let fingerprint_mdns = encode_hex(&state.certificate_fingerprint);
+    let peer_id_hex = encode_hex(&state.peer_id);
+    let _discovery = discovery::advertise(
+        &desktop_name,
+        local_address.port(),
+        &peer_id_hex,
+        &fingerprint_mdns,
+    )?;
 
     println!("BridgePad Desktop receiver");
-    println!("Listening on {}", listener.local_addr()?);
-    println!("Certificate SHA-256: {fingerprint}");
-    println!("Enter this fingerprint exactly in the Android network screen.");
+    println!("Desktop name: {desktop_name}");
+    println!("Desktop ID: {peer_id_hex}");
+    println!("Listening on {local_address}");
+    println!("Certificate SHA-256: {fingerprint_display}");
+    print_pairing_code(&state)?;
+    if state.allow_unpaired {
+        println!("WARNING: unauthenticated diagnostic gameplay is enabled.");
+    }
+    println!("Android discovery service: {}", discovery::SERVICE_TYPE);
     println!("Press Ctrl+C to stop.\n");
 
     let config = Arc::new(config);
@@ -56,8 +143,9 @@ fn main() -> Result<(), AnyError> {
         match connection {
             Ok(socket) => {
                 let config = Arc::clone(&config);
+                let state = Arc::clone(&state);
                 thread::spawn(move || {
-                    if let Err(error) = serve(socket, config) {
+                    if let Err(error) = serve(socket, config, state) {
                         eprintln!("Connection ended: {error}");
                     }
                 });
@@ -68,10 +156,14 @@ fn main() -> Result<(), AnyError> {
     Ok(())
 }
 
-fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
+fn serve(
+    socket: TcpStream,
+    config: Arc<ServerConfig>,
+    state: Arc<ServerState>,
+) -> Result<(), AnyError> {
     let peer = socket.peer_addr()?;
     socket.set_nodelay(true)?;
-    socket.set_read_timeout(Some(std::time::Duration::from_secs(2)))?;
+    socket.set_read_timeout(Some(std::time::Duration::from_secs(3)))?;
     let connection = ServerConnection::new(config)?;
     let mut stream = StreamOwned::new(connection, socket);
     println!("Encrypted client connected from {peer}");
@@ -79,6 +171,9 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
     let mut pointer: Option<PointerLease> = None;
     let mut active_session_id = None;
     let mut latest_gamepad_sequence = None;
+    let mut authenticated_peer = None;
+    let mut pair_attempt: Option<PairAttempt> = None;
+    let mut auth_attempt: Option<AuthAttempt> = None;
 
     loop {
         let Some(bytes) = read_packet(&mut stream)? else {
@@ -98,7 +193,158 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
                     packet.payload,
                 )?;
             }
+            MessageType::PairRequest => {
+                if gamepad.is_some() || authenticated_peer.is_some() {
+                    return Err("pairing is unavailable during an active session".into());
+                }
+                let request = decode_pair_request(packet)?;
+                let (code, expires_in_seconds) = {
+                    let mut pairing = lock(&state.pairing)?;
+                    (pairing.code()?, pairing.expires_in_seconds())
+                };
+                let server_nonce = secure_array::<NONCE_SIZE>()?;
+                let salt = secure_array::<SALT_SIZE>()?;
+                let key = derive_pairing_key(&code, &salt);
+                let transcript = pairing_transcript(
+                    &request.peer_id,
+                    &state.peer_id,
+                    &request.client_nonce,
+                    &server_nonce,
+                    &state.certificate_fingerprint,
+                );
+                let server_proof = create_proof(
+                    &key,
+                    &role_transcript(b"bridgepad-pair-server-v1", &transcript),
+                );
+                let mut payload = Vec::with_capacity(
+                    PEER_ID_SIZE + NONCE_SIZE + SALT_SIZE + 6 + server_proof.len(),
+                );
+                payload.extend_from_slice(&state.peer_id);
+                payload.extend_from_slice(&server_nonce);
+                payload.extend_from_slice(&salt);
+                payload.extend_from_slice(&PBKDF2_ITERATIONS.to_be_bytes());
+                payload.extend_from_slice(&expires_in_seconds.to_be_bytes());
+                payload.extend_from_slice(&server_proof);
+                pair_attempt = Some(PairAttempt {
+                    request,
+                    server_nonce,
+                    salt,
+                    code,
+                });
+                write_response(
+                    &mut stream,
+                    packet.header,
+                    MessageType::PairChallenge,
+                    &payload,
+                )?;
+            }
+            MessageType::PairProof => {
+                let attempt = pair_attempt
+                    .take()
+                    .ok_or("pairing proof has no challenge")?;
+                let actual = decode_auth_proof(packet)?;
+                let key = derive_pairing_key(&attempt.code, &attempt.salt);
+                let common_transcript = pairing_transcript(
+                    &attempt.request.peer_id,
+                    &state.peer_id,
+                    &attempt.request.client_nonce,
+                    &attempt.server_nonce,
+                    &state.certificate_fingerprint,
+                );
+                let transcript = role_transcript(b"bridgepad-pair-client-v1", &common_transcript);
+                let accepted = verify_proof(&key, &transcript, &actual);
+                if accepted {
+                    let secret = secure_array::<SHARED_SECRET_SIZE>()?;
+                    lock(&state.trust_store)?.insert(TrustedPeer {
+                        id: attempt.request.peer_id,
+                        name: attempt.request.peer_name.clone(),
+                        secret,
+                    })?;
+                    authenticated_peer = Some(attempt.request.peer_id);
+                    lock(&state.pairing)?.record_success()?;
+                    write_response(
+                        &mut stream,
+                        packet.header,
+                        MessageType::PairResult,
+                        &pair_result_payload(true, &secret, &state.desktop_name, "")?,
+                    )?;
+                    println!(
+                        "Paired {} ({})",
+                        attempt.request.peer_name,
+                        encode_hex(&attempt.request.peer_id)
+                    );
+                    print_pairing_code(&state)?;
+                } else {
+                    lock(&state.pairing)?.record_failure()?;
+                    write_response(
+                        &mut stream,
+                        packet.header,
+                        MessageType::PairResult,
+                        &pair_result_payload(false, &[], &state.desktop_name, "code_rejected")?,
+                    )?;
+                    println!("Rejected pairing proof from {peer}");
+                }
+            }
+            MessageType::AuthRequest => {
+                let request = decode_auth_request(packet)?;
+                let trusted = lock(&state.trust_store)?.get(&request.peer_id).cloned();
+                let known_peer = trusted.is_some();
+                let secret =
+                    trusted.map_or(secure_array::<SHARED_SECRET_SIZE>()?, |item| item.secret);
+                let server_nonce = secure_array::<NONCE_SIZE>()?;
+                let mut payload = Vec::with_capacity(PEER_ID_SIZE + NONCE_SIZE);
+                payload.extend_from_slice(&state.peer_id);
+                payload.extend_from_slice(&server_nonce);
+                auth_attempt = Some(AuthAttempt {
+                    request,
+                    server_nonce,
+                    secret,
+                    known_peer,
+                });
+                write_response(
+                    &mut stream,
+                    packet.header,
+                    MessageType::AuthChallenge,
+                    &payload,
+                )?;
+            }
+            MessageType::AuthProof => {
+                let attempt = auth_attempt
+                    .take()
+                    .ok_or("authentication proof has no challenge")?;
+                let actual = decode_auth_proof(packet)?;
+                let transcript = authentication_transcript(
+                    &attempt.request.peer_id,
+                    &state.peer_id,
+                    &attempt.request.client_nonce,
+                    &attempt.server_nonce,
+                    &state.certificate_fingerprint,
+                );
+                let accepted =
+                    attempt.known_peer && verify_proof(&attempt.secret, &transcript, &actual);
+                if accepted {
+                    authenticated_peer = Some(attempt.request.peer_id);
+                    println!("Authenticated {}", encode_hex(&attempt.request.peer_id));
+                }
+                write_response(
+                    &mut stream,
+                    packet.header,
+                    MessageType::AuthResult,
+                    &auth_result_payload(
+                        accepted,
+                        &state.desktop_name,
+                        if accepted {
+                            ""
+                        } else {
+                            "authentication_rejected"
+                        },
+                    )?,
+                )?;
+            }
             MessageType::SessionStart => {
+                if authenticated_peer.is_none() && !state.allow_unpaired {
+                    return Err("authentication is required before gameplay".into());
+                }
                 if gamepad.is_some() {
                     return Err("a gamepad session is already active on this connection".into());
                 }
@@ -109,8 +355,7 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
                 if request.requested_capabilities & CAPABILITY_GAMEPAD == 0 {
                     return Err("the client did not request the gamepad capability".into());
                 }
-                let device = VigemGamepad::connect()?;
-                gamepad = Some(GamepadLease::new(Box::new(device))?);
+                gamepad = Some(GamepadLease::new(Box::new(VigemGamepad::connect()?))?);
                 pointer = Some(PointerLease::new(Box::new(WindowsPointer::connect()))?);
                 active_session_id = Some(packet.header.session_id);
                 latest_gamepad_sequence = None;
@@ -127,8 +372,7 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
                     return Err("gamepad snapshot does not belong to the active session".into());
                 }
                 if is_newer_sequence(latest_gamepad_sequence, packet.header.sequence) {
-                    let snapshot = decode_gamepad_snapshot(packet)?;
-                    let report = to_gamepad_report(snapshot)?;
+                    let report = to_gamepad_report(decode_gamepad_snapshot(packet)?)?;
                     gamepad
                         .as_mut()
                         .ok_or("gamepad session is not active")?
@@ -159,9 +403,49 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
                     println!("Playable gamepad session stopped for {peer}");
                 }
             }
-            _ => return Err("message is not supported by the first playable flow".into()),
+            _ => return Err("message is not supported by the receiver".into()),
         }
     }
+}
+
+fn pair_result_payload(
+    accepted: bool,
+    secret: &[u8],
+    desktop_name: &str,
+    detail: &str,
+) -> Result<Vec<u8>, AnyError> {
+    let mut payload = Vec::new();
+    payload.push(u8::from(accepted));
+    payload.push(u8::try_from(secret.len())?);
+    payload.extend_from_slice(secret);
+    write_string_u8(&mut payload, desktop_name)?;
+    write_string_u16(&mut payload, detail)?;
+    Ok(payload)
+}
+
+fn auth_result_payload(
+    accepted: bool,
+    desktop_name: &str,
+    detail: &str,
+) -> Result<Vec<u8>, AnyError> {
+    let mut payload = vec![u8::from(accepted)];
+    write_string_u8(&mut payload, desktop_name)?;
+    write_string_u16(&mut payload, detail)?;
+    Ok(payload)
+}
+
+fn write_string_u8(output: &mut Vec<u8>, value: &str) -> Result<(), AnyError> {
+    let bytes = value.as_bytes();
+    output.push(u8::try_from(bytes.len()).map_err(|_| "text is too long")?);
+    output.extend_from_slice(bytes);
+    Ok(())
+}
+
+fn write_string_u16(output: &mut Vec<u8>, value: &str) -> Result<(), AnyError> {
+    let bytes = value.as_bytes();
+    output.extend_from_slice(&u16::try_from(bytes.len())?.to_be_bytes());
+    output.extend_from_slice(bytes);
+    Ok(())
 }
 
 fn write_response(
@@ -319,12 +603,38 @@ fn load_or_create_identity(directory: &Path) -> Result<DiagnosticIdentity, AnyEr
     }
 }
 
-fn sha256_fingerprint(certificate: &[u8]) -> String {
-    Sha256::digest(certificate)
+fn print_trusted_peers(store: &TrustStore) {
+    let mut peers: Vec<_> = store.all().collect();
+    peers.sort_by(|left, right| left.name.cmp(&right.name));
+    if peers.is_empty() {
+        println!("No trusted devices.");
+        return;
+    }
+    for peer in peers {
+        println!("{}  {}", encode_hex(&peer.id), peer.name);
+    }
+}
+
+fn print_pairing_code(state: &ServerState) -> Result<(), AnyError> {
+    let code = lock(&state.pairing)?.formatted_code()?;
+    println!("Pairing code: {code} (valid for 10 minutes)");
+    Ok(())
+}
+
+fn fingerprint_display(fingerprint: &[u8; 32]) -> String {
+    fingerprint
         .iter()
         .map(|byte| format!("{byte:02X}"))
         .collect::<Vec<_>>()
         .join(":")
+}
+
+fn default_desktop_name() -> String {
+    std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .ok()
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| "BridgePad Desktop".to_owned())
 }
 
 fn monotonic_micros() -> u64 {
@@ -345,6 +655,16 @@ fn argument(name: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn argument_flag(name: &str) -> bool {
+    std::env::args().any(|argument| argument == name)
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>, AnyError> {
+    mutex
+        .lock()
+        .map_err(|_| "shared state lock was poisoned".into())
 }
 
 #[cfg(test)]

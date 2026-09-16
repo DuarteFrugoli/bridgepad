@@ -96,14 +96,52 @@ reported the same certificate fingerprint and the Android probe connected
 successfully with the previously pinned value, validating diagnostic identity
 persistence across process restarts.
 
-## First playable Wi-Fi flow
+## Product Wi-Fi discovery, pairing and reconnection
 
-This development flow joins the encrypted Android transport to the Windows
-virtual-gamepad adapter before discovery and pairing are implemented.
+1. Stop older daemon instances and run the authenticated receiver from the
+   repository root:
+
+   ```powershell
+   cargo run --release --manifest-path desktop/Cargo.toml -p bridgepad-daemon
+   ```
+
+2. Keep the desktop output visible. It must show its name, persistent ID,
+   certificate fingerprint, current 12-digit pairing code and the
+   `_bridgepad._tcp.local.` discovery service.
+3. In Android, choose **PC > Wi-Fi** and confirm the desktop appears without
+   entering an IP, port or fingerprint.
+4. Choose **Pair**, enter the displayed code and confirm the desktop becomes a
+   trusted selectable destination. A wrong or expired code must fail without
+   creating a trust record.
+5. Tap **Connect and play**. Confirm the XInput controller appears in `joy.cpl`,
+   Steam and a game; test the virtual controller, physical controller and mouse.
+6. Stop and reconnect without entering the code. Restart the daemon with the same
+   `.bridgepad-dev` directory and repeat; its identity and trust must persist.
+7. During gameplay, interrupt Wi-Fi or restart the receiver briefly. Confirm the
+   Android UI shows bounded reconnection attempts, recovers when possible and
+   never leaves a pressed button or non-neutral axis behind.
+8. Use **Forget** on Android. With the receiver stopped, inspect and revoke its
+   side as well:
+
+   ```powershell
+   cargo run --release --manifest-path desktop/Cargo.toml -p bridgepad-daemon -- --list-peers
+   cargo run --release --manifest-path desktop/Cargo.toml -p bridgepad-daemon -- --forget-peer <device-id>
+   ```
+
+9. Start the receiver again and confirm a revoked phone cannot start gameplay
+   until it pairs with the current code. Repeat on Windows public and private
+   profiles after installer-managed firewall rules exist; the current development
+   binary may still require an explicit Windows Firewall allowance.
+
+## First playable Wi-Fi diagnostic flow
+
+This development-only fallback joins the encrypted Android transport to the
+Windows virtual-gamepad adapter using a manually entered endpoint.
 
 1. Install the signed ViGEmBus driver used by the current Windows spike.
 2. From `desktop/`, start the receiver with
-   `cargo run --release -p bridgepad-daemon -- --identity-dir ..\.bridgepad-dev`.
+   `cargo run --release -p bridgepad-daemon -- --identity-dir ..\.bridgepad-dev --allow-unpaired`.
+   The explicit flag is required because product gameplay rejects unpaired clients.
 3. Install the current Android debug build and open **Settings > Encrypted
    network test**.
 4. Enter the PC IPv4 address, port `39393` and the fingerprint printed by the

@@ -77,6 +77,7 @@ import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 class MainActivity : ComponentActivity() {
     private lateinit var gamepadController: AndroidGamepadController
+    private lateinit var networkDesktopCoordinator: dev.jonalakas.bridgepad.session.NetworkDesktopCoordinator
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,6 +86,7 @@ class MainActivity : ComponentActivity() {
         val bridgePadApplication = application as BridgePadApplication
         val sessionCoordinator = bridgePadApplication.sessionCoordinator
         val networkGameplayController = bridgePadApplication.networkGameplayController
+        networkDesktopCoordinator = bridgePadApplication.networkDesktopCoordinator
 
         val deviceInfo = AndroidDeviceInfoProvider.get()
         val preferences = getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -108,6 +110,7 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(PhysicalCaptureMode.COMPATIBILITY.name)
                 }
                 var selectedAddress by rememberSaveable { mutableStateOf<String?>(null) }
+                var selectedNetworkDesktopId by rememberSaveable { mutableStateOf<String?>(null) }
                 var pairNewPcSelected by rememberSaveable { mutableStateOf(false) }
                 var pendingDestination by rememberSaveable { mutableStateOf<String?>(null) }
                 var connectionGate by rememberSaveable { mutableStateOf<String?>(null) }
@@ -191,6 +194,10 @@ class MainActivity : ComponentActivity() {
                 }
                 val hidState by sessionCoordinator.state.collectAsState()
                 val networkGameplayStatus by networkGameplayController.status.collectAsState()
+                val discoveredDesktops by networkDesktopCoordinator.discoveredDesktops.collectAsState()
+                val trustedDesktops by networkDesktopCoordinator.trustedDesktops.collectAsState()
+                val networkPairingStatus by networkDesktopCoordinator.pairingStatus.collectAsState()
+                val networkDiscoveryError by networkDesktopCoordinator.discoveryError.collectAsState()
                 val touchscreenLayout by TouchscreenLayoutStore.layout.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
@@ -257,6 +264,38 @@ class MainActivity : ComponentActivity() {
                         if (networkGameplayStatus is NetworkGamepadStatus.Active) {
                             enterGamepadMode()
                         } else {
+                            exitGamepadMode()
+                        }
+                    }
+                }
+
+                LaunchedEffect(networkPairingStatus) {
+                    val success = networkPairingStatus as? dev.jonalakas.bridgepad.session.NetworkPairingStatus.Success
+                    if (success != null) selectedNetworkDesktopId = success.peerIdHex
+                }
+
+                LaunchedEffect(
+                    networkGameplayStatus,
+                    effectiveConnectionMethod,
+                    openAfterConnection,
+                    physicalGamepadState.devices,
+                    directUsbState.active,
+                    showNetworkDiagnostic,
+                ) {
+                    if (showNetworkDiagnostic || effectiveConnectionMethod != ConnectionMethod.WIFI) {
+                        return@LaunchedEffect
+                    }
+                    if (networkGameplayStatus is NetworkGamepadStatus.Active && openAfterConnection) {
+                        openAfterConnection = false
+                        val physicalConnected = physicalGamepadState.devices.isNotEmpty() || directUsbState.active
+                        showTouchController = !physicalConnected
+                        showMouseTouchpad = physicalConnected
+                    }
+                    if (networkGameplayStatus is NetworkGamepadStatus.Failed) {
+                        openAfterConnection = false
+                        if (showTouchController || showMouseTouchpad) {
+                            showTouchController = false
+                            showMouseTouchpad = false
                             exitGamepadMode()
                         }
                     }
@@ -537,6 +576,7 @@ class MainActivity : ComponentActivity() {
                             destinationTypeName = destination.name
                             connectionMethodName = null
                             selectedAddress = null
+                            selectedNetworkDesktopId = null
                             pairNewPcSelected = false
                         }
                     },
@@ -544,7 +584,17 @@ class MainActivity : ComponentActivity() {
                         if (connectionMethodName != ConnectionMethod.BLUETOOTH.name) {
                             connectionMethodName = ConnectionMethod.BLUETOOTH.name
                             selectedAddress = null
+                            selectedNetworkDesktopId = null
                             pairNewPcSelected = false
+                            networkDesktopCoordinator.clearPairingStatus()
+                        }
+                    },
+                    onSelectWifi = {
+                        if (connectionMethodName != ConnectionMethod.WIFI.name) {
+                            connectionMethodName = ConnectionMethod.WIFI.name
+                            selectedAddress = null
+                            pairNewPcSelected = false
+                            networkDesktopCoordinator.clearPairingStatus()
                         }
                     },
                     pairedHosts = pairedHosts,
@@ -558,6 +608,21 @@ class MainActivity : ComponentActivity() {
                             pairNewPcSelected = selectingNewPc
                         }
                     },
+                    discoveredDesktops = discoveredDesktops,
+                    trustedDesktops = trustedDesktops,
+                    selectedNetworkDesktopId = selectedNetworkDesktopId,
+                    networkPairingStatus = networkPairingStatus,
+                    networkGameplayStatus = networkGameplayStatus,
+                    networkDiscoveryError = networkDiscoveryError,
+                    onSelectNetworkDesktop = { selectedNetworkDesktopId = it },
+                    onPairNetworkDesktop = { peerId, code ->
+                        networkDesktopCoordinator.pair(peerId, code)
+                    },
+                    onForgetNetworkDesktop = { peerId ->
+                        networkDesktopCoordinator.forget(peerId)
+                        if (selectedNetworkDesktopId == peerId) selectedNetworkDesktopId = null
+                    },
+                    onDismissNetworkPairingStatus = networkDesktopCoordinator::clearPairingStatus,
                     onPhysicalCaptureModeChanged = { mode ->
                         captureModeName = mode.name
                         sessionCoordinator.selectPhysicalCaptureMode(mode)
@@ -569,6 +634,13 @@ class MainActivity : ComponentActivity() {
                         pendingDestination = DestinationSelection.CHOOSE_PC
                     },
                     onPlay = {
+                        if (effectiveConnectionMethod == ConnectionMethod.WIFI) {
+                            selectedNetworkDesktopId?.let { peerId ->
+                                openAfterConnection = true
+                                networkDesktopCoordinator.startGameplay(peerId, effectiveCaptureMode)
+                            }
+                            return@HomeScreen
+                        }
                         val bluetoothPermissionsReady = hasBluetoothPermission()
                         bluetoothPermissionGranted = bluetoothPermissionsReady
                         val bluetoothReady = isBluetoothEnabled()
@@ -608,11 +680,18 @@ class MainActivity : ComponentActivity() {
                         destinationTypeName = null
                         connectionMethodName = null
                         selectedAddress = null
+                        selectedNetworkDesktopId = null
                         pairNewPcSelected = false
                         pendingDestination = null
                         connectionGate = null
                         openAfterConnection = false
                         if (hidState.sessionActive) sessionCoordinator.stop()
+                        if (
+                            networkGameplayStatus !is NetworkGamepadStatus.Stopped &&
+                            !showNetworkDiagnostic
+                        ) {
+                            networkDesktopCoordinator.stopGameplay()
+                        }
                     },
                     onOpenSettings = { showSettings = true },
                 )
@@ -622,12 +701,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        networkDesktopCoordinator.startDiscovery()
         gamepadController.start()
     }
 
     override fun onStop() {
         TouchGamepadStore.neutralize()
         gamepadController.stop()
+        networkDesktopCoordinator.stopDiscovery()
         super.onStop()
     }
 

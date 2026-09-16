@@ -56,6 +56,8 @@ value class BridgeCapabilities(val bits: Int) {
 
 enum class BridgeMessageType(val code: Int) {
     HELLO(0x01), HELLO_ACK(0x02), SESSION_START(0x03), SESSION_READY(0x04), SESSION_STOP(0x05),
+    PAIR_REQUEST(0x06), PAIR_CHALLENGE(0x07), PAIR_PROOF(0x08), PAIR_RESULT(0x09),
+    AUTH_REQUEST(0x0a), AUTH_CHALLENGE(0x0b), AUTH_PROOF(0x0c), AUTH_RESULT(0x0d),
     GAMEPAD_SNAPSHOT(0x10), POINTER(0x11), PING(0x20), PONG(0x21), STATUS(0x30), ERROR(0x31),
     RUMBLE(0x40);
 
@@ -63,6 +65,15 @@ enum class BridgeMessageType(val code: Int) {
         fun fromCode(code: Int): BridgeMessageType = entries.firstOrNull { it.code == code }
             ?: throw BridgeProtocolException("Unknown message type: $code")
     }
+}
+
+object BridgeAuthentication {
+    const val NONCE_SIZE = 32
+    const val SALT_SIZE = 16
+    const val PROOF_SIZE = 32
+    const val SHARED_SECRET_SIZE = 32
+    const val PAIRING_CODE_DIGITS = 12
+    const val PBKDF2_ITERATIONS = 210_000
 }
 
 enum class BridgeInputKind(val code: Int) {

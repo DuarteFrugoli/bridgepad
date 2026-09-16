@@ -21,14 +21,14 @@ new connection methods and destinations do not change existing input adapters.
 - `:protocol` owns versioned messages shared with a future BridgePad receiver.
   It depends only on `:domain`. A published wire format must remain independent
   of the desktop implementation language.
-- `:transport-network` owns the platform-independent encrypted socket client.
-  It provides the certificate-pinned diagnostic probe and the first bounded
-  gamepad-session sender. Discovery, mutual trust and product reconnection will
-  build on it without entering Compose or Bluetooth modules.
+- `:transport-network` owns the platform-independent encrypted socket client,
+  pairing/authentication exchange, bounded gamepad sender and reconnect policy.
+  Discovery and persistence remain above it and never enter input code.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
 - `:app` is the Android composition root. It owns Compose UI, permissions,
-  lifecycle, hardware input adapters, persistence and adapter registration. The
+  lifecycle, hardware input adapters, DNS-SD discovery, Android Keystore-backed
+  trusted-desktop persistence and adapter registration. The
   active touchscreen layout is an app-owned, versioned set of normalized control
   positions and scales; it never enters the input or transport domain models.
 
@@ -76,9 +76,10 @@ capture state changes, never for each controller event.
 `SessionCoordinator` is the Android application boundary used by presentation
 code. It owns a catalog of `OutputSessionAdapter` implementations and selects an
 adapter by stable id. `MainActivity` does not start a transport service directly.
-The manual playable network increment is composed separately by
-`NetworkGameplayController` until discovery and pairing provide a selectable
-network destination; it still consumes only `InputRouter`'s normalized state.
+The product network flow is composed separately by
+`NetworkGameplayController` and `NetworkDesktopCoordinator`. The Home selects a
+discovered, trusted desktop while the manual IP/fingerprint route remains an
+advanced diagnostic; both consume only `InputRouter`'s normalized state.
 
 Connection method and output-adapter identity are deliberately separate. The
 generic Bluetooth HID profile and future Wi-Fi or USB desktop receivers can all

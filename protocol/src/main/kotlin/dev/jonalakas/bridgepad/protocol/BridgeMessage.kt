@@ -40,6 +40,99 @@ sealed interface BridgeMessage {
         override val type = BridgeMessageType.SESSION_STOP
     }
 
+    data class PairRequest(
+        val peerId: PeerId,
+        val peerName: String,
+        val clientNonce: ByteArray,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.PAIR_REQUEST
+
+        init {
+            require(clientNonce.size == BridgeAuthentication.NONCE_SIZE)
+        }
+    }
+
+    data class PairChallenge(
+        val peerId: PeerId,
+        val serverNonce: ByteArray,
+        val salt: ByteArray,
+        val iterations: Int,
+        val expiresInSeconds: Int,
+        val serverProof: ByteArray,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.PAIR_CHALLENGE
+
+        init {
+            require(serverNonce.size == BridgeAuthentication.NONCE_SIZE)
+            require(salt.size == BridgeAuthentication.SALT_SIZE)
+            require(iterations > 0)
+            require(expiresInSeconds in 0..0xffff)
+            require(serverProof.size == BridgeAuthentication.PROOF_SIZE)
+        }
+    }
+
+    data class PairProof(val proof: ByteArray) : BridgeMessage {
+        override val type = BridgeMessageType.PAIR_PROOF
+
+        init {
+            require(proof.size == BridgeAuthentication.PROOF_SIZE)
+        }
+    }
+
+    data class PairResult(
+        val accepted: Boolean,
+        val sharedSecret: ByteArray,
+        val peerName: String,
+        val detail: String = "",
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.PAIR_RESULT
+
+        init {
+            require(
+                sharedSecret.size == BridgeAuthentication.SHARED_SECRET_SIZE ||
+                    (!accepted && sharedSecret.isEmpty()),
+            )
+        }
+    }
+
+    data class AuthRequest(
+        val peerId: PeerId,
+        val clientNonce: ByteArray,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.AUTH_REQUEST
+
+        init {
+            require(clientNonce.size == BridgeAuthentication.NONCE_SIZE)
+        }
+    }
+
+    data class AuthChallenge(
+        val peerId: PeerId,
+        val serverNonce: ByteArray,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.AUTH_CHALLENGE
+
+        init {
+            require(serverNonce.size == BridgeAuthentication.NONCE_SIZE)
+        }
+    }
+
+    data class AuthProof(val proof: ByteArray) : BridgeMessage {
+        override val type = BridgeMessageType.AUTH_PROOF
+
+        init {
+            require(proof.size == BridgeAuthentication.PROOF_SIZE)
+        }
+    }
+
+    data class AuthResult(
+        val accepted: Boolean,
+        val peerName: String,
+        val detail: String = "",
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.AUTH_RESULT
+    }
+
     data class GamepadSnapshot(val state: VirtualGamepadState) : BridgeMessage {
         override val type = BridgeMessageType.GAMEPAD_SNAPSHOT
     }

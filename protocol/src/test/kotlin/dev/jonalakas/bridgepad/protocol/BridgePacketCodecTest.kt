@@ -79,6 +79,33 @@ class BridgePacketCodecTest {
     }
 
     @Test
+    fun pairingAndAuthenticationMessages_roundTripBinaryFields() {
+        val peerId = PeerId(0x0102, 0x0304)
+        val nonce = ByteArray(BridgeAuthentication.NONCE_SIZE) { it.toByte() }
+        val salt = ByteArray(BridgeAuthentication.SALT_SIZE) { (it + 32).toByte() }
+        val proof = ByteArray(BridgeAuthentication.PROOF_SIZE) { (it + 64).toByte() }
+        val secret = ByteArray(BridgeAuthentication.SHARED_SECRET_SIZE) { (it + 96).toByte() }
+        val messages = listOf(
+            BridgeMessage.PairRequest(peerId, "Galaxy A35", nonce),
+            BridgeMessage.PairChallenge(peerId, nonce, salt, 210_000, 600, proof),
+            BridgeMessage.PairProof(proof),
+            BridgeMessage.PairResult(true, secret, "Desktop", ""),
+            BridgeMessage.AuthRequest(peerId, nonce),
+            BridgeMessage.AuthChallenge(peerId, nonce),
+            BridgeMessage.AuthProof(proof),
+            BridgeMessage.AuthResult(true, "Desktop", ""),
+        )
+
+        messages.forEachIndexed { index, message ->
+            val decoded = BridgePacketCodec.decode(
+                BridgePacketCodec.encode(BridgePacket(9, index.toLong(), 11, message)),
+            ).message
+            assertEquals(message.type, decoded.type)
+            assertMessageContents(message, decoded)
+        }
+    }
+
+    @Test
     fun gamepadSnapshot_preservesStableButtonBitsAndNormalizedValues() {
         val state = VirtualGamepadState(
             pressedButtons = setOf(
@@ -181,6 +208,44 @@ class BridgePacketCodecTest {
 
     private fun assertRejected(bytes: ByteArray) {
         assertThrows(BridgeProtocolException::class.java) { BridgePacketCodec.decode(bytes) }
+    }
+
+    private fun assertMessageContents(expected: BridgeMessage, actual: BridgeMessage) {
+        when (expected) {
+            is BridgeMessage.PairRequest -> (actual as BridgeMessage.PairRequest).also {
+                assertEquals(expected.peerId, it.peerId)
+                assertEquals(expected.peerName, it.peerName)
+                assertArrayEquals(expected.clientNonce, it.clientNonce)
+            }
+            is BridgeMessage.PairChallenge -> (actual as BridgeMessage.PairChallenge).also {
+                assertEquals(expected.peerId, it.peerId)
+                assertArrayEquals(expected.serverNonce, it.serverNonce)
+                assertArrayEquals(expected.salt, it.salt)
+                assertEquals(expected.iterations, it.iterations)
+                assertEquals(expected.expiresInSeconds, it.expiresInSeconds)
+                assertArrayEquals(expected.serverProof, it.serverProof)
+            }
+            is BridgeMessage.PairProof ->
+                assertArrayEquals(expected.proof, (actual as BridgeMessage.PairProof).proof)
+            is BridgeMessage.PairResult -> (actual as BridgeMessage.PairResult).also {
+                assertEquals(expected.accepted, it.accepted)
+                assertArrayEquals(expected.sharedSecret, it.sharedSecret)
+                assertEquals(expected.peerName, it.peerName)
+                assertEquals(expected.detail, it.detail)
+            }
+            is BridgeMessage.AuthRequest -> (actual as BridgeMessage.AuthRequest).also {
+                assertEquals(expected.peerId, it.peerId)
+                assertArrayEquals(expected.clientNonce, it.clientNonce)
+            }
+            is BridgeMessage.AuthChallenge -> (actual as BridgeMessage.AuthChallenge).also {
+                assertEquals(expected.peerId, it.peerId)
+                assertArrayEquals(expected.serverNonce, it.serverNonce)
+            }
+            is BridgeMessage.AuthProof ->
+                assertArrayEquals(expected.proof, (actual as BridgeMessage.AuthProof).proof)
+            is BridgeMessage.AuthResult -> assertEquals(expected, actual)
+            else -> error("Unexpected test message: ${expected.type}")
+        }
     }
 
     private fun ByteArray.mutated(index: Int, value: Int): ByteArray = copyOf().also {

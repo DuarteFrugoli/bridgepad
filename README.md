@@ -29,7 +29,7 @@ Present in the current build:
 - Bluetooth HID gamepad and relative mouse output;
 - integrated and full-screen mouse touchpads;
 - simultaneous virtual and physical input during an active session;
-- a manual encrypted Wi-Fi gameplay path through BridgePad Desktop on Windows;
+- automatic Wi-Fi discovery and authenticated gameplay through BridgePad Desktop on Windows;
 - guided pairing, reconnection, session notices and safe shutdown;
 - live metrics and privacy-conscious diagnostic report export;
 - English and Brazilian Portuguese interfaces;
@@ -91,10 +91,10 @@ directly.
 The Home screen builds a session in dependency order:
 
 1. **Destination** — currently a Windows or future Linux PC.
-2. **Connection** — Bluetooth is available; Wi-Fi and phone-to-PC USB are shown
+2. **Connection** — Bluetooth and Wi-Fi are available; phone-to-PC USB is shown
    as upcoming.
-3. **Computer** — choose an already paired PC or explicitly choose to pair a new
-   one.
+3. **Computer** — Bluetooth lists Android-paired PCs. Wi-Fi discovers BridgePad
+   Desktop automatically and asks for its one-time code only on first pairing.
 
 Input is automatic rather than another required setup choice. Virtual controls
 and any detected physical controller may be used simultaneously.
@@ -211,10 +211,10 @@ The intended order is:
 
 1. specify and test the versioned desktop protocol;
 2. create a sustainable Windows virtual-controller backend;
-3. implement automatic local discovery, secure pairing and Wi-Fi sessions;
-4. implement phone-to-PC USB without root or ADB in the normal user flow;
-5. add the Linux virtual-controller backend and packaging;
-6. harden installation, updates, recovery and diagnostics;
+3. validate and harden automatic discovery, secure pairing and Wi-Fi sessions;
+4. automate Windows installation, firewall rules and desktop credential protection;
+5. implement phone-to-PC USB without root or ADB in the normal user flow;
+6. add the Linux virtual-controller backend and packaging;
 7. add optional low-latency PC-to-phone video streaming, followed by audio.
 
 Wi-Fi and USB will require BridgePad Desktop because the computer must receive
@@ -223,7 +223,6 @@ remain available as a direct path that does not require the companion.
 
 ## Not implemented yet
 
-- automatic LAN discovery and product Wi-Fi pairing;
 - phone-to-PC USB output;
 - a production Windows virtual-controller backend and installer;
 - Linux receiver support;
@@ -232,6 +231,7 @@ remain available as a direct path that does not require the companion.
 - named user layout presets;
 - analog touchscreen triggers;
 - PC-to-phone video or audio streaming;
+- multi-phone local co-op with one independent virtual-controller slot per player;
 - advanced per-game controller profiles;
 - macros or guided calibration.
 

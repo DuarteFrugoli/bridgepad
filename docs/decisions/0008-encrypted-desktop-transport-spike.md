@@ -104,6 +104,22 @@ remains the deciding experiment.
 - USB reuses the authenticated application session whenever its chosen carrier
   supports it.
 
+## Implementation update — 2026-09-16
+
+TLS 1.3/TCP is now the first product Wi-Fi carrier. The daemon advertises
+`_bridgepad._tcp` through DNS-SD/mDNS and Android pins the advertised
+certificate during the first pairing. Pairing uses a 12-digit, ten-minute code,
+fresh PBKDF2-HMAC-SHA256 salt/nonces and separate server/client HMAC proofs. It
+rotates after success or five failed proofs. Later sessions require a fresh
+nonce challenge proved with a random 256-bit shared secret before any functional
+input is accepted.
+
+Android encrypts the saved shared secret with an AES-GCM key held by Android
+Keystore. The current command-line desktop store remains a user-owned
+development file; moving it to OS-protected Windows/Linux storage is still a
+release requirement. QR scanning and explicit confirmation in a future desktop
+UI may supplement the implemented PIN flow without changing the trust model.
+
 ## References
 
 - [Android network service discovery](https://developer.android.com/develop/connectivity/wifi/use-nsd)

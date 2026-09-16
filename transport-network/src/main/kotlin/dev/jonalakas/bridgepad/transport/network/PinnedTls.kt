@@ -67,7 +67,7 @@ internal fun normalizeFingerprint(value: String): String {
     return normalized.uppercase()
 }
 
-private fun decodeFingerprint(value: String): ByteArray = normalizeFingerprint(value)
+internal fun decodeFingerprint(value: String): ByteArray = normalizeFingerprint(value)
     .chunked(2)
     .map { it.toInt(16).toByte() }
     .toByteArray()

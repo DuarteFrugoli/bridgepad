@@ -28,19 +28,47 @@ loopback. It does not select the production transport by itself; QUIC and real
 Android/Wi-Fi measurements are still required. Plaintext is never a product
 mode.
 
-## Android-to-desktop encrypted connection
+## Android-to-desktop Wi-Fi connection
 
-Start the diagnostic receiver:
+Start the receiver from the repository root:
 
 ```sh
 cargo run --release --manifest-path desktop/Cargo.toml \
   -p bridgepad-daemon
 ```
 
-It listens on TCP port `39393`, creates a persistent diagnostic identity in
-`.bridgepad-dev/` and prints its certificate SHA-256 fingerprint. On Windows,
-allow the process on private networks if the firewall asks. Use `ipconfig` to
-find the PC's local IPv4 address.
+It listens on TCP port `39393`, creates a persistent identity and trust store in
+`.bridgepad-dev/`, announces `_bridgepad._tcp` through DNS-SD/mDNS and prints a
+12-digit pairing code. Keep the process open, choose **PC > Wi-Fi** in the
+Android Home and select the discovered desktop. The code is required only for
+the first pairing; following sessions mutually authenticate with the saved
+device secret. The Android copy is encrypted by Android Keystore.
+
+Gameplay requires a paired client by default. The daemon rejects untrusted
+`SessionStart`, gamepad and pointer messages. Transient disconnects trigger
+bounded automatic reconnection in Android, and the UI distinguishes an offline
+desktop, changed identity, rejected authentication and a lost connection.
+
+List or revoke the desktop's trusted phones while the receiver is stopped:
+
+```sh
+cargo run --release --manifest-path desktop/Cargo.toml -p bridgepad-daemon -- --list-peers
+cargo run --release --manifest-path desktop/Cargo.toml -p bridgepad-daemon -- --forget-peer <32-hex-character-id>
+cargo run --release --manifest-path desktop/Cargo.toml -p bridgepad-daemon -- --forget-all
+```
+
+Also use **Forget** in Android to delete that side's protected credentials.
+Revoking both copies ensures neither side retains a usable trust record.
+
+### Manual diagnostic route
+
+To test with a typed IP and fingerprint in **Settings > Encrypted network test**,
+start the daemon with the explicit development bypass:
+
+```sh
+cargo run --release --manifest-path desktop/Cargo.toml \
+  -p bridgepad-daemon -- --allow-unpaired
+```
 
 In the Android app, open **Settings > Encrypted network test** and enter:
 
@@ -58,20 +86,16 @@ switch between those surfaces without ending the TLS session. Pointer reports
 drive the native Windows mouse; ending the session neutralizes and removes the
 desktop controller.
 
-The playable path is still a manual development flow: it uses the typed IP and
-pinned certificate fingerprint, supports gamepad and relative-pointer reports,
-and trusts any
-client that can reach the manually started receiver. Use it only on a trusted
-development network. Discovery, mutual pairing and protected identity storage
-remain required before Wi-Fi is exposed as a normal Home connection.
+The bypass trusts any client that can reach the receiver and is diagnostic only.
+Never use `--allow-unpaired` as the normal Home flow or on an untrusted network.
 
 GitHub Actions also publishes `bridgepad-desktop-windows` and
 `bridgepad-desktop-linux` artifacts so the probe can be run without installing a
 Rust toolchain.
 
-This diagnostic certificate is stored as ordinary files and exists only for the
-transport experiment. The product daemon will move identity material to the
-operating system's protected credential storage before pairing is implemented.
+The current desktop identity and trust database are ordinary user-owned files.
+Production installers still need operating-system-protected credential storage,
+appropriate Windows ACLs/Linux permissions and automatic firewall rules.
 
 ## Windows virtual gamepad spike
 

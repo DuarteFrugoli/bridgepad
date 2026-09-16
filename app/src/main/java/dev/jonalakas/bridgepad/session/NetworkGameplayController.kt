@@ -3,6 +3,7 @@ package dev.jonalakas.bridgepad.session
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadClient
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
+import dev.jonalakas.bridgepad.transport.network.NetworkFailureReason
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -56,6 +57,12 @@ class NetworkGameplayController(
     @Synchronized
     fun shutdown() {
         stopCurrent(immediate = true)
+    }
+
+    @Synchronized
+    fun reportFailure(reason: NetworkFailureReason, detail: String) {
+        stopCurrent(immediate = true)
+        mutableStatus.value = NetworkGamepadStatus.Failed(reason, detail)
     }
 
     private fun stopCurrent(immediate: Boolean) {

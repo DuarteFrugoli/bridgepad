@@ -7,6 +7,7 @@ pub const MAJOR_VERSION: u8 = 1;
 pub const MINOR_VERSION: u8 = 0;
 pub const HEADER_SIZE: usize = 32;
 pub const MAX_PAYLOAD_SIZE: usize = 4_096;
+pub const MAX_PEER_NAME_SIZE: usize = 64;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
@@ -16,6 +17,14 @@ pub enum MessageType {
     SessionStart = 0x03,
     SessionReady = 0x04,
     SessionStop = 0x05,
+    PairRequest = 0x06,
+    PairChallenge = 0x07,
+    PairProof = 0x08,
+    PairResult = 0x09,
+    AuthRequest = 0x0a,
+    AuthChallenge = 0x0b,
+    AuthProof = 0x0c,
+    AuthResult = 0x0d,
     GamepadSnapshot = 0x10,
     Pointer = 0x11,
     Ping = 0x20,
@@ -35,6 +44,14 @@ impl TryFrom<u8> for MessageType {
             0x03 => Ok(Self::SessionStart),
             0x04 => Ok(Self::SessionReady),
             0x05 => Ok(Self::SessionStop),
+            0x06 => Ok(Self::PairRequest),
+            0x07 => Ok(Self::PairChallenge),
+            0x08 => Ok(Self::PairProof),
+            0x09 => Ok(Self::PairResult),
+            0x0a => Ok(Self::AuthRequest),
+            0x0b => Ok(Self::AuthChallenge),
+            0x0c => Ok(Self::AuthProof),
+            0x0d => Ok(Self::AuthResult),
             0x10 => Ok(Self::GamepadSnapshot),
             0x11 => Ok(Self::Pointer),
             0x20 => Ok(Self::Ping),
@@ -73,6 +90,9 @@ pub enum ProtocolError {
     PayloadLengthMismatch { declared: usize, actual: usize },
     InvalidPayloadLength { expected: usize, actual: usize },
     InvalidDpad(u8),
+    InvalidUtf8,
+    InvalidPeerId,
+    InvalidPeerName,
 }
 
 impl fmt::Display for ProtocolError {
@@ -154,6 +174,8 @@ pub fn decode_ping(packet: Packet<'_>) -> Result<u64, ProtocolError> {
 
 pub const CAPABILITY_GAMEPAD: u32 = 1;
 pub const CAPABILITY_POINTER: u32 = 1 << 1;
+pub const AUTH_NONCE_SIZE: usize = 32;
+pub const AUTH_PROOF_SIZE: usize = 32;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SessionStart {
@@ -213,6 +235,72 @@ pub fn decode_pointer(packet: Packet<'_>) -> Result<PointerReport, ProtocolError
         delta_x: read_i32(packet.payload, 1),
         delta_y: read_i32(packet.payload, 5),
     })
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PairRequest {
+    pub peer_id: [u8; 16],
+    pub peer_name: String,
+    pub client_nonce: [u8; AUTH_NONCE_SIZE],
+}
+
+pub fn decode_pair_request(packet: Packet<'_>) -> Result<PairRequest, ProtocolError> {
+    if packet.payload.len() < 16 + 1 + AUTH_NONCE_SIZE {
+        return Err(ProtocolError::InvalidPayloadLength {
+            expected: 16 + 1 + AUTH_NONCE_SIZE,
+            actual: packet.payload.len(),
+        });
+    }
+    let peer_id: [u8; 16] = packet.payload[..16]
+        .try_into()
+        .expect("validated peer id bounds");
+    if peer_id.iter().all(|byte| *byte == 0) {
+        return Err(ProtocolError::InvalidPeerId);
+    }
+    let name_length = usize::from(packet.payload[16]);
+    if name_length > MAX_PEER_NAME_SIZE {
+        return Err(ProtocolError::InvalidPeerName);
+    }
+    let expected = 16 + 1 + name_length + AUTH_NONCE_SIZE;
+    require_payload_length(packet.payload, expected)?;
+    let peer_name = std::str::from_utf8(&packet.payload[17..17 + name_length])
+        .map_err(|_| ProtocolError::InvalidUtf8)?
+        .to_owned();
+    let client_nonce = packet.payload[17 + name_length..]
+        .try_into()
+        .expect("validated nonce bounds");
+    Ok(PairRequest {
+        peer_id,
+        peer_name,
+        client_nonce,
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AuthRequest {
+    pub peer_id: [u8; 16],
+    pub client_nonce: [u8; AUTH_NONCE_SIZE],
+}
+
+pub fn decode_auth_request(packet: Packet<'_>) -> Result<AuthRequest, ProtocolError> {
+    require_payload_length(packet.payload, 16 + AUTH_NONCE_SIZE)?;
+    let peer_id: [u8; 16] = packet.payload[..16]
+        .try_into()
+        .expect("validated peer id bounds");
+    if peer_id.iter().all(|byte| *byte == 0) {
+        return Err(ProtocolError::InvalidPeerId);
+    }
+    Ok(AuthRequest {
+        peer_id,
+        client_nonce: packet.payload[16..]
+            .try_into()
+            .expect("validated nonce bounds"),
+    })
+}
+
+pub fn decode_auth_proof(packet: Packet<'_>) -> Result<[u8; AUTH_PROOF_SIZE], ProtocolError> {
+    require_payload_length(packet.payload, AUTH_PROOF_SIZE)?;
+    Ok(packet.payload.try_into().expect("validated proof bounds"))
 }
 
 fn require_payload_length(payload: &[u8], expected: usize) -> Result<(), ProtocolError> {
