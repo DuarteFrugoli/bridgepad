@@ -1,8 +1,11 @@
 [workspace]
 members = [
     "crates/bridgepad-daemon",
+    "crates/bridgepad-gamepad-spike",
     "crates/bridgepad-protocol",
     "crates/bridgepad-transport-spike",
+    "crates/bridgepad-virtual-device",
+    "crates/bridgepad-windows-vigem",
 ]
 resolver = "2"
 

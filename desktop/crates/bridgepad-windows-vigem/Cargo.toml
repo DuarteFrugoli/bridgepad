@@ -1,0 +1,18 @@
+[package]
+name = "bridgepad-windows-vigem"
+description = "Experimental ViGEm virtual controller adapter for BridgePad Desktop"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bridgepad-virtual-device = { path = "../bridgepad-virtual-device" }
+
+[target.'cfg(windows)'.dependencies]
+vigem-rust = { version = "0.2.0", default-features = false, features = ["x360"] }
+
+[lints]
+workspace = true

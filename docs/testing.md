@@ -21,6 +21,31 @@ app/build/outputs/apk/debug/app-debug.apk
 
 The same checks run as independent jobs in GitHub Actions after every push.
 
+## Windows virtual gamepad spike
+
+This test validates the virtual-device boundary independently from Android and
+the network transport.
+
+1. Install the last signed ViGEmBus driver.
+2. From `desktop/`, run `cargo run -p bridgepad-gamepad-spike`.
+3. Open `joy.cpl` and confirm an Xbox 360 controller appears without manual
+   mapping.
+4. Enter `demo` and confirm A/B/X/Y, bumpers, Back/Start, L3/R3, D-pad, both
+   sticks and both triggers follow the printed sequence and return to neutral.
+5. Open Steam's controller test while the spike remains active. Confirm it is
+   recognized without starting Steam's manual controller setup.
+6. Enter `quit` and confirm the device disappears without a stuck input.
+7. Repeat the recognition check in a game with native controller support.
+
+On 2026-09-15, the local Windows machine successfully created, updated,
+neutralized and removed the controller through ViGEmBus 1.21.442. On 2026-09-16,
+current Steam recognized the virtual controller automatically without manual
+setup, and the complete deterministic demo produced the expected buttons,
+D-pad, sticks and triggers. The controller also appeared in `joy.cpl` and worked
+in a native controller game. The functional Windows recognition spike is
+approved; sustainable signed production distribution remains a separate gate
+under ADR 0010.
+
 ## Encrypted Android-to-desktop network probe
 
 The probe validates TLS, certificate pinning and protocol v1 Ping/Pong before
@@ -61,8 +86,15 @@ private networks while Windows classified the current network as public. Changin
 the trusted home network to private allowed the spike to complete. This is a
 diagnostic limitation, not the intended product flow: the desktop installer must
 eventually manage narrowly scoped rules for both profiles after mutual device
-authentication is implemented. The invalid-fingerprint and identity-persistence
-checks remain pending.
+authentication is implemented.
+
+On 2026-09-16, the same home-network setup was repeated with one certificate
+fingerprint digit changed. The Android probe rejected the desktop certificate
+and did not complete the encrypted test, validating the negative pinning path.
+The daemon was then stopped and restarted with the same identity directory. It
+reported the same certificate fingerprint and the Android probe connected
+successfully with the previously pinned value, validating diagnostic identity
+persistence across process restarts.
 
 ## Installing from VS Code on a physical device
 

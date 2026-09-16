@@ -78,10 +78,14 @@ jobs:
           - name: Windows
             os: windows-latest
             artifact: bridgepad-desktop-windows
-            binary: desktop/target/release/bridgepad-daemon.exe
+            packages: -p bridgepad-daemon -p bridgepad-gamepad-spike
+            binary: |
+              desktop/target/release/bridgepad-daemon.exe
+              desktop/target/release/bridgepad-gamepad-spike.exe
           - name: Linux
             os: ubuntu-latest
             artifact: bridgepad-desktop-linux
+            packages: -p bridgepad-daemon
             binary: desktop/target/release/bridgepad-daemon
     steps:
       - name: Check out repository
@@ -91,7 +95,7 @@ jobs:
         uses: dtolnay/rust-toolchain@1.88.0
 
       - name: Build desktop receiver
-        run: cargo build --locked --release --manifest-path desktop/Cargo.toml -p bridgepad-daemon
+        run: cargo build --locked --release --manifest-path desktop/Cargo.toml ${{ matrix.packages }}
 
       - name: Upload desktop receiver
         uses: actions/upload-artifact@v4

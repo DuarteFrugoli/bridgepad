@@ -8,6 +8,18 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Added a platform-independent desktop virtual-gamepad contract, an isolated
+  experimental ViGEm/XInput adapter and an interactive Windows recognition
+  spike for `joy.cpl`, Steam and games.
+- Recorded the proposed production Windows backend direction: retain ViGEm for
+  alpha development while evaluating a BridgePad-owned, Microsoft-signed
+  UMDF2/XUSB package behind the same virtual-device contract.
+- Validated that the encrypted desktop probe rejects a changed certificate
+  fingerprint and preserves its diagnostic identity across daemon restarts.
+- Validated automatic Steam recognition and the complete deterministic input
+  demo for the experimental Windows virtual Xbox 360 controller.
+- Validated the experimental controller in `joy.cpl` and a native controller
+  game, completing the Windows recognition spike.
 - Added a certificate-pinned Android TLS probe and a minimal Rust desktop
   receiver for measuring 125 Hz encrypted Ping/Pong latency by manual IP.
 - Added independent Windows and Linux receiver artifacts to GitHub Actions.

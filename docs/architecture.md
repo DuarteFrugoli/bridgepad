@@ -105,6 +105,11 @@ choice.
 - `desktop/` is a Rust workspace. Its protocol crate consumes the same normative
   binary vectors as Kotlin; transport and virtual-device crates must depend on
   it instead of duplicating wire logic.
+- `bridgepad-virtual-device` is the only contract consumed by desktop session
+  code. Windows backend details remain in replaceable adapters. ViGEm is the
+  current development/alpha adapter; the proposed production direction is a
+  Microsoft-signed UMDF2 package with an XUSB personality, subject to ADR 0010's
+  acceptance gate.
 - Bluetooth HID remains an Android-only adapter and does not use the desktop
   protocol.
 - The existing `GenericCompositeHidProfile` contains the Windows/Linux Bluetooth

@@ -5,9 +5,10 @@ crates remain independent from Android UI and transport details.
 
 The `bridgepad-protocol` crate validates the shared v1 wire vectors.
 `bridgepad-transport-spike` compares encrypted transport candidates without
-becoming a production transport. Additional crates for session state, virtual
-devices, daemon and UI will be introduced behind explicit interfaces as their
-Phase 0 spikes pass.
+becoming a production transport. `bridgepad-virtual-device` defines the
+platform-independent virtual controller contract. The experimental
+`bridgepad-windows-vigem` adapter implements that contract without exposing its
+Windows dependency to the protocol or daemon.
 
 Run all current desktop checks with:
 
@@ -58,3 +59,30 @@ Rust toolchain.
 This diagnostic certificate is stored as ordinary files and exists only for the
 transport experiment. The product daemon will move identity material to the
 operating system's protected credential storage before pairing is implemented.
+
+## Windows virtual gamepad spike
+
+The Windows spike creates an Xbox 360-compatible virtual controller that should
+appear automatically in `joy.cpl`, Steam and games. It currently uses ViGEmBus
+only as a replaceable experimental adapter; ViGEm is archived and is not yet the
+final production-backend decision.
+
+Install the last signed ViGEmBus driver, then run from the `desktop` directory:
+
+```powershell
+cargo run -p bridgepad-gamepad-spike
+```
+
+Keep the process running while opening `joy.cpl` or Steam's controller test.
+Enter `demo` to exercise the standard buttons, D-pad, both sticks and triggers,
+or `quit` to neutralize and remove the controller. To run the sequence once and
+exit automatically:
+
+```powershell
+cargo run -p bridgepad-gamepad-spike -- --demo
+```
+
+The adapter converts BridgePad's downward-positive Y axes to XInput's
+upward-positive convention and scales 16-bit trigger values to XInput's 8-bit
+range. BridgePad's first extra button maps to Guide; the remaining extra buttons
+have no Xbox 360 equivalent.

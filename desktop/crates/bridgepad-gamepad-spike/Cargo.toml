@@ -1,0 +1,16 @@
+[package]
+name = "bridgepad-gamepad-spike"
+description = "Interactive Windows virtual gamepad spike for BridgePad Desktop"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bridgepad-virtual-device = { path = "../bridgepad-virtual-device" }
+bridgepad-windows-vigem = { path = "../bridgepad-windows-vigem" }
+
+[lints]
+workspace = true
