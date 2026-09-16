@@ -8,17 +8,19 @@ import dev.jonalakas.bridgepad.protocol.BridgeMessage
 import dev.jonalakas.bridgepad.protocol.BridgePacket
 import dev.jonalakas.bridgepad.protocol.BridgePacketCodec
 import dev.jonalakas.bridgepad.protocol.BridgeStopReason
+import dev.jonalakas.bridgepad.core.ports.PointerReport
 import java.io.DataInputStream
 import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.ArrayBlockingQueue
 import javax.net.ssl.SSLSocket
 
 data class NetworkGamepadRequest(
     val host: String,
     val port: Int = 39_393,
     val certificateSha256: String,
-    val inputKind: BridgeInputKind = BridgeInputKind.TOUCHSCREEN,
+    val inputKind: BridgeInputKind = BridgeInputKind.AUTOMATIC,
     val connectTimeoutMillis: Int = 5_000,
     val readTimeoutMillis: Int = 2_000,
 ) {
@@ -47,6 +49,7 @@ class NetworkGamepadClient(
 ) {
     private val stopping = AtomicBoolean(false)
     private val pendingState = AtomicReference<VirtualGamepadState?>(VirtualGamepadState())
+    private val pendingPointers = ArrayBlockingQueue<PointerReport>(POINTER_QUEUE_CAPACITY)
     @Volatile
     private var socket: SSLSocket? = null
     @Volatile
@@ -64,6 +67,14 @@ class NetworkGamepadClient(
 
     fun send(state: VirtualGamepadState) {
         if (!stopping.get()) pendingState.set(state)
+    }
+
+    fun sendPointer(report: PointerReport) {
+        if (stopping.get()) return
+        if (!pendingPointers.offer(report)) {
+            pendingPointers.poll()
+            pendingPointers.offer(report)
+        }
     }
 
     fun stop() {
@@ -97,7 +108,7 @@ class NetworkGamepadClient(
                     sequence,
                     BridgeMessage.SessionStart(
                         request.inputKind,
-                        BridgeCapabilities.of(BridgeCapability.GAMEPAD),
+                        BridgeCapabilities.of(BridgeCapability.GAMEPAD, BridgeCapability.POINTER),
                     ),
                 )
                 val ready = readBridgePacket(input).message as? BridgeMessage.SessionReady
@@ -119,6 +130,14 @@ class NetworkGamepadClient(
                             BridgeMessage.GamepadSnapshot(next),
                         )
                         lastSent = next
+                    }
+                    pendingPointers.poll()?.let { pointer ->
+                        sequence = writePacket(
+                            connected,
+                            sessionId,
+                            sequence,
+                            BridgeMessage.PointerFrame(pointer),
+                        )
                     }
                     val now = System.nanoTime()
                     if (now - lastHeartbeatAt >= HEARTBEAT_INTERVAL_NANOS) {
@@ -194,5 +213,6 @@ class NetworkGamepadClient(
     private companion object {
         const val HEARTBEAT_INTERVAL_NANOS = 500_000_000L
         const val IDLE_POLL_MILLIS = 4L
+        const val POINTER_QUEUE_CAPACITY = 64
     }
 }

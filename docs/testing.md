@@ -108,12 +108,14 @@ virtual-gamepad adapter before discovery and pairing are implemented.
    network test**.
 4. Enter the PC IPv4 address, port `39393` and the fingerprint printed by the
    receiver.
-5. Tap **Start playable Wi-Fi session**. The touchscreen controller must open
-   only after the desktop accepts the session.
+5. Without a physical controller attached, tap **Start playable Wi-Fi session**.
+   The touchscreen controller must open only after the desktop accepts the
+   session.
 6. Confirm the controller appears in `joy.cpl`, Steam and a game without manual
    Steam mapping. Exercise every visible button, D-pad, both sticks and triggers.
-7. Leave the touchscreen controller and confirm the virtual controller
-   disappears with every input neutral.
+7. Press Android Back, switch between the virtual-controller and mouse-touchpad
+   surfaces, and confirm that the desktop controller remains connected. End the
+   session from the menu and confirm it disappears with every input neutral.
 8. Repeat while holding a button, then disable Wi-Fi or terminate the Android
    app. Within the receiver timeout, the desktop must neutralize and remove the
    virtual controller.
@@ -126,9 +128,8 @@ increment as validated.
 
 ### Physical controller over Wi-Fi follow-up
 
-After the adaptive multi-source input model is implemented, validate the
-physical-controller path over the same playable Wi-Fi session rather than only
-through Bluetooth HID:
+Validate the adaptive physical-controller path over the same playable Wi-Fi
+session rather than only through Bluetooth HID:
 
 1. Start a Wi-Fi session with a physical controller already connected to the
    phone and confirm its complete mapping in `joy.cpl`, Steam and a game.
@@ -141,12 +142,31 @@ through Bluetooth HID:
    last intentional source without drift taking permanent control.
 5. Change between the virtual-controller and touchpad screens without restarting
    TLS, recreating the desktop controller or interrupting physical input.
-6. Turn off Wi-Fi while holding a physical button and with an analog axis away
+6. On the touchpad screen, verify relative movement and click through the native
+   Windows pointer output.
+7. Turn off Wi-Fi while holding a physical button and with an analog axis away
    from center. The desktop must neutralize and remove the virtual controller
    within the receiver timeout.
 
 These checks are not replaced by the successful touchscreen Wi-Fi test: they
 validate the independent physical-capture and multi-source routing path.
+
+### Validation evidence — 2026-09-16
+
+- Android device: Samsung Galaxy A35, Android 16 (API 36)
+- Host: Windows with the BridgePad Desktop development receiver
+- Wi-Fi session using only the virtual controller: PASS in `joy.cpl` and a game
+- Wi-Fi session with a physical controller connected to the phone: PASS in
+  `joy.cpl` and a game
+- Automatic initial surface selection, simultaneous input routing and switching
+  between the virtual-controller and mouse-touchpad surfaces: PASS
+- Compatibility and Background USB capture through the shared adaptive router:
+  PASS
+- Native Windows relative-pointer movement and click over Wi-Fi: PASS
+- Controller state remained usable while changing the visible session surface:
+  PASS
+- Result: no blocking defect was observed in the adaptive multi-source gameplay
+  validation
 
 ## Installing from VS Code on a physical device
 

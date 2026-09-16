@@ -84,7 +84,7 @@
     <string name="session_active">Sessão em andamento</string>
     <string name="home_title">Vamos jogar?</string>
     <string name="home_description">Escolha onde jogar, como conectar e quais controles usar.</string>
-    <string name="step_input">3 · Entrada</string>
+    <string name="step_input">Controles</string>
     <string name="step_transport">2 · Conexão</string>
     <string name="step_destination">1 · Destino</string>
     <string name="destination_pc">PC · Windows ou Linux</string>
@@ -249,4 +249,11 @@
     <string name="network_gameplay_action">Iniciar sessão Wi-Fi jogável</string>
     <string name="network_gameplay_connecting">Criando controle virtual…</string>
     <string name="network_gameplay_failed">Não foi possível iniciar a sessão jogável</string>
+    <string name="automatic_input_description">O BridgePad usa automaticamente a tela e os controles físicos conectados ao mesmo tempo.</string>
+    <string name="automatic_input_virtual_ready">Nenhum controle físico detectado. O controle virtual será aberto quando a sessão conectar.</string>
+    <string name="session_screens">Tela da sessão</string>
+    <string name="session_screens_description">Trocar esta tela não desconecta a sessão nem desativa um controle físico.</string>
+    <string name="open_virtual_controller">Abrir controle virtual</string>
+    <string name="notification_automatic_input_active">Sessão ativa · tela e controles físicos habilitados</string>
+    <string name="network_physical_controller_active">Controle físico ativo. Você pode continuar usando-o em qualquer tela da sessão.</string>
 </resources>

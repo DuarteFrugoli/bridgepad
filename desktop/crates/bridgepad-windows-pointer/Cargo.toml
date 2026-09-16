@@ -1,0 +1,16 @@
+[package]
+name = "bridgepad-windows-pointer"
+description = "Windows relative pointer adapter for BridgePad Desktop"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bridgepad-virtual-device = { path = "../bridgepad-virtual-device" }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_UI_Input_KeyboardAndMouse"] }
+

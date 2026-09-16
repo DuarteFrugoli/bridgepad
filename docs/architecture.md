@@ -47,8 +47,16 @@ touch / Android InputDevice / direct USB
 ```
 
 Input implementations normalize platform events and never choose a destination.
-`InputRouter` selects and merges them. Output implementations receive only
+`InputRouter` keeps touchscreen and detected physical-controller sources active
+at the same time. Buttons are combined, while each analog axis and the D-pad are
+owned by the last source that made an intentional non-neutral change; releasing
+that source falls back to another source that is still held. This prevents idle
+stick drift from permanently taking control. Output implementations receive only
 logical gamepad or pointer reports and never import concrete input packages.
+
+The visible gameplay surface is presentation state, not input-routing state.
+Opening the virtual controller or the large mouse touchpad never disables a
+physical controller, stops touchscreen input, or restarts the output transport.
 
 `BridgePadApplication` is the process-level composition root and owns the shared
 input router. The Bluetooth foreground service is only an Android lifecycle host
@@ -79,14 +87,16 @@ target a PC while retaining independent protocol behavior.
 The setup model is a progressive dependency chain:
 
 ```text
-destination -> connection -> target -> input
+destination -> connection -> target
 ```
 
 Changing an earlier choice clears every dependent choice. `SessionPlanner`
 resolves a compatible adapter and rejects unsupported combinations before an
 Android service is started. A single compatible adapter remains an internal
 detail; multiple compatible adapters require an explicit product policy or user
-choice.
+choice. Input routing defaults to automatic and is deliberately outside this
+connection dependency chain. Physical-controller capture is an optional advanced
+setting that becomes relevant only when compatible hardware is detected.
 
 ## Dependency rules
 

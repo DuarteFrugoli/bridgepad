@@ -28,7 +28,7 @@ class BridgePadApplication : Application() {
         DirectUsbCaptureManager.initialize(this)
         TouchscreenLayoutStore.initialize(this)
         inputRouter = InputRouter(applicationScope)
-        networkGameplayController = NetworkGameplayController(inputRouter)
+        networkGameplayController = NetworkGameplayController(inputRouter, applicationScope)
         sessionCoordinator = SessionCoordinator(
             context = this,
             adapters = listOf(BluetoothHidSessionAdapter(this, GenericCompositeHidProfile)),

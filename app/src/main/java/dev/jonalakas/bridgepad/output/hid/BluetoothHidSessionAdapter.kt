@@ -3,7 +3,6 @@ package dev.jonalakas.bridgepad.output.hid
 import android.content.Context
 import androidx.core.content.ContextCompat
 import dev.jonalakas.bridgepad.core.session.DestinationType
-import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.ports.OutputSessionAdapter
 
@@ -19,8 +18,7 @@ class BluetoothHidSessionAdapter(
 
     override fun start(
         destination: DestinationType,
-        inputMode: InputMode,
-        physicalCaptureMode: PhysicalCaptureMode?,
+        physicalCaptureMode: PhysicalCaptureMode,
     ) {
         require(destination in descriptor.supportedDestinations) {
             "${descriptor.id.value} does not support $destination."
@@ -31,12 +29,8 @@ class BluetoothHidSessionAdapter(
                 .putExtra(BluetoothHidService.EXTRA_OUTPUT_ADAPTER_ID, descriptor.id.value)
                 .putExtra(BluetoothHidService.EXTRA_DESTINATION_TYPE, destination.name)
                 .putExtra(
-                    BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED,
-                    inputMode == InputMode.TOUCHSCREEN,
-                )
-                .putExtra(
                     BluetoothHidService.EXTRA_PHYSICAL_CAPTURE_MODE,
-                    physicalCaptureMode?.name,
+                    physicalCaptureMode.name,
                 ),
         )
     }
@@ -52,28 +46,16 @@ class BluetoothHidSessionAdapter(
         applicationContext.startService(command(BluetoothHidService.ACTION_STOP))
     }
 
-    override fun updateInput(
-        inputMode: InputMode,
-        physicalCaptureMode: PhysicalCaptureMode?,
-    ) {
+    override fun updatePhysicalCapture(physicalCaptureMode: PhysicalCaptureMode) {
         applicationContext.startService(
-            command(BluetoothHidService.ACTION_SELECT_INPUT)
-                .putExtra(
-                    BluetoothHidService.EXTRA_TOUCH_INPUT_SELECTED,
-                    inputMode == InputMode.TOUCHSCREEN,
-                ),
+            command(
+                if (physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
+                    BluetoothHidService.ACTION_ENABLE_BACKGROUND_USB
+                } else {
+                    BluetoothHidService.ACTION_ENABLE_COMPATIBILITY_INPUT
+                },
+            ),
         )
-        if (inputMode == InputMode.PHYSICAL_GAMEPAD && physicalCaptureMode != null) {
-            applicationContext.startService(
-                command(
-                    if (physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB) {
-                        BluetoothHidService.ACTION_ENABLE_BACKGROUND_USB
-                    } else {
-                        BluetoothHidService.ACTION_ENABLE_COMPATIBILITY_INPUT
-                    },
-                ),
-            )
-        }
     }
 
     override fun pairingWindowStarted(durationSeconds: Int) {

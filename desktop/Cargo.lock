@@ -83,6 +83,7 @@ version = "0.1.0"
 dependencies = [
  "bridgepad-protocol",
  "bridgepad-virtual-device",
+ "bridgepad-windows-pointer",
  "bridgepad-windows-vigem",
  "rcgen",
  "rustls",
@@ -114,6 +115,14 @@ dependencies = [
 [[package]]
 name = "bridgepad-virtual-device"
 version = "0.1.0"
+
+[[package]]
+name = "bridgepad-windows-pointer"
+version = "0.1.0"
+dependencies = [
+ "bridgepad-virtual-device",
+ "windows",
+]
 
 [[package]]
 name = "bridgepad-windows-vigem"

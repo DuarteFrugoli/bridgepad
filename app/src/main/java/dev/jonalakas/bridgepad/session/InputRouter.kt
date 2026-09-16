@@ -2,12 +2,10 @@ package dev.jonalakas.bridgepad.session
 
 import dev.jonalakas.bridgepad.core.gamepad.SourceGamepadState
 import dev.jonalakas.bridgepad.core.gamepad.SourceId
-import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.mapping.InputMerger
-import dev.jonalakas.bridgepad.core.mapping.InputOwnership
+import dev.jonalakas.bridgepad.core.mapping.AdaptiveInputOwnership
 import dev.jonalakas.bridgepad.core.ports.PointerReport
-import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
@@ -28,6 +26,7 @@ data class RoutedInputState(
     val directUsbActive: Boolean = false,
     val captureMessage: LocalizedMessage? = null,
     val captureError: Boolean = false,
+    val physicalControllerConnected: Boolean = false,
 )
 
 fun interface InputSubscription {
@@ -41,8 +40,8 @@ fun interface InputSubscription {
 class InputRouter(scope: CoroutineScope) {
     private val stateLock = Any()
     private val observers = linkedSetOf<(RoutedInputState) -> Unit>()
-    private var inputMode = InputMode.TOUCHSCREEN
     private var captureMode = PhysicalCaptureMode.COMPATIBILITY
+    private val adaptiveOwnership = AdaptiveInputOwnership()
     private var physical = PhysicalGamepadStore.state.value
     private var touch = TouchGamepadStore.state.value
     private var directUsb = DirectUsbGamepadStore.state.value
@@ -71,7 +70,7 @@ class InputRouter(scope: CoroutineScope) {
                     val changed = state.inputEventCount != lastTouchCount
                     lastTouchCount = state.inputEventCount
                     touch = state
-                    publishLocked(if (changed && inputMode == InputMode.TOUCHSCREEN) state.lastInputTimestampNanos else null)
+                    publishLocked(if (changed) state.lastInputTimestampNanos else null)
                 }
             }
         }
@@ -87,10 +86,10 @@ class InputRouter(scope: CoroutineScope) {
         }
     }
 
-    fun select(inputMode: InputMode, captureMode: PhysicalCaptureMode?) {
+    fun selectAutomatic(captureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY) {
         synchronized(stateLock) {
-            this.inputMode = inputMode
-            this.captureMode = captureMode ?: PhysicalCaptureMode.COMPATIBILITY
+            this.captureMode = captureMode
+            adaptiveOwnership.clear()
             publishLocked(null)
         }
     }
@@ -118,17 +117,6 @@ class InputRouter(scope: CoroutineScope) {
 
     private fun buildState(timestampNanos: Long?): RoutedInputState {
         val directActive = usesDirectUsbInput()
-        val primary = when {
-            inputMode == InputMode.TOUCHSCREEN -> TouchGamepadStore.sourceId
-            directActive -> DIRECT_USB_SOURCE_ID
-            else -> physical.devices.firstOrNull()?.sourceId
-        }
-        val ownership = primary?.let { primarySource ->
-            InputOwnership(
-                axes = VirtualAxis.entries.associateWith { primarySource },
-                dpad = primarySource,
-            )
-        } ?: InputOwnership()
         val physicalSources = if (usesCompatibilityInput()) {
             physical.sourceStates.map { (sourceId, gamepad) -> SourceGamepadState(sourceId, gamepad) }
         } else {
@@ -137,12 +125,15 @@ class InputRouter(scope: CoroutineScope) {
         val sources = physicalSources +
             SourceGamepadState(
                 TouchGamepadStore.sourceId,
-                if (inputMode == InputMode.TOUCHSCREEN) touch.gamepad else VirtualGamepadState(),
+                touch.gamepad,
             ) +
             SourceGamepadState(
                 DIRECT_USB_SOURCE_ID,
                 if (directActive) directUsb.gamepad else VirtualGamepadState(),
             )
+        sources.forEach(adaptiveOwnership::observe)
+        adaptiveOwnership.retainSources(sources.mapTo(mutableSetOf(), SourceGamepadState::sourceId))
+        val ownership = adaptiveOwnership.ownership(sources)
         return RoutedInputState(
             gamepad = InputMerger.merge(sources, ownership),
             inputEventCount = routedEventCount,
@@ -150,15 +141,15 @@ class InputRouter(scope: CoroutineScope) {
             directUsbActive = directUsb.active,
             captureMessage = directUsb.statusMessage,
             captureError = directUsb.statusIsError,
+            physicalControllerConnected = physical.devices.isNotEmpty() || directUsb.active,
         )
     }
 
     private fun usesCompatibilityInput(): Boolean =
-        inputMode == InputMode.PHYSICAL_GAMEPAD && captureMode == PhysicalCaptureMode.COMPATIBILITY
+        captureMode == PhysicalCaptureMode.COMPATIBILITY
 
     private fun usesDirectUsbInput(): Boolean =
-        inputMode == InputMode.PHYSICAL_GAMEPAD &&
-            captureMode == PhysicalCaptureMode.BACKGROUND_USB &&
+        captureMode == PhysicalCaptureMode.BACKGROUND_USB &&
             directUsb.active
 
     private companion object {

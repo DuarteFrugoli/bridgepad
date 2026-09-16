@@ -51,11 +51,16 @@ In the Android app, open **Settings > Encrypted network test** and enter:
 The Android screen exposes two development actions. The encrypted probe sends
 250 Ping/Pong samples at 125 Hz and reports handshake, p50, p95 and p99 RTT. On
 Windows, **Start playable Wi-Fi session** creates the virtual controller and
-opens the touchscreen layout. Leaving the layout sends a neutral snapshot and
-ends the desktop session.
+accepts touchscreen and physical-controller input simultaneously. It initially
+opens the large mouse touchpad when a physical controller is already connected,
+or the virtual controller otherwise. Android Back opens a session menu that can
+switch between those surfaces without ending the TLS session. Pointer reports
+drive the native Windows mouse; ending the session neutralizes and removes the
+desktop controller.
 
 The playable path is still a manual development flow: it uses the typed IP and
-pinned certificate fingerprint, supports gamepad snapshots only, and trusts any
+pinned certificate fingerprint, supports gamepad and relative-pointer reports,
+and trusts any
 client that can reach the manually started receiver. Use it only on a trusted
 development network. Discovery, mutual pairing and protected identity storage
 remain required before Wi-Fi is exposed as a normal Home connection.

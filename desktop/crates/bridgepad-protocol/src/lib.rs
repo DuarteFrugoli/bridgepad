@@ -153,6 +153,7 @@ pub fn decode_ping(packet: Packet<'_>) -> Result<u64, ProtocolError> {
 }
 
 pub const CAPABILITY_GAMEPAD: u32 = 1;
+pub const CAPABILITY_POINTER: u32 = 1 << 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct SessionStart {

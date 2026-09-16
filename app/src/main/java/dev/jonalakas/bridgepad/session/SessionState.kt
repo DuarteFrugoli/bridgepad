@@ -34,7 +34,6 @@ data class SessionState(
     val canReconnect: Boolean = false,
     val physicalCaptureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
     val directUsbActive: Boolean = false,
-    val touchInputSelected: Boolean = true,
     val message: LocalizedMessage? = null,
     val feedbackLevel: FeedbackLevel = FeedbackLevel.INFO,
     val inputRateHz: Float = 0f,

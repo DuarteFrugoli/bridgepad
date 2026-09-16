@@ -66,7 +66,7 @@ enum class BridgeMessageType(val code: Int) {
 }
 
 enum class BridgeInputKind(val code: Int) {
-    TOUCHSCREEN(0), PHYSICAL_GAMEPAD(1);
+    TOUCHSCREEN(0), PHYSICAL_GAMEPAD(1), AUTOMATIC(2);
 
     companion object {
         fun fromCode(code: Int): BridgeInputKind = entries.firstOrNull { it.code == code }

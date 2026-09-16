@@ -30,7 +30,6 @@ import dev.jonalakas.bridgepad.MainActivity
 import dev.jonalakas.bridgepad.BridgePadApplication
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
-import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.session.ConnectionMethod
 import dev.jonalakas.bridgepad.core.session.DestinationType
@@ -307,13 +306,11 @@ class BluetoothHidService : Service() {
                 }
                 activeProfile = requestedProfile
                 activeDestination = requestedDestination
-                val touchSelected = intent.getBooleanExtra(EXTRA_TOUCH_INPUT_SELECTED, true)
                 val captureMode = intent.getStringExtra(EXTRA_PHYSICAL_CAPTURE_MODE)
                     ?.let { runCatching { PhysicalCaptureMode.valueOf(it) }.getOrNull() }
                     ?: PhysicalCaptureMode.COMPATIBILITY
                 HidSessionStore.update {
                     it.copy(
-                        touchInputSelected = touchSelected,
                         physicalCaptureMode = captureMode,
                         directUsbActive = inputRouter.current.directUsbActive,
                         destinationType = activeDestination,
@@ -321,10 +318,7 @@ class BluetoothHidService : Service() {
                         outputAdapterId = activeProfile.adapter.id,
                     )
                 }
-                inputRouter.select(
-                    if (touchSelected) InputMode.TOUCHSCREEN else InputMode.PHYSICAL_GAMEPAD,
-                    captureMode,
-                )
+                inputRouter.selectAutomatic(captureMode)
                 updateNotification()
                 startHid()
             }
@@ -332,11 +326,11 @@ class BluetoothHidService : Service() {
             ACTION_RECONNECT -> reconnect()
             ACTION_ENABLE_BACKGROUND_USB -> {
                 HidSessionStore.update { it.copy(physicalCaptureMode = PhysicalCaptureMode.BACKGROUND_USB) }
-                inputRouter.select(InputMode.PHYSICAL_GAMEPAD, PhysicalCaptureMode.BACKGROUND_USB)
+                inputRouter.selectAutomatic(PhysicalCaptureMode.BACKGROUND_USB)
                 outputScheduler.submit(inputRouter.current.gamepad)
             }
             ACTION_ENABLE_COMPATIBILITY_INPUT -> {
-                inputRouter.select(InputMode.PHYSICAL_GAMEPAD, PhysicalCaptureMode.COMPATIBILITY)
+                inputRouter.selectAutomatic(PhysicalCaptureMode.COMPATIBILITY)
                 outputScheduler.submit(inputRouter.current.gamepad)
                 HidSessionStore.update {
                     it.copy(
@@ -348,9 +342,6 @@ class BluetoothHidService : Service() {
                 }
                 updateNotification()
             }
-            ACTION_SELECT_INPUT -> selectInput(
-                intent.getBooleanExtra(EXTRA_TOUCH_INPUT_SELECTED, true),
-            )
             ACTION_REFRESH_HOSTS -> if (!shuttingDown) refreshPairedHosts()
             ACTION_DISCOVERABILITY_STARTED -> showDiscoverabilityMessage(
                 intent.getIntExtra(EXTRA_DISCOVERABLE_DURATION, 120),
@@ -404,31 +395,6 @@ class BluetoothHidService : Service() {
         }
         val requested = currentAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HID_DEVICE)
         if (!requested) finishSession(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_no_profile))
-    }
-
-    private fun selectInput(touchSelected: Boolean) {
-        inputRouter.clearPointer()
-        if (connectedDevice != null) {
-            synchronized(transportLock) { outputTransport.sendGamepad(VirtualGamepadState()) }
-        }
-        HidSessionStore.update {
-            it.copy(
-                touchInputSelected = touchSelected,
-                message = if (touchSelected) {
-                    LocalizedMessage(R.string.hid_touch_selected)
-                } else {
-                    LocalizedMessage(R.string.hid_physical_selected)
-                },
-                feedbackLevel = HidFeedbackLevel.INFO,
-            )
-        }
-        inputRouter.select(
-            if (touchSelected) InputMode.TOUCHSCREEN else InputMode.PHYSICAL_GAMEPAD,
-            HidSessionStore.state.value.physicalCaptureMode,
-        )
-        updateNotification()
-        outputScheduler.submit(inputRouter.current.gamepad)
-        SessionLog.record("INPUT", if (touchSelected) "Touchscreen input selected" else "Physical gamepad input selected")
     }
 
     private fun registerHidApp() {
@@ -815,9 +781,8 @@ class BluetoothHidService : Service() {
     private fun buildNotification(): android.app.Notification {
         val state = HidSessionStore.state.value
         val message = when {
-            state.touchInputSelected -> getString(R.string.notification_touchscreen_active)
             state.directUsbActive -> getString(R.string.notification_background_usb_active)
-            else -> getString(R.string.notification_physical_gamepad_active)
+            else -> getString(R.string.notification_automatic_input_active)
         }
         return NotificationCompat.Builder(this, CHANNEL_ID)
         .setSmallIcon(R.drawable.ic_notification)
@@ -846,13 +811,11 @@ class BluetoothHidService : Service() {
         const val ACTION_RECONNECT = "dev.jonalakas.bridgepad.hid.RECONNECT"
         const val ACTION_ENABLE_BACKGROUND_USB = "dev.jonalakas.bridgepad.hid.ENABLE_BACKGROUND_USB"
         const val ACTION_ENABLE_COMPATIBILITY_INPUT = "dev.jonalakas.bridgepad.hid.ENABLE_COMPATIBILITY_INPUT"
-        const val ACTION_SELECT_INPUT = "dev.jonalakas.bridgepad.hid.SELECT_INPUT"
         const val ACTION_REFRESH_HOSTS = "dev.jonalakas.bridgepad.hid.REFRESH_HOSTS"
         const val ACTION_DISCOVERABILITY_STARTED = "dev.jonalakas.bridgepad.hid.DISCOVERABILITY_STARTED"
         const val ACTION_STOP = "dev.jonalakas.bridgepad.hid.STOP"
         const val EXTRA_ADDRESS = "host_address"
         const val EXTRA_DISCOVERABLE_DURATION = "discoverable_duration"
-        const val EXTRA_TOUCH_INPUT_SELECTED = "touch_input_selected"
         const val EXTRA_PHYSICAL_CAPTURE_MODE = "physical_capture_mode"
         const val EXTRA_OUTPUT_ADAPTER_ID = "output_adapter_id"
         const val EXTRA_DESTINATION_TYPE = "destination_type"

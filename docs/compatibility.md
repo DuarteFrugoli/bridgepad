@@ -108,3 +108,18 @@ its evidence recorded here.
 - Twenty start/connect/stop cycles and continuous two-hour session: PASS
 - Activity recreation, background return and diagnostic sharing: PASS
 - Result: no blocking defect observed during Phase 7 validation
+
+### 2026-09-16 — Adaptive multi-source Wi-Fi gameplay
+
+- Android device: Samsung Galaxy A35, Android 16 (API 36)
+- Host: Windows with BridgePad Desktop and its development virtual-gamepad backend
+- Virtual controller over the encrypted Wi-Fi session in `joy.cpl`: PASS
+- Virtual controller over the encrypted Wi-Fi session in a game: PASS
+- Physical controller forwarded through the same Wi-Fi session in `joy.cpl` and
+  a game: PASS
+- Automatic virtual/physical input coexistence and initial session surface: PASS
+- Live switching between virtual-controller and mouse-touchpad surfaces without
+  interrupting the desktop controller: PASS
+- Relative Windows mouse movement and click over Wi-Fi: PASS
+- Compatibility and Background USB capture with the shared router: PASS
+- Result: no blocking defect observed

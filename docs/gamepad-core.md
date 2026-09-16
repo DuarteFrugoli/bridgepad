@@ -20,8 +20,11 @@ RawInputEvent
 
 Each input source has a stable, non-empty `SourceId`. Buttons from active
 sources are combined using a logical union. Ownership of every analog axis and
-the D-pad is explicit; an absent owner contributes the neutral value. Removing
-a source immediately removes all of its contributions.
+the D-pad is explicit. `AdaptiveInputOwnership` assigns each control to the last
+source that made an intentional non-neutral change, ignores neutral drift and
+falls back to another source that remains held when the owner releases it. An
+absent owner contributes the neutral value. Removing a source immediately
+removes all of its contributions.
 
 Stick axes use `[-1, 1]`, while triggers use `[0, 1]`. Values are clamped before
 they enter a source state. Stick deadzones are radial and can optionally rescale
@@ -31,8 +34,10 @@ Session lifecycle is represented separately from controller input. Stopping a
 session clears pending output and produces a neutral gamepad state.
 
 `InputRouter` is the Android composition point for touchscreen, Android
-`InputDevice` and direct USB sources. An output adapter consumes only the routed
-logical state and cannot import those concrete input implementations.
+`InputDevice` and direct USB sources. Touchscreen and the selected physical
+capture path remain active together; choosing a gameplay screen never selects an
+exclusive source. An output adapter consumes only the routed logical state and
+cannot import those concrete input implementations.
 
 `OutputScheduler` is transport-neutral timing policy. An output transport may
 use it to preserve short button transitions while rate-limiting analog updates.

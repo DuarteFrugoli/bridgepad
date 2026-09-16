@@ -84,7 +84,7 @@
     <string name="session_active">Session in progress</string>
     <string name="home_title">Ready to play?</string>
     <string name="home_description">Choose where to play, how to connect and which controls to use.</string>
-    <string name="step_input">3 · Input</string>
+    <string name="step_input">Controls</string>
     <string name="step_transport">2 · Connection</string>
     <string name="step_destination">1 · Destination</string>
     <string name="destination_pc">PC · Windows or Linux</string>
@@ -249,4 +249,11 @@
     <string name="network_gameplay_action">Start playable Wi-Fi session</string>
     <string name="network_gameplay_connecting">Creating virtual controller…</string>
     <string name="network_gameplay_failed">Could not start the playable session</string>
+    <string name="automatic_input_description">BridgePad uses touchscreen and connected physical controllers together automatically.</string>
+    <string name="automatic_input_virtual_ready">No physical controller detected. The virtual controller will open when the session connects.</string>
+    <string name="session_screens">Session screen</string>
+    <string name="session_screens_description">Changing this screen does not disconnect the session or disable a physical controller.</string>
+    <string name="open_virtual_controller">Open virtual controller</string>
+    <string name="notification_automatic_input_active">Session active · touchscreen and physical controllers enabled</string>
+    <string name="network_physical_controller_active">Physical controller active. You can keep using it on either session screen.</string>
 </resources>

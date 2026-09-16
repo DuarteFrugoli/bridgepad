@@ -5,36 +5,25 @@ data class SessionDraft(
     val connectionMethod: ConnectionMethod? = null,
     val outputAdapterId: OutputAdapterId? = null,
     val destinationTarget: DestinationTarget? = null,
-    val inputMode: InputMode? = null,
-    val physicalCaptureMode: PhysicalCaptureMode? = null,
+    val physicalCaptureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
 ) {
     fun selectDestination(destination: DestinationType) = copy(
         destinationType = destination,
         connectionMethod = null,
         outputAdapterId = null,
         destinationTarget = null,
-        inputMode = null,
-        physicalCaptureMode = null,
     )
 
     fun selectConnection(method: ConnectionMethod, adapterId: OutputAdapterId? = null) = copy(
         connectionMethod = method,
         outputAdapterId = adapterId,
         destinationTarget = null,
-        inputMode = null,
-        physicalCaptureMode = null,
     )
 
     fun selectTarget(target: DestinationTarget) = copy(
         destinationTarget = target,
-        inputMode = null,
-        physicalCaptureMode = null,
     )
 
-    fun selectInput(mode: InputMode) = copy(
-        inputMode = mode,
-        physicalCaptureMode = if (mode == InputMode.PHYSICAL_GAMEPAD) physicalCaptureMode else null,
-    )
 }
 
 enum class SessionPlanProblem {
@@ -46,8 +35,6 @@ enum class SessionPlanProblem {
     CONNECTION_UNAVAILABLE,
     MISSING_TARGET,
     TARGET_UNAVAILABLE,
-    MISSING_INPUT,
-    MISSING_CAPTURE_MODE,
 }
 
 sealed interface SessionPlanResult {
@@ -107,18 +94,12 @@ object SessionPlanner {
         if (target?.kind == DestinationTargetKind.EXISTING && target.id !in availableTargetIds) {
             return SessionPlanResult.Incomplete(SessionPlanProblem.TARGET_UNAVAILABLE)
         }
-        val input = draft.inputMode
-            ?: return SessionPlanResult.Incomplete(SessionPlanProblem.MISSING_INPUT)
-        if (input == InputMode.PHYSICAL_GAMEPAD && draft.physicalCaptureMode == null) {
-            return SessionPlanResult.Incomplete(SessionPlanProblem.MISSING_CAPTURE_MODE)
-        }
         return SessionPlanResult.Ready(
             SessionConfiguration(
                 destinationType = destination,
                 connectionMethod = connection,
                 outputAdapterId = adapter.id,
                 destinationTarget = target,
-                inputMode = input,
                 physicalCaptureMode = draft.physicalCaptureMode,
             ),
         )

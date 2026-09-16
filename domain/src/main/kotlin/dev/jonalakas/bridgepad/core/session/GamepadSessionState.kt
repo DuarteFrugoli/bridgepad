@@ -1,7 +1,5 @@
 package dev.jonalakas.bridgepad.core.session
 
-enum class InputMode { TOUCHSCREEN, PHYSICAL_GAMEPAD }
-
 enum class PhysicalCaptureMode { COMPATIBILITY, BACKGROUND_USB }
 
 enum class DestinationType { PC }
@@ -71,15 +69,8 @@ data class SessionConfiguration(
     val connectionMethod: ConnectionMethod,
     val outputAdapterId: OutputAdapterId,
     val destinationTarget: DestinationTarget? = null,
-    val inputMode: InputMode,
-    val physicalCaptureMode: PhysicalCaptureMode? = null,
-) {
-    init {
-        require(inputMode != InputMode.PHYSICAL_GAMEPAD || physicalCaptureMode != null) {
-            "Physical input requires an explicit capture mode."
-        }
-    }
-}
+    val physicalCaptureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
+)
 
 data class GamepadSessionState(
     val status: SessionStatus = SessionStatus.IDLE,

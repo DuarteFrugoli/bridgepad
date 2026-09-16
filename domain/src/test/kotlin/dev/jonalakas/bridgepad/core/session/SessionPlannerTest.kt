@@ -14,13 +14,12 @@ class SessionPlannerTest {
     private val catalog = OutputAdapterCatalog(listOf(pcBluetooth))
 
     @Test
-    fun selectionsClearEveryDependentStep() {
+    fun changingConnectionClearsItsTargetButPreservesInputPreferences() {
         val complete = SessionDraft(
             destinationType = DestinationType.PC,
             connectionMethod = ConnectionMethod.BLUETOOTH,
             outputAdapterId = OutputAdapterIds.GENERIC_BLUETOOTH_HID,
             destinationTarget = DestinationTarget(DestinationTargetKind.EXISTING, "pc"),
-            inputMode = InputMode.PHYSICAL_GAMEPAD,
             physicalCaptureMode = PhysicalCaptureMode.BACKGROUND_USB,
         )
 
@@ -30,7 +29,7 @@ class SessionPlannerTest {
         assertEquals(ConnectionMethod.WIFI, changedConnection.connectionMethod)
         assertEquals(null, changedConnection.outputAdapterId)
         assertEquals(null, changedConnection.destinationTarget)
-        assertEquals(null, changedConnection.inputMode)
+        assertEquals(PhysicalCaptureMode.BACKGROUND_USB, changedConnection.physicalCaptureMode)
     }
 
     @Test
@@ -40,7 +39,6 @@ class SessionPlannerTest {
                 destinationType = DestinationType.PC,
                 connectionMethod = ConnectionMethod.BLUETOOTH,
                 destinationTarget = DestinationTarget(DestinationTargetKind.EXISTING, "pc"),
-                inputMode = InputMode.TOUCHSCREEN,
             ),
             adapters = catalog,
             connectionAvailable = true,
@@ -61,7 +59,6 @@ class SessionPlannerTest {
                 destinationType = DestinationType.PC,
                 connectionMethod = ConnectionMethod.WIFI,
                 destinationTarget = DestinationTarget(DestinationTargetKind.EXISTING, "pc"),
-                inputMode = InputMode.TOUCHSCREEN,
             ),
             adapters = catalog,
             connectionAvailable = true,

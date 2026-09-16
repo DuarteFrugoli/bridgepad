@@ -2,7 +2,6 @@ package dev.jonalakas.bridgepad.session
 
 import android.content.Context
 import dev.jonalakas.bridgepad.core.session.DestinationType
-import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.core.session.OutputAdapterCatalog
 import dev.jonalakas.bridgepad.core.session.OutputAdapterId
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
@@ -13,8 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Application-level coordinator used by presentation code.
  *
- * UI chooses a destination, connection and input. This class resolves those
- * choices to an adapter; presentation never talks to a concrete service.
+ * UI chooses a destination and connection. This class resolves them to an
+ * adapter; automatic multi-source input stays independent from presentation.
  */
 class SessionCoordinator(
     context: Context,
@@ -34,13 +33,12 @@ class SessionCoordinator(
     fun start(
         adapterId: OutputAdapterId,
         destination: DestinationType,
-        inputMode: InputMode,
-        physicalCaptureMode: PhysicalCaptureMode?,
+        physicalCaptureMode: PhysicalCaptureMode,
     ): Boolean {
         val adapter = adaptersById[adapterId] ?: return false
         if (destination !in adapter.descriptor.supportedDestinations) return false
         activeAdapterId = adapterId
-        adapter.start(destination, inputMode, physicalCaptureMode)
+        adapter.start(destination, physicalCaptureMode)
         return true
     }
 
@@ -55,14 +53,9 @@ class SessionCoordinator(
         activeAdapterId = null
     }
 
-    fun selectInput(inputMode: InputMode) {
-        if (inputMode == InputMode.TOUCHSCREEN) preparePhysicalCapture(null)
-        activeAdapter()?.updateInput(inputMode, state.value.physicalCaptureMode)
-    }
-
     fun selectPhysicalCaptureMode(mode: PhysicalCaptureMode) {
         preparePhysicalCapture(mode)
-        activeAdapter()?.updateInput(InputMode.PHYSICAL_GAMEPAD, mode)
+        activeAdapter()?.updatePhysicalCapture(mode)
     }
 
     fun pairingWindowStarted(durationSeconds: Int) {

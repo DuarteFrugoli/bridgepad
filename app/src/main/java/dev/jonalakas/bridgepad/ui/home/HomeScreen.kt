@@ -10,7 +10,6 @@ import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.usb.DirectUsbState
-import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.session.ConnectionMethod
 import dev.jonalakas.bridgepad.core.session.DestinationType
@@ -33,7 +32,6 @@ fun HomeScreen(
     hidCompatible: Boolean,
     hidState: HidSessionState,
     physicalGamepadState: PhysicalGamepadState,
-    inputMode: InputMode?,
     physicalCaptureMode: PhysicalCaptureMode?,
     sessionDraft: SessionDraft,
     outputAdapters: OutputAdapterCatalog,
@@ -48,7 +46,6 @@ fun HomeScreen(
     pairNewPcSelected: Boolean,
     preparingConnection: Boolean,
     onSelectHost: (String?) -> Unit,
-    onInputModeChanged: (InputMode) -> Unit,
     onPhysicalCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
     onPrepareBluetooth: () -> Unit,
     onPlay: () -> Unit,
@@ -66,6 +63,7 @@ fun HomeScreen(
         permissionGranted = bluetoothPermissionGranted,
     )
     val bluetoothSelected = connectionMethod == ConnectionMethod.BLUETOOTH
+    val physicalConnected = physicalGamepadState.devices.isNotEmpty() || directUsbState.active
     val targetChosen = connected || (
         destinationType == DestinationType.PC &&
             bluetoothSelected &&
@@ -160,19 +158,21 @@ fun HomeScreen(
                     }
                 }
             }
-            if (targetChosen) {
+            if (targetChosen || physicalConnected) {
                 item {
                     SetupCard(R.string.step_input) {
-                        Choice(inputMode == InputMode.TOUCHSCREEN, R.string.touchscreen_input, !busy) { onInputModeChanged(InputMode.TOUCHSCREEN) }
-                        Choice(inputMode == InputMode.PHYSICAL_GAMEPAD, R.string.physical_input, !busy) { onInputModeChanged(InputMode.PHYSICAL_GAMEPAD) }
-                        if (inputMode == InputMode.TOUCHSCREEN) {
-                            OutlinedButton(
-                                onClick = onEditTouchscreenLayout,
-                                enabled = !busy,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text(stringResource(R.string.edit_controller_layout)) }
-                        } else if (inputMode == InputMode.PHYSICAL_GAMEPAD) {
+                        Text(stringResource(R.string.automatic_input_description))
+                        OutlinedButton(
+                            onClick = onEditTouchscreenLayout,
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text(stringResource(R.string.edit_controller_layout)) }
+                        if (physicalConnected) {
                             val deviceNames = physicalGamepadState.devices.joinToString { it.name }
+                            Text(
+                                directUsbState.deviceName ?: deviceNames,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                             Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleSmall)
                             Choice(
                                 physicalCaptureMode == PhysicalCaptureMode.COMPATIBILITY,
@@ -193,7 +193,7 @@ fun HomeScreen(
                                     PhysicalCaptureMode.COMPATIBILITY -> deviceNames.ifEmpty {
                                         stringResource(R.string.physical_input_missing)
                                     }
-                                    null -> stringResource(R.string.choose_capture_mode)
+                                    null -> stringResource(R.string.compatibility_mode)
                                 },
                             )
                             if (physicalCaptureMode == PhysicalCaptureMode.BACKGROUND_USB && directUsbState.statusMessage != null) {
@@ -212,7 +212,7 @@ fun HomeScreen(
                             ) { Text(stringResource(R.string.configure_gamepad_mapping)) }
                             Text(stringResource(R.string.mapping_optional_both_modes), style = MaterialTheme.typography.bodySmall)
                         } else {
-                            Text(stringResource(R.string.choose_input_hint), style = MaterialTheme.typography.bodySmall)
+                            Text(stringResource(R.string.automatic_input_virtual_ready), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -227,23 +227,31 @@ fun HomeScreen(
                     })
                 }
             }
-            item {
+            if (!connected) item {
                 if (!connected && !setupComplete && !busy) {
                     Text(stringResource(R.string.complete_session_setup), modifier = Modifier.padding(bottom = 8.dp))
                 }
                 Button(
-                    onClick = if (connected) {
-                        if (inputMode == InputMode.TOUCHSCREEN) onOpenTouchController else onOpenMouseTouchpad
-                    } else onPlay,
-                    enabled = hidCompatible && !busy && (connected || setupComplete),
+                    onClick = onPlay,
+                    enabled = hidCompatible && !busy && setupComplete,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(stringResource(when {
-                        connected -> R.string.resume_session
                         hidState.pairingModeActive -> R.string.waiting_for_pairing
                         busy -> R.string.preparing_connection
                         else -> R.string.connect_and_play
                     }))
+                }
+            }
+            if (connected) item {
+                SetupCard(R.string.session_screens) {
+                    Button(onClick = onOpenTouchController, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.open_virtual_controller))
+                    }
+                    OutlinedButton(onClick = onOpenMouseTouchpad, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.open_mouse_touchpad))
+                    }
+                    Text(stringResource(R.string.session_screens_description), style = MaterialTheme.typography.bodySmall)
                 }
             }
             if (hidState.sessionActive) item {

@@ -28,7 +28,8 @@ Present in the current build:
 - optional saved controller mapping for both physical-input modes;
 - Bluetooth HID gamepad and relative mouse output;
 - integrated and full-screen mouse touchpads;
-- switching between virtual and physical input during an active session;
+- simultaneous virtual and physical input during an active session;
+- a manual encrypted Wi-Fi gameplay path through BridgePad Desktop on Windows;
 - guided pairing, reconnection, session notices and safe shutdown;
 - live metrics and privacy-conscious diagnostic report export;
 - English and Brazilian Portuguese interfaces;
@@ -94,19 +95,23 @@ The Home screen builds a session in dependency order:
    as upcoming.
 3. **Computer** — choose an already paired PC or explicitly choose to pair a new
    one.
-4. **Input** — virtual gamepad or physical controller.
+
+Input is automatic rather than another required setup choice. Virtual controls
+and any detected physical controller may be used simultaneously.
 
 No choice is preselected for a new setup. **Connect and play** remains disabled
 until the required choices and permissions are valid. Selecting a paired PC does
 not make the phone discoverable; new pairing only starts after the user chooses
 that action.
 
-During an active session, the player can switch between virtual and physical
-input without reconnecting the Bluetooth controller seen by the PC.
+During an active session, the player can switch between the virtual-controller
+and mouse-touchpad screens without reconnecting. This changes only the visible
+surface; virtual and physical inputs remain active together.
 
 ## Physical gamepad modes
 
-BridgePad provides two capture modes for a physical controller.
+When a physical controller is detected, BridgePad provides two optional capture
+modes. They do not disable the virtual controls.
 
 ### Compatibility
 
@@ -185,7 +190,8 @@ in [`docs/decisions`](./docs/decisions/).
 
 ## Next direction
 
-The next major work is BridgePad Desktop, first for Windows and then Linux.
+The current major work is evolving the first playable BridgePad Desktop path
+into a product connection, first for Windows and then Linux.
 
 ```text
 BridgePad Android
@@ -217,10 +223,9 @@ remain available as a direct path that does not require the companion.
 
 ## Not implemented yet
 
-- BridgePad Desktop;
-- LAN/Wi-Fi output;
+- automatic LAN discovery and product Wi-Fi pairing;
 - phone-to-PC USB output;
-- native virtual-controller output on Windows or Linux;
+- a production Windows virtual-controller backend and installer;
 - Linux receiver support;
 - rumble/force-feedback return;
 - gyroscope or accelerometer control;

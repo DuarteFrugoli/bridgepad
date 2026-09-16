@@ -1,10 +1,14 @@
 //! Encrypted BridgePad receiver for the network probe and first playable flow.
 
 use bridgepad_protocol::{
-    CAPABILITY_GAMEPAD, HEADER_SIZE, MAX_PAYLOAD_SIZE, MessageType, PacketHeader,
-    decode_gamepad_snapshot, decode_packet, decode_session_start, encode_packet,
+    CAPABILITY_GAMEPAD, CAPABILITY_POINTER, HEADER_SIZE, MAX_PAYLOAD_SIZE, MessageType,
+    PacketHeader, decode_gamepad_snapshot, decode_packet, decode_pointer, decode_session_start,
+    encode_packet,
 };
-use bridgepad_virtual_device::{DpadDirection, GamepadReport, VirtualGamepadDevice};
+use bridgepad_virtual_device::{
+    DpadDirection, GamepadReport, PointerReport, VirtualGamepadDevice, VirtualPointerDevice,
+};
+use bridgepad_windows_pointer::WindowsPointer;
 use bridgepad_windows_vigem::VigemGamepad;
 use rcgen::{CertifiedKey, generate_simple_self_signed};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
@@ -72,6 +76,7 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
     let mut stream = StreamOwned::new(connection, socket);
     println!("Encrypted client connected from {peer}");
     let mut gamepad: Option<GamepadLease> = None;
+    let mut pointer: Option<PointerLease> = None;
     let mut active_session_id = None;
     let mut latest_gamepad_sequence = None;
 
@@ -98,7 +103,7 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
                     return Err("a gamepad session is already active on this connection".into());
                 }
                 let request = decode_session_start(packet)?;
-                if request.input_kind > 1 {
+                if request.input_kind > 2 {
                     return Err("unsupported input kind".into());
                 }
                 if request.requested_capabilities & CAPABILITY_GAMEPAD == 0 {
@@ -106,13 +111,14 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
                 }
                 let device = VigemGamepad::connect()?;
                 gamepad = Some(GamepadLease::new(Box::new(device))?);
+                pointer = Some(PointerLease::new(Box::new(WindowsPointer::connect()))?);
                 active_session_id = Some(packet.header.session_id);
                 latest_gamepad_sequence = None;
                 write_response(
                     &mut stream,
                     packet.header,
                     MessageType::SessionReady,
-                    &CAPABILITY_GAMEPAD.to_be_bytes(),
+                    &(CAPABILITY_GAMEPAD | CAPABILITY_POINTER).to_be_bytes(),
                 )?;
                 println!("Playable gamepad session started for {peer}");
             }
@@ -130,9 +136,24 @@ fn serve(socket: TcpStream, config: Arc<ServerConfig>) -> Result<(), AnyError> {
                     latest_gamepad_sequence = Some(packet.header.sequence);
                 }
             }
+            MessageType::Pointer => {
+                if active_session_id != Some(packet.header.session_id) {
+                    return Err("pointer report does not belong to the active session".into());
+                }
+                let report = decode_pointer(packet)?;
+                pointer
+                    .as_mut()
+                    .ok_or("pointer session is not active")?
+                    .update(PointerReport {
+                        buttons: report.buttons,
+                        delta_x: report.delta_x,
+                        delta_y: report.delta_y,
+                    })?;
+            }
             MessageType::SessionStop => {
                 if active_session_id == Some(packet.header.session_id) {
                     gamepad = None;
+                    pointer = None;
                     active_session_id = None;
                     latest_gamepad_sequence = None;
                     println!("Playable gamepad session stopped for {peer}");
@@ -217,6 +238,30 @@ impl Drop for GamepadLease {
     fn drop(&mut self) {
         if let Err(error) = self.device.neutralize() {
             eprintln!("Could not neutralize virtual gamepad: {error}");
+        }
+    }
+}
+
+struct PointerLease {
+    device: Box<dyn VirtualPointerDevice>,
+}
+
+impl PointerLease {
+    fn new(mut device: Box<dyn VirtualPointerDevice>) -> Result<Self, AnyError> {
+        device.neutralize()?;
+        Ok(Self { device })
+    }
+
+    fn update(&mut self, report: PointerReport) -> Result<(), AnyError> {
+        self.device.update(report)?;
+        Ok(())
+    }
+}
+
+impl Drop for PointerLease {
+    fn drop(&mut self) {
+        if let Err(error) = self.device.neutralize() {
+            eprintln!("Could not neutralize virtual pointer: {error}");
         }
     }
 }

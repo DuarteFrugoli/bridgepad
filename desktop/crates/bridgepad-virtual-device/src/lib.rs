@@ -67,6 +67,31 @@ pub trait VirtualGamepadDevice: Send {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PointerReport {
+    pub buttons: u8,
+    pub delta_x: i32,
+    pub delta_y: i32,
+}
+
+pub trait VirtualPointerDevice: Send {
+    /// Sends relative pointer movement and the complete pointer-button state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an adapter-specific error if the operating system rejects the input.
+    fn update(&mut self, report: PointerReport) -> Result<(), VirtualDeviceError>;
+
+    /// Releases pointer buttons without moving the pointer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an adapter-specific error if the neutral report is rejected.
+    fn neutralize(&mut self) -> Result<(), VirtualDeviceError> {
+        self.update(PointerReport::default())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VirtualDeviceErrorKind {
     UnsupportedPlatform,

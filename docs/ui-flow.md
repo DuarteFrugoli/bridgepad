@@ -1,30 +1,36 @@
 # Session UI and localization
 
-The Home screen progressively reveals three choices on one page:
+The Home screen progressively reveals three connection choices on one page:
 
 1. **Destination**: PC running Windows or Linux.
-2. **Connection**: the compatible methods for the selected destination. For PC,
-   Bluetooth is available while Wi-Fi and USB are visible as future work. With
-   PC and Bluetooth selected, this step also asks for an already paired computer
-   or **Pair a new PC**.
-3. **Input**: virtual gamepad or physical controller. This step appears after a
-   connection target has been chosen. Input can change during an active session
-   without reconnecting the PC.
+2. **Connection**: the compatible methods for the selected destination.
+3. **Computer**: for Bluetooth, choose an already paired computer or explicitly
+   choose **Pair a new PC**. Product Wi-Fi discovery is still future work; its
+   current playable path remains in the diagnostic screen.
 
-Each new setup starts with no input, transport or destination selected, including
-after explicitly ending a session. Previously saved setup preferences are ignored.
+Input is automatic rather than a fourth required choice. Touchscreen and detected
+physical controllers may be used at the same time. If a session starts with a
+physical controller connected, BridgePad opens the large mouse touchpad; otherwise
+it opens the virtual controller. This initial screen does not select or disable an
+input source.
+
+Each new setup starts with no destination, connection or target selected,
+including after explicitly ending a session. Previously saved setup preferences
+are ignored.
 Choices survive rotation while configuring the current session, and reopening an
 active session reflects its actual input/connection without interrupting it.
 Onboarding completion and per-controller mappings remain persistent.
-For physical input, the Input step also requires an explicit capture choice:
+When a physical controller is detected, Home reveals optional capture settings
+independently from destination and connection selection:
 **Compatibility** reads Android game-controller events while BridgePad is visible;
 **Background USB** claims a USB HID controller directly and can keep reading it
-outside the app or with the screen off. This capture choice is independent from
-the Bluetooth output transport and may be prepared before a PC session exists.
+outside the app or with the screen off. Compatibility is the default. This
+setting changes how the physical source is captured, not whether virtual input is
+accepted, and is independent from the output transport.
 
 Changing destination, connection or PC clears every dependent choice below it.
-**Connect and play** remains disabled until the three steps and, when applicable,
-the physical capture choice are valid, Bluetooth is on and access permission is
+**Connect and play** remains disabled until the connection choices are valid,
+Bluetooth is on and access permission is
 granted. A selected PC that is no longer paired does not count as a valid
 destination. The button then
 starts HID registration and connects to the chosen PC, or requests temporary
@@ -40,13 +46,13 @@ A previous new-pairing choice
 is cleared; enabling Bluetooth never implies consent to become discoverable.
 The phone must be added from Windows Bluetooth settings during discoverability.
 
-After the HID connection is confirmed, virtual input opens the virtual gamepad;
-physical input opens a mouse touchpad that fills the usable screen. The physical
-touchpad has no permanent menu button: Android's Back button or gesture returns
-to Home without ending the Bluetooth session. A plain localized text hint remains
-in a corner without a container or button styling. The touchpad does not repeat
-connection state already available on Home and in the notification. **Resume game** reopens the
-appropriate input screen, and **End session** explicitly releases the connection.
+After the connection is confirmed, BridgePad opens the initial screen described
+above. Android's Back button or gesture returns to Home without ending the
+session. Home then offers separate actions to open the virtual controller or the
+large mouse touchpad; either screen may be selected while virtual and physical
+inputs continue to work simultaneously. The touchpad does not repeat connection
+state already available on Home and in the notification. **End session**
+explicitly releases the connection.
 
 ## Contextual options
 
@@ -68,9 +74,8 @@ appropriate input screen, and **End session** explicitly releases the connection
   persisted when saved. **Symmetric**, **Asymmetric** and **Mobile** are built-in
   starting layouts; choosing one updates only the draft, and every control can
   still be moved or resized before saving.
-- Physical-controller capture is selected directly inside the Input step, before
-  connecting. It can also be changed during an active session without reconnecting
-  the Bluetooth HID output.
+- Physical-controller capture appears only while compatible hardware is detected.
+  It can be changed before or during a session without reconnecting the output.
 - **Configure controller buttons** is optional and becomes available when the
   selected capture path detects a controller. The same mapping workflow and
   logical layout apply to Compatibility and Background USB.

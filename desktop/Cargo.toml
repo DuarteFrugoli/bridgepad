@@ -6,6 +6,7 @@ members = [
     "crates/bridgepad-transport-spike",
     "crates/bridgepad-virtual-device",
     "crates/bridgepad-windows-vigem",
+    "crates/bridgepad-windows-pointer",
 ]
 resolver = "2"
 

@@ -60,7 +60,6 @@ import dev.jonalakas.bridgepad.core.session.DestinationTargetKind
 import dev.jonalakas.bridgepad.core.session.OutputAdapterIds
 import dev.jonalakas.bridgepad.core.session.SessionDraft
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
-import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
 import dev.jonalakas.bridgepad.ui.home.DestinationSelection
 import dev.jonalakas.bridgepad.session.SessionSetup
@@ -103,12 +102,11 @@ class MainActivity : ComponentActivity() {
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
-                var inputModeName by rememberSaveable {
-                    mutableStateOf<String?>(null)
-                }
                 var destinationTypeName by rememberSaveable { mutableStateOf<String?>(null) }
                 var connectionMethodName by rememberSaveable { mutableStateOf<String?>(null) }
-                var captureModeName by rememberSaveable { mutableStateOf<String?>(null) }
+                var captureModeName by rememberSaveable {
+                    mutableStateOf(PhysicalCaptureMode.COMPATIBILITY.name)
+                }
                 var selectedAddress by rememberSaveable { mutableStateOf<String?>(null) }
                 var pairNewPcSelected by rememberSaveable { mutableStateOf(false) }
                 var pendingDestination by rememberSaveable { mutableStateOf<String?>(null) }
@@ -156,7 +154,6 @@ class MainActivity : ComponentActivity() {
                     }
                     pairedHosts = readPairedHosts()
                 }
-                val inputMode = inputModeName?.let(InputMode::valueOf)
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestMultiplePermissions(),
                 ) {
@@ -197,13 +194,10 @@ class MainActivity : ComponentActivity() {
                 val touchscreenLayout by TouchscreenLayoutStore.layout.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
-                val effectiveInputMode = if (hidState.sessionActive) {
-                    if (hidState.touchInputSelected) InputMode.TOUCHSCREEN else InputMode.PHYSICAL_GAMEPAD
-                } else inputMode
                 val effectiveCaptureMode = if (hidState.sessionActive) {
                     hidState.physicalCaptureMode
                 } else {
-                    captureModeName?.let(PhysicalCaptureMode::valueOf)
+                    PhysicalCaptureMode.valueOf(captureModeName)
                 }
                 val effectiveDestinationType = if (hidState.sessionActive) {
                     hidState.destinationType
@@ -232,7 +226,6 @@ class MainActivity : ComponentActivity() {
                         pairNewPcSelected -> DestinationTarget(DestinationTargetKind.NEW_PAIRING)
                         else -> null
                     },
-                    inputMode = effectiveInputMode,
                     physicalCaptureMode = effectiveCaptureMode,
                 )
                 val mappingInput = when (effectiveCaptureMode) {
@@ -253,7 +246,6 @@ class MainActivity : ComponentActivity() {
                             inputEventCount = physicalGamepadState.inputEventCount,
                         )
                     }
-                    null -> null
                 }
 
                 LaunchedEffect(showGamepadMapping, mappingInput) {
@@ -357,7 +349,6 @@ class MainActivity : ComponentActivity() {
                             sessionCoordinator.start(
                                 adapterId = OutputAdapterIds.GENERIC_BLUETOOTH_HID,
                                 destination = requireNotNull(effectiveDestinationType),
-                                inputMode = requireNotNull(inputMode),
                                 physicalCaptureMode = effectiveCaptureMode,
                             )
                         }
@@ -367,11 +358,18 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                LaunchedEffect(hidState.status, hidState.sessionActive, effectiveInputMode, openAfterConnection) {
+                LaunchedEffect(
+                    hidState.status,
+                    hidState.sessionActive,
+                    openAfterConnection,
+                    physicalGamepadState.devices,
+                    directUsbState.active,
+                ) {
                     if (hidState.status == HidSessionStatus.CONNECTED && openAfterConnection) {
                         openAfterConnection = false
-                        showTouchController = effectiveInputMode == InputMode.TOUCHSCREEN
-                        showMouseTouchpad = effectiveInputMode == InputMode.PHYSICAL_GAMEPAD
+                        val physicalConnected = physicalGamepadState.devices.isNotEmpty() || directUsbState.active
+                        showTouchController = !physicalConnected
+                        showMouseTouchpad = physicalConnected
                         hidState.connectedHostAddress?.let { address ->
                             selectedAddress = address
                             pairNewPcSelected = false
@@ -415,9 +413,10 @@ class MainActivity : ComponentActivity() {
                 } else if (showNetworkDiagnostic) {
                     NetworkDiagnosticScreen(
                         gameplayStatus = networkGameplayStatus,
+                        physicalControllerConnected = physicalGamepadState.devices.isNotEmpty() || directUsbState.active,
                         touchscreenLayout = touchscreenLayout,
                         onStartGameplay = { request ->
-                            networkGameplayController.start(request)
+                            networkGameplayController.start(request, effectiveCaptureMode)
                         },
                         onStopGameplay = {
                             networkGameplayController.stop()
@@ -526,7 +525,6 @@ class MainActivity : ComponentActivity() {
                     hidCompatible = isBluetoothHidPotentiallyAvailable(),
                     hidState = hidState,
                     physicalGamepadState = physicalGamepadState,
-                    inputMode = effectiveInputMode,
                     physicalCaptureMode = effectiveCaptureMode,
                     sessionDraft = sessionDraft,
                     outputAdapters = sessionCoordinator.catalog,
@@ -540,9 +538,6 @@ class MainActivity : ComponentActivity() {
                             connectionMethodName = null
                             selectedAddress = null
                             pairNewPcSelected = false
-                            inputModeName = null
-                            captureModeName = null
-                            sessionCoordinator.preparePhysicalCapture(null)
                         }
                     },
                     onSelectBluetooth = {
@@ -550,9 +545,6 @@ class MainActivity : ComponentActivity() {
                             connectionMethodName = ConnectionMethod.BLUETOOTH.name
                             selectedAddress = null
                             pairNewPcSelected = false
-                            inputModeName = null
-                            captureModeName = null
-                            sessionCoordinator.preparePhysicalCapture(null)
                         }
                     },
                     pairedHosts = pairedHosts,
@@ -564,20 +556,6 @@ class MainActivity : ComponentActivity() {
                         if (selectedAddress != address || pairNewPcSelected != selectingNewPc) {
                             selectedAddress = address
                             pairNewPcSelected = selectingNewPc
-                            inputModeName = null
-                            captureModeName = null
-                            sessionCoordinator.preparePhysicalCapture(null)
-                        }
-                    },
-                    onInputModeChanged = { mode ->
-                        inputModeName = mode.name
-                        if (mode == InputMode.PHYSICAL_GAMEPAD) TouchGamepadStore.deactivate()
-                        if (mode == InputMode.TOUCHSCREEN && !hidState.sessionActive) {
-                            captureModeName = null
-                            sessionCoordinator.preparePhysicalCapture(null)
-                        }
-                        if (hidState.sessionActive) {
-                            sessionCoordinator.selectInput(mode)
                         }
                     },
                     onPhysicalCaptureModeChanged = { mode ->
@@ -587,9 +565,6 @@ class MainActivity : ComponentActivity() {
                     onPrepareBluetooth = {
                         pairNewPcSelected = false
                         selectedAddress = null
-                        inputModeName = null
-                        captureModeName = null
-                        sessionCoordinator.preparePhysicalCapture(null)
                         connectionGate = null
                         pendingDestination = DestinationSelection.CHOOSE_PC
                     },
@@ -628,8 +603,7 @@ class MainActivity : ComponentActivity() {
                         showMouseTouchpad = true
                     },
                     onStopHid = {
-                        inputModeName = null
-                        captureModeName = null
+                        captureModeName = PhysicalCaptureMode.COMPATIBILITY.name
                         sessionCoordinator.preparePhysicalCapture(null)
                         destinationTypeName = null
                         connectionMethodName = null
