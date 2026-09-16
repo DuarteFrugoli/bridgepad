@@ -96,6 +96,58 @@ reported the same certificate fingerprint and the Android probe connected
 successfully with the previously pinned value, validating diagnostic identity
 persistence across process restarts.
 
+## First playable Wi-Fi flow
+
+This development flow joins the encrypted Android transport to the Windows
+virtual-gamepad adapter before discovery and pairing are implemented.
+
+1. Install the signed ViGEmBus driver used by the current Windows spike.
+2. From `desktop/`, start the receiver with
+   `cargo run --release -p bridgepad-daemon -- --identity-dir ..\.bridgepad-dev`.
+3. Install the current Android debug build and open **Settings > Encrypted
+   network test**.
+4. Enter the PC IPv4 address, port `39393` and the fingerprint printed by the
+   receiver.
+5. Tap **Start playable Wi-Fi session**. The touchscreen controller must open
+   only after the desktop accepts the session.
+6. Confirm the controller appears in `joy.cpl`, Steam and a game without manual
+   Steam mapping. Exercise every visible button, D-pad, both sticks and triggers.
+7. Leave the touchscreen controller and confirm the virtual controller
+   disappears with every input neutral.
+8. Repeat while holding a button, then disable Wi-Fi or terminate the Android
+   app. Within the receiver timeout, the desktop must neutralize and remove the
+   virtual controller.
+
+The Android sender keeps at most one pending complete state and sends a
+heartbeat every 500 ms. The development receiver times out after two seconds,
+neutralizes on every disconnect/error path and ignores duplicate or older
+gamepad sequence numbers. Record hardware evidence here before treating this
+increment as validated.
+
+### Physical controller over Wi-Fi follow-up
+
+After the adaptive multi-source input model is implemented, validate the
+physical-controller path over the same playable Wi-Fi session rather than only
+through Bluetooth HID:
+
+1. Start a Wi-Fi session with a physical controller already connected to the
+   phone and confirm its complete mapping in `joy.cpl`, Steam and a game.
+2. Repeat with Android Compatibility capture and direct background USB capture.
+3. Connect and disconnect the physical controller while the Wi-Fi session stays
+   active; the desktop virtual controller must remain present and neutralize
+   only the removed source.
+4. Use physical and touchscreen controls simultaneously. Buttons must remain
+   pressed while either source holds them, and analog ownership must move to the
+   last intentional source without drift taking permanent control.
+5. Change between the virtual-controller and touchpad screens without restarting
+   TLS, recreating the desktop controller or interrupting physical input.
+6. Turn off Wi-Fi while holding a physical button and with an analog axis away
+   from center. The desktop must neutralize and remove the virtual controller
+   within the receiver timeout.
+
+These checks are not replaced by the successful touchscreen Wi-Fi test: they
+validate the independent physical-capture and multi-source routing path.
+
 ## Installing from VS Code on a physical device
 
 1. Enable Developer options on the Android device by tapping **Build number**

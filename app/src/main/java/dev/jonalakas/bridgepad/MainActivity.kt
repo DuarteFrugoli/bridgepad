@@ -64,6 +64,7 @@ import dev.jonalakas.bridgepad.core.session.InputMode
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
 import dev.jonalakas.bridgepad.ui.home.DestinationSelection
 import dev.jonalakas.bridgepad.session.SessionSetup
+import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutEditorScreen
@@ -82,7 +83,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         gamepadController = AndroidGamepadController(this)
-        val sessionCoordinator = (application as BridgePadApplication).sessionCoordinator
+        val bridgePadApplication = application as BridgePadApplication
+        val sessionCoordinator = bridgePadApplication.sessionCoordinator
+        val networkGameplayController = bridgePadApplication.networkGameplayController
 
         val deviceInfo = AndroidDeviceInfoProvider.get()
         val preferences = getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -190,6 +193,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val hidState by sessionCoordinator.state.collectAsState()
+                val networkGameplayStatus by networkGameplayController.status.collectAsState()
                 val touchscreenLayout by TouchscreenLayoutStore.layout.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
@@ -254,6 +258,16 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(showGamepadMapping, mappingInput) {
                     if (showGamepadMapping && mappingInput == null) showGamepadMapping = false
+                }
+
+                LaunchedEffect(networkGameplayStatus, showNetworkDiagnostic) {
+                    if (showNetworkDiagnostic) {
+                        if (networkGameplayStatus is NetworkGamepadStatus.Active) {
+                            enterGamepadMode()
+                        } else {
+                            exitGamepadMode()
+                        }
+                    }
                 }
 
                 LaunchedEffect(bluetoothEnabled, bluetoothPermissionGranted) {
@@ -400,7 +414,17 @@ class MainActivity : ComponentActivity() {
                     )
                 } else if (showNetworkDiagnostic) {
                     NetworkDiagnosticScreen(
+                        gameplayStatus = networkGameplayStatus,
+                        touchscreenLayout = touchscreenLayout,
+                        onStartGameplay = { request ->
+                            networkGameplayController.start(request)
+                        },
+                        onStopGameplay = {
+                            networkGameplayController.stop()
+                            exitGamepadMode()
+                        },
                         onBack = {
+                            networkGameplayController.shutdown()
                             showNetworkDiagnostic = false
                             showSettings = true
                         },

@@ -10,6 +10,8 @@ repository.workspace = true
 
 [dependencies]
 bridgepad-protocol = { path = "../bridgepad-protocol" }
+bridgepad-virtual-device = { path = "../bridgepad-virtual-device" }
+bridgepad-windows-vigem = { path = "../bridgepad-windows-vigem" }
 rcgen = "0.14.10"
 rustls = { version = "0.23.44", default-features = false, features = ["ring", "std", "tls12"] }
 sha2 = "0.10.9"

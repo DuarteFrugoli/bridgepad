@@ -246,4 +246,7 @@
     <string name="network_test_success">Encrypted connection succeeded</string>
     <string name="network_test_result">%1$s · handshake %2$s ms\nRTT p50 %3$s ms · p95 %4$s ms · p99 %5$s ms\n%6$d samples</string>
     <string name="network_test_failed">Encrypted connection failed</string>
+    <string name="network_gameplay_action">Start playable Wi-Fi session</string>
+    <string name="network_gameplay_connecting">Creating virtual controller…</string>
+    <string name="network_gameplay_failed">Could not start the playable session</string>
 </resources>

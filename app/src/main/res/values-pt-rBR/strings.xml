@@ -246,4 +246,7 @@
     <string name="network_test_success">Conexão criptografada concluída</string>
     <string name="network_test_result">%1$s · handshake %2$s ms\nRTT p50 %3$s ms · p95 %4$s ms · p99 %5$s ms\n%6$d amostras</string>
     <string name="network_test_failed">A conexão criptografada falhou</string>
+    <string name="network_gameplay_action">Iniciar sessão Wi-Fi jogável</string>
+    <string name="network_gameplay_connecting">Criando controle virtual…</string>
+    <string name="network_gameplay_failed">Não foi possível iniciar a sessão jogável</string>
 </resources>

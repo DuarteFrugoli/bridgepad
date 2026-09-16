@@ -28,7 +28,7 @@ loopback. It does not select the production transport by itself; QUIC and real
 Android/Wi-Fi measurements are still required. Plaintext is never a product
 mode.
 
-## Android-to-desktop encrypted probe
+## Android-to-desktop encrypted connection
 
 Start the diagnostic receiver:
 
@@ -48,9 +48,17 @@ In the Android app, open **Settings > Encrypted network test** and enter:
 2. Port `39393`.
 3. The complete fingerprint printed by the receiver.
 
-The phone sends 250 encrypted Ping/Pong samples at 125 Hz and reports handshake,
-p50, p95 and p99 RTT. This receiver does not create a virtual gamepad yet and is
-not the final pairing flow.
+The Android screen exposes two development actions. The encrypted probe sends
+250 Ping/Pong samples at 125 Hz and reports handshake, p50, p95 and p99 RTT. On
+Windows, **Start playable Wi-Fi session** creates the virtual controller and
+opens the touchscreen layout. Leaving the layout sends a neutral snapshot and
+ends the desktop session.
+
+The playable path is still a manual development flow: it uses the typed IP and
+pinned certificate fingerprint, supports gamepad snapshots only, and trusts any
+client that can reach the manually started receiver. Use it only on a trusted
+development network. Discovery, mutual pairing and protected identity storage
+remain required before Wi-Fi is exposed as a normal Home connection.
 
 GitHub Actions also publishes `bridgepad-desktop-windows` and
 `bridgepad-desktop-linux` artifacts so the probe can be run without installing a

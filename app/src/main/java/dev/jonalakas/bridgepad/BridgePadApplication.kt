@@ -5,6 +5,7 @@ import dev.jonalakas.bridgepad.input.usb.DirectUsbCaptureManager
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
 import dev.jonalakas.bridgepad.session.InputRouter
 import dev.jonalakas.bridgepad.session.SessionCoordinator
+import dev.jonalakas.bridgepad.session.NetworkGameplayController
 import dev.jonalakas.bridgepad.output.hid.BluetoothHidSessionAdapter
 import dev.jonalakas.bridgepad.output.hid.GenericCompositeHidProfile
 import kotlinx.coroutines.CoroutineScope
@@ -19,12 +20,15 @@ class BridgePadApplication : Application() {
         private set
     lateinit var sessionCoordinator: SessionCoordinator
         private set
+    lateinit var networkGameplayController: NetworkGameplayController
+        private set
 
     override fun onCreate() {
         super.onCreate()
         DirectUsbCaptureManager.initialize(this)
         TouchscreenLayoutStore.initialize(this)
         inputRouter = InputRouter(applicationScope)
+        networkGameplayController = NetworkGameplayController(inputRouter)
         sessionCoordinator = SessionCoordinator(
             context = this,
             adapters = listOf(BluetoothHidSessionAdapter(this, GenericCompositeHidProfile)),
@@ -32,6 +36,7 @@ class BridgePadApplication : Application() {
     }
 
     override fun onTerminate() {
+        networkGameplayController.shutdown()
         applicationScope.cancel()
         super.onTerminate()
     }

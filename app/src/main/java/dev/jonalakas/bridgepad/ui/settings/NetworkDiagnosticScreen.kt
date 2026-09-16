@@ -35,6 +35,10 @@ import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.transport.network.NetworkProbeRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkProbeResult
 import dev.jonalakas.bridgepad.transport.network.NetworkTlsProbe
+import dev.jonalakas.bridgepad.transport.network.NetworkGamepadRequest
+import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
+import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,9 +48,12 @@ import java.util.Locale
 @Composable
 fun NetworkDiagnosticScreen(
     onBack: () -> Unit,
+    gameplayStatus: NetworkGamepadStatus,
+    touchscreenLayout: TouchscreenLayout,
+    onStartGameplay: (NetworkGamepadRequest) -> Unit,
+    onStopGameplay: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(onBack = onBack)
     var host by rememberSaveable { mutableStateOf("") }
     var port by rememberSaveable { mutableStateOf("39393") }
     var fingerprint by rememberSaveable { mutableStateOf("") }
@@ -54,6 +61,17 @@ fun NetworkDiagnosticScreen(
     var result by remember { mutableStateOf<NetworkProbeResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    if (gameplayStatus is NetworkGamepadStatus.Active) {
+        TouchscreenGamepadScreen(
+            layout = touchscreenLayout,
+            onExit = onStopGameplay,
+            modifier = modifier,
+        )
+        return
+    }
+    BackHandler(onBack = onBack)
+    val connectingGamepad = gameplayStatus is NetworkGamepadStatus.Connecting
+    val validatedPort = port.toIntOrNull()?.takeIf { it in 1..65_535 }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -151,6 +169,41 @@ fun NetworkDiagnosticScreen(
                     )
                 }
             }
+            item {
+                Button(
+                    onClick = {
+                        error = null
+                        onStartGameplay(
+                            NetworkGamepadRequest(
+                                host = host,
+                                port = requireNotNull(validatedPort),
+                                certificateSha256 = fingerprint,
+                            ),
+                        )
+                    },
+                    enabled = !running && !connectingGamepad && host.isNotBlank() &&
+                        validatedPort != null && fingerprint.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (connectingGamepad) {
+                        CircularProgressIndicator(
+                            modifier = Modifier
+                                .padding(end = 12.dp)
+                                .size(18.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                    Text(
+                        stringResource(
+                            if (connectingGamepad) {
+                                R.string.network_gameplay_connecting
+                            } else {
+                                R.string.network_gameplay_action
+                            },
+                        ),
+                    )
+                }
+            }
             result?.let { probeResult ->
                 item {
                     Card(Modifier.fillMaxWidth()) {
@@ -194,6 +247,23 @@ fun NetworkDiagnosticScreen(
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(message)
+                        }
+                    }
+                }
+            }
+            (gameplayStatus as? NetworkGamepadStatus.Failed)?.let { failure ->
+                item {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.network_gameplay_failed),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(failure.detail)
                         }
                     }
                 }

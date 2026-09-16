@@ -14,6 +14,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":domain"))
     implementation(project(":protocol"))
     testImplementation(libs.junit)
 }

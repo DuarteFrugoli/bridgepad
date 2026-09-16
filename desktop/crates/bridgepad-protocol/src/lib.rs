@@ -72,6 +72,7 @@ pub enum ProtocolError {
     PayloadTooLarge(usize),
     PayloadLengthMismatch { declared: usize, actual: usize },
     InvalidPayloadLength { expected: usize, actual: usize },
+    InvalidDpad(u8),
 }
 
 impl fmt::Display for ProtocolError {
@@ -129,8 +130,8 @@ pub fn encode_packet(header: PacketHeader, payload: &[u8]) -> Result<Vec<u8>, Pr
     if payload.len() > MAX_PAYLOAD_SIZE {
         return Err(ProtocolError::PayloadTooLarge(payload.len()));
     }
-    let payload_length = u16::try_from(payload.len())
-        .map_err(|_| ProtocolError::PayloadTooLarge(payload.len()))?;
+    let payload_length =
+        u16::try_from(payload.len()).map_err(|_| ProtocolError::PayloadTooLarge(payload.len()))?;
     let mut bytes = Vec::with_capacity(HEADER_SIZE + payload.len());
     bytes.extend_from_slice(&MAGIC.to_be_bytes());
     bytes.push(MAJOR_VERSION);
@@ -149,6 +150,52 @@ pub fn encode_packet(header: PacketHeader, payload: &[u8]) -> Result<Vec<u8>, Pr
 pub fn decode_ping(packet: Packet<'_>) -> Result<u64, ProtocolError> {
     require_payload_length(packet.payload, 8)?;
     Ok(read_u64(packet.payload, 0))
+}
+
+pub const CAPABILITY_GAMEPAD: u32 = 1;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SessionStart {
+    pub input_kind: u8,
+    pub requested_capabilities: u32,
+}
+
+pub fn decode_session_start(packet: Packet<'_>) -> Result<SessionStart, ProtocolError> {
+    require_payload_length(packet.payload, 5)?;
+    Ok(SessionStart {
+        input_kind: packet.payload[0],
+        requested_capabilities: read_u32(packet.payload, 1),
+    })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GamepadSnapshot {
+    pub buttons: u16,
+    pub dpad: u8,
+    pub left_x: i16,
+    pub left_y: i16,
+    pub right_x: i16,
+    pub right_y: i16,
+    pub left_trigger: u16,
+    pub right_trigger: u16,
+}
+
+pub fn decode_gamepad_snapshot(packet: Packet<'_>) -> Result<GamepadSnapshot, ProtocolError> {
+    require_payload_length(packet.payload, 15)?;
+    let dpad = packet.payload[2];
+    if dpad > 8 {
+        return Err(ProtocolError::InvalidDpad(dpad));
+    }
+    Ok(GamepadSnapshot {
+        buttons: read_u16(packet.payload, 0),
+        dpad,
+        left_x: read_i16(packet.payload, 3),
+        left_y: read_i16(packet.payload, 5),
+        right_x: read_i16(packet.payload, 7),
+        right_y: read_i16(packet.payload, 9),
+        left_trigger: read_u16(packet.payload, 11),
+        right_trigger: read_u16(packet.payload, 13),
+    })
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -179,19 +226,43 @@ fn require_payload_length(payload: &[u8], expected: usize) -> Result<(), Protoco
 }
 
 fn read_u16(bytes: &[u8], offset: usize) -> u16 {
-    u16::from_be_bytes(bytes[offset..offset + 2].try_into().expect("validated field bounds"))
+    u16::from_be_bytes(
+        bytes[offset..offset + 2]
+            .try_into()
+            .expect("validated field bounds"),
+    )
 }
 
 fn read_u32(bytes: &[u8], offset: usize) -> u32 {
-    u32::from_be_bytes(bytes[offset..offset + 4].try_into().expect("validated field bounds"))
+    u32::from_be_bytes(
+        bytes[offset..offset + 4]
+            .try_into()
+            .expect("validated field bounds"),
+    )
+}
+
+fn read_i16(bytes: &[u8], offset: usize) -> i16 {
+    i16::from_be_bytes(
+        bytes[offset..offset + 2]
+            .try_into()
+            .expect("validated field bounds"),
+    )
 }
 
 fn read_i32(bytes: &[u8], offset: usize) -> i32 {
-    i32::from_be_bytes(bytes[offset..offset + 4].try_into().expect("validated field bounds"))
+    i32::from_be_bytes(
+        bytes[offset..offset + 4]
+            .try_into()
+            .expect("validated field bounds"),
+    )
 }
 
 fn read_u64(bytes: &[u8], offset: usize) -> u64 {
-    u64::from_be_bytes(bytes[offset..offset + 8].try_into().expect("validated field bounds"))
+    u64::from_be_bytes(
+        bytes[offset..offset + 8]
+            .try_into()
+            .expect("validated field bounds"),
+    )
 }
 
 #[cfg(test)]
@@ -241,11 +312,17 @@ mod tests {
     #[test]
     fn invalid_envelopes_are_rejected() {
         let valid = vector("ping");
-        assert!(matches!(decode_packet(&valid[..31]), Err(ProtocolError::HeaderTooShort)));
+        assert!(matches!(
+            decode_packet(&valid[..31]),
+            Err(ProtocolError::HeaderTooShort)
+        ));
 
         let mut bad_magic = valid.clone();
         bad_magic[0] = 0;
-        assert!(matches!(decode_packet(&bad_magic), Err(ProtocolError::InvalidMagic(_))));
+        assert!(matches!(
+            decode_packet(&bad_magic),
+            Err(ProtocolError::InvalidMagic(_))
+        ));
 
         let mut trailing = valid;
         trailing.push(0);
@@ -253,6 +330,38 @@ mod tests {
             decode_packet(&trailing),
             Err(ProtocolError::PayloadLengthMismatch { .. })
         ));
+    }
+
+    #[test]
+    fn gamepad_snapshot_decodes_complete_state() {
+        let payload = [
+            0x01, 0x21, 0x06, 0x80, 0x01, 0x7f, 0xff, 0xff, 0xff, 0x00, 0x00, 0x80, 0x00, 0xff,
+            0xff,
+        ];
+        let bytes = encode_packet(
+            PacketHeader {
+                session_id: 7,
+                sequence: 9,
+                timestamp_micros: 11,
+                message_type: MessageType::GamepadSnapshot,
+            },
+            &payload,
+        )
+        .expect("packet must encode");
+        let packet = decode_packet(&bytes).expect("packet must decode");
+        assert_eq!(
+            decode_gamepad_snapshot(packet),
+            Ok(GamepadSnapshot {
+                buttons: 0x0121,
+                dpad: 6,
+                left_x: i16::MIN + 1,
+                left_y: i16::MAX,
+                right_x: -1,
+                right_y: 0,
+                left_trigger: 0x8000,
+                right_trigger: u16::MAX,
+            })
+        );
     }
 
     fn vector(name: &str) -> Vec<u8> {

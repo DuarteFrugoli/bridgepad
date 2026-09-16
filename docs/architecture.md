@@ -22,9 +22,9 @@ new connection methods and destinations do not change existing input adapters.
   It depends only on `:domain`. A published wire format must remain independent
   of the desktop implementation language.
 - `:transport-network` owns the platform-independent encrypted socket client.
-  Its first API is a certificate-pinned diagnostic probe; discovery, trust
-  persistence and product session lifecycle will build on it without entering
-  Compose or Bluetooth modules.
+  It provides the certificate-pinned diagnostic probe and the first bounded
+  gamepad-session sender. Discovery, mutual trust and product reconnection will
+  build on it without entering Compose or Bluetooth modules.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
 - `:app` is the Android composition root. It owns Compose UI, permissions,
@@ -68,6 +68,9 @@ capture state changes, never for each controller event.
 `SessionCoordinator` is the Android application boundary used by presentation
 code. It owns a catalog of `OutputSessionAdapter` implementations and selects an
 adapter by stable id. `MainActivity` does not start a transport service directly.
+The manual playable network increment is composed separately by
+`NetworkGameplayController` until discovery and pairing provide a selectable
+network destination; it still consumes only `InputRouter`'s normalized state.
 
 Connection method and output-adapter identity are deliberately separate. The
 generic Bluetooth HID profile and future Wi-Fi or USB desktop receivers can all

@@ -82,6 +82,8 @@ name = "bridgepad-daemon"
 version = "0.1.0"
 dependencies = [
  "bridgepad-protocol",
+ "bridgepad-virtual-device",
+ "bridgepad-windows-vigem",
  "rcgen",
  "rustls",
  "sha2",
