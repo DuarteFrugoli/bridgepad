@@ -60,7 +60,7 @@ impl PairingWindow {
         self.rotate()
     }
 
-    fn rotate(&mut self) -> io::Result<()> {
+    pub fn rotate(&mut self) -> io::Result<()> {
         let mut random = [0_u8; 8];
         secure_fill(&mut random)?;
         let value = u64::from_be_bytes(random) % 1_000_000_000_000;

@@ -119,6 +119,11 @@ setting that becomes relevant only when compatible hardware is detected.
 - `desktop/` is a Rust workspace. Its protocol crate consumes the same normative
   binary vectors as Kotlin; transport and virtual-device crates must depend on
   it instead of duplicating wire logic.
+- `bridgepad-daemon` exposes the encrypted receiver as a reusable Rust library
+  and retains a thin command-line binary for diagnostics. `bridgepad-desktop`
+  owns only the Tauri window, tray and presentation commands; it calls the same
+  server library and does not duplicate pairing, authentication, protocol or
+  virtual-device behavior.
 - `bridgepad-virtual-device` is the only contract consumed by desktop session
   code. Windows backend details remain in replaceable adapters. ViGEm is the
   current development/alpha adapter; the proposed production direction is a

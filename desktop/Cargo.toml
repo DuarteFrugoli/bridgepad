@@ -1,6 +1,16 @@
 [workspace]
 members = [
     "crates/bridgepad-daemon",
+    "crates/bridgepad-desktop",
+    "crates/bridgepad-gamepad-spike",
+    "crates/bridgepad-protocol",
+    "crates/bridgepad-transport-spike",
+    "crates/bridgepad-virtual-device",
+    "crates/bridgepad-windows-vigem",
+    "crates/bridgepad-windows-pointer",
+]
+default-members = [
+    "crates/bridgepad-daemon",
     "crates/bridgepad-gamepad-spike",
     "crates/bridgepad-protocol",
     "crates/bridgepad-transport-spike",

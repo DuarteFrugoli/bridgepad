@@ -9,9 +9,9 @@ ou tablet em uma ponte flexível de controles. Ele pode usar a tela ou um contro
 físico como entrada, normalizar os comandos em um único estado lógico de gamepad
 e enviá-los para um computador.
 
-O projeto está em desenvolvimento ativo. O caminho atual entre Android e PC
-funciona por Bluetooth HID e passou pela validação principal de hardware. Ainda
-não é uma versão pública finalizada.
+O projeto está em desenvolvimento ativo. Os caminhos atuais entre Android e PC
+funcionam por Bluetooth HID direto ou por Wi-Fi com o BridgePad Desktop no
+Windows. Ainda não é uma versão pública finalizada.
 
 ## Estado atual
 
@@ -28,10 +28,13 @@ Disponível na build atual:
 - mapeamento opcional e salvo para os dois modos de controle físico;
 - saída Bluetooth HID de gamepad e mouse relativo;
 - touchpad de mouse integrado e touchpad grande para controle físico;
-- troca entre entrada virtual e física durante uma sessão;
+- uso simultâneo das entradas virtual e física durante uma sessão;
+- descoberta Wi-Fi automática e sessão autenticada pelo BridgePad Desktop no Windows;
 - pareamento guiado, reconexão, avisos e encerramento seguro;
 - métricas ao vivo e exportação de diagnóstico com foco em privacidade;
 - interface em inglês e português brasileiro;
+- janela mínima bilíngue do BridgePad Desktop com status, PIN, revogação de
+  celulares confiáveis e funcionamento pela bandeja do sistema;
 - testes unitários, lint Android e build independente do APK no CI.
 
 A combinação principal validada é:
@@ -90,19 +93,21 @@ controle Bluetooth atual.
 A Home monta a sessão nesta ordem:
 
 1. **Destino** — atualmente um PC Windows ou, futuramente, Linux.
-2. **Conexão** — Bluetooth está disponível; Wi-Fi e USB entre celular e PC
-   aparecem como futuros.
-3. **Computador** — escolher um PC já pareado ou pedir explicitamente um novo
-   pareamento.
-4. **Entrada** — controle virtual ou controle físico.
+2. **Conexão** — Bluetooth e Wi-Fi estão disponíveis; USB entre celular e PC
+   aparece como futuro.
+3. **Computador** — no Bluetooth, escolher um PC pareado; no Wi-Fi, descobrir o
+   BridgePad Desktop automaticamente e digitar o PIN apenas no primeiro pareamento.
+
+A entrada não é mais uma escolha exclusiva. Os controles virtuais e qualquer
+controle físico detectado podem ser usados ao mesmo tempo.
 
 Uma nova configuração começa sem opções selecionadas. **Conectar e jogar** fica
 desativado até todas as escolhas e permissões necessárias estarem válidas.
 Escolher um computador pareado não torna o celular visível; isso só acontece se
 o usuário escolher parear um novo PC.
 
-Durante uma sessão, é possível trocar entre controle virtual e físico sem
-reconectar o controle Bluetooth reconhecido pelo computador.
+Durante uma sessão, é possível trocar entre as telas de controle virtual e
+touchpad sem reconectar. A tela visível não desativa nenhuma fonte de entrada.
 
 ## Modos do controle físico
 
@@ -170,7 +175,8 @@ Os módulos Gradle atuais são:
 - `:domain` — estado, mapeamento, combinação, agendamento, sessão e portas em
   Kotlin puro;
 - `:protocol` — mensagens versionadas e independentes de plataforma para o
-  futuro receptor desktop;
+  receptor desktop;
+- `:transport-network` — descoberta, pareamento seguro, autenticação e sessão Wi-Fi;
 - `:transport-bluetooth-hid` — perfis Bluetooth HID, descritores e encoders;
 - `:app` — UI Android, permissões, ciclo de vida, entradas físicas, persistência
   e composição das dependências.
@@ -182,8 +188,8 @@ transporte, e uma saída deve consumir apenas estados normalizados. Consulte
 
 ## Próxima direção
 
-O próximo trabalho principal será o BridgePad Desktop, primeiro para Windows e
-depois Linux.
+O trabalho principal agora é transformar o primeiro caminho jogável do
+BridgePad Desktop em um produto, primeiro para Windows e depois Linux.
 
 ```text
 BridgePad Android
@@ -201,12 +207,12 @@ controle virtual do sistema
 
 A ordem pretendida é:
 
-1. especificar e testar o protocolo versionado do desktop;
-2. criar um backend sustentável de controle virtual no Windows;
-3. implementar descoberta local, pareamento seguro e sessões por Wi-Fi;
-4. implementar USB entre celular e PC sem root ou ADB no uso normal;
-5. adicionar backend de controle virtual e empacotamento para Linux;
-6. estabilizar instalação, atualizações, recuperação e diagnóstico;
+1. consolidar e testar o protocolo versionado do desktop;
+2. substituir o backend experimental por um backend sustentável no Windows;
+3. validar e endurecer descoberta, pareamento seguro e sessões por Wi-Fi;
+4. automatizar instalação, Firewall, credenciais e atualização no Windows;
+5. implementar USB entre celular e PC sem root ou ADB no uso normal;
+6. adicionar backend de controle virtual e empacotamento para Linux;
 7. adicionar streaming opcional e de baixa latência do PC para o celular,
    começando por vídeo e depois áudio.
 
@@ -216,16 +222,16 @@ como caminho direto, sem exigir o aplicativo complementar.
 
 ## Ainda não implementado
 
-- BridgePad Desktop;
-- saída LAN/Wi-Fi;
 - saída USB entre celular e computador;
-- controle virtual nativo no Windows ou Linux;
+- backend e instalador de produção do controle virtual no Windows;
 - receptor Linux;
 - retorno de vibração/force feedback;
 - controles por giroscópio ou acelerômetro;
 - presets pessoais de layout com nome;
 - gatilhos analógicos na tela;
 - streaming de vídeo ou áudio do PC;
+- modo cooperativo local em vários celulares, com um slot de controle virtual
+  independente para cada pessoa;
 - perfis avançados por jogo;
 - macros ou calibração guiada.
 

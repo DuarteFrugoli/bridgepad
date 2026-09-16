@@ -1,0 +1,20 @@
+[package]
+name = "bridgepad-desktop"
+description = "BridgePad Desktop graphical controller receiver"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2.5.4", features = [] }
+
+[dependencies]
+bridgepad-daemon = { path = "../bridgepad-daemon" }
+serde = { version = "1.0.228", features = ["derive"] }
+tauri = { version = "2.11.5", features = ["tray-icon"] }
+
+[lints]
+workspace = true

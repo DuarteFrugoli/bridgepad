@@ -78,8 +78,9 @@ jobs:
           - name: Windows
             os: windows-latest
             artifact: bridgepad-desktop-windows
-            packages: -p bridgepad-daemon -p bridgepad-gamepad-spike
+            packages: -p bridgepad-desktop -p bridgepad-daemon -p bridgepad-gamepad-spike
             binary: |
+              desktop/target/release/bridgepad-desktop.exe
               desktop/target/release/bridgepad-daemon.exe
               desktop/target/release/bridgepad-gamepad-spike.exe
           - name: Linux

@@ -20,6 +20,7 @@ local.properties
 /.kotlin/
 /.idea/deploymentTargetSelector.xml
 /desktop/target/
+/desktop/crates/bridgepad-desktop/gen/
 .bridgepad-dev/
 *.jks
 *.keystore

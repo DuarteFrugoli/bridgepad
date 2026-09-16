@@ -30,6 +30,8 @@ Present in the current build:
 - integrated and full-screen mouse touchpads;
 - simultaneous virtual and physical input during an active session;
 - automatic Wi-Fi discovery and authenticated gameplay through BridgePad Desktop on Windows;
+- a minimal bilingual BridgePad Desktop window with live status, pairing code,
+  trusted-phone revocation and system-tray behavior;
 - guided pairing, reconnection, session notices and safe shutdown;
 - live metrics and privacy-conscious diagnostic report export;
 - English and Brazilian Portuguese interfaces;
@@ -176,8 +178,8 @@ The Gradle modules are:
 
 - `:domain` — pure Kotlin gamepad state, mapping, merging, scheduling, session
   planning and ports;
-- `:protocol` — platform-independent, versioned messages for the future desktop
-  receiver;
+- `:protocol` — platform-independent, versioned messages for the desktop receiver;
+- `:transport-network` — discovery, secure pairing, authentication and Wi-Fi sessions;
 - `:transport-bluetooth-hid` — Android Bluetooth HID profiles, descriptors and
   report encoding;
 - `:app` — Android UI, permissions, lifecycle, physical inputs, persistence and

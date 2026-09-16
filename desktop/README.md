@@ -10,6 +10,12 @@ platform-independent virtual controller contract. The experimental
 `bridgepad-windows-vigem` adapter implements that contract without exposing its
 Windows dependency to the protocol or daemon.
 
+`bridgepad-desktop` is the first graphical companion. It uses Tauri 2 with a
+small framework-free HTML/CSS/JavaScript frontend and calls the same Rust server
+library as the terminal daemon. It shows receiver state, a rotating pairing
+code and trusted phones, and keeps the receiver alive in the system tray when
+its window is closed.
+
 Run all current desktop checks with:
 
 ```sh
@@ -29,6 +35,33 @@ Android/Wi-Fi measurements are still required. Plaintext is never a product
 mode.
 
 ## Android-to-desktop Wi-Fi connection
+
+### Graphical app
+
+On Windows, start the development build from the repository root with:
+
+```powershell
+cargo run --manifest-path desktop/Cargo.toml -p bridgepad-desktop
+```
+
+The normal interface does not require an IP address, port or certificate
+fingerprint. Choose the discovered computer in Android and enter the temporary
+code shown by BridgePad Desktop on the first connection. Closing the window
+hides it; use the tray icon to reopen it, rotate the pairing code or exit. The
+trusted-device list can revoke an individual phone.
+
+The graphical app stores its identity below the operating system's local app
+data directory. This is intentionally separate from the repository-local
+diagnostic identity described below.
+
+The raw development executable does not install Windows Firewall rules yet. A
+public network can therefore still block discovery or incoming sessions unless
+the user has allowed the executable for that profile. The planned Windows
+installer must create narrowly scoped rules for both public and private
+profiles and remove them during uninstall; the product flow must never require
+changing the network to private.
+
+### Terminal diagnostic receiver
 
 Start the receiver from the repository root:
 
@@ -89,9 +122,11 @@ desktop controller.
 The bypass trusts any client that can reach the receiver and is diagnostic only.
 Never use `--allow-unpaired` as the normal Home flow or on an untrusted network.
 
-GitHub Actions also publishes `bridgepad-desktop-windows` and
-`bridgepad-desktop-linux` artifacts so the probe can be run without installing a
-Rust toolchain.
+GitHub Actions publishes a `bridgepad-desktop-windows` artifact containing the
+graphical app, terminal daemon and gamepad spike. The
+`bridgepad-desktop-linux` artifact currently contains the terminal receiver.
+These raw development binaries can be tried without installing a Rust
+toolchain; installers remain a later product increment.
 
 The current desktop identity and trust database are ordinary user-owned files.
 Production installers still need operating-system-protected credential storage,

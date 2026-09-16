@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BridgePad Desktop</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <span></span><span></span>
+          </div>
+          <div>
+            <h1>BridgePad</h1>
+            <p>Desktop</p>
+          </div>
+        </div>
+        <button id="languageButton" class="language-button" type="button">PT</button>
+      </header>
+
+      <section class="hero panel">
+        <div class="status-row">
+          <span id="statusDot" class="status-dot"></span>
+          <div>
+            <p id="statusLabel" class="eyebrow">Ready to connect</p>
+            <h2 id="desktopName">BridgePad Desktop</h2>
+          </div>
+        </div>
+        <p id="statusDetail" class="status-detail">Waiting for your phone on this network.</p>
+      </section>
+
+      <section id="errorPanel" class="error-panel" hidden>
+        <strong id="errorTitle">BridgePad needs attention</strong>
+        <p id="errorText"></p>
+      </section>
+
+      <div class="content-grid">
+        <section class="panel pairing-panel">
+          <div class="section-heading">
+            <div>
+              <p id="pairEyebrow" class="eyebrow">PAIR A PHONE</p>
+              <h2 id="pairTitle">Enter this code in BridgePad</h2>
+            </div>
+            <span id="pairTimer" class="timer">10:00</span>
+          </div>
+          <button id="copyCodeButton" class="pairing-code" type="button" aria-label="Copy pairing code">
+            <span id="pairingCode">•••• — •••• — ••••</span>
+            <span id="copyHint" class="copy-hint">Click to copy</span>
+          </button>
+          <p id="pairHelp" class="muted">
+            On your phone, choose PC → Wi-Fi → this computer, then enter the code.
+          </p>
+          <button id="newCodeButton" class="secondary-button" type="button">Generate new code</button>
+        </section>
+
+        <section class="panel devices-panel">
+          <div class="section-heading">
+            <div>
+              <p id="devicesEyebrow" class="eyebrow">TRUSTED DEVICES</p>
+              <h2 id="devicesTitle">Your phones</h2>
+            </div>
+            <span id="deviceCount" class="count-badge">0</span>
+          </div>
+          <div id="deviceList" class="device-list"></div>
+          <div id="emptyDevices" class="empty-state">
+            <div class="phone-icon" aria-hidden="true"></div>
+            <strong id="emptyTitle">No paired phones yet</strong>
+            <p id="emptyText">The first phone will appear here after pairing.</p>
+          </div>
+        </section>
+      </div>
+
+      <footer>
+        <div class="tray-note">
+          <span class="tray-dot"></span>
+          <span id="trayHint">BridgePad keeps running in the system tray when this window is closed.</span>
+        </div>
+        <span id="firewallNote" class="development-note">Development build: automatic Windows Firewall setup is not available yet.</span>
+      </footer>
+    </main>
+  </body>
+</html>
