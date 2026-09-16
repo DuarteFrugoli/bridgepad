@@ -41,26 +41,13 @@ button { font: inherit; }
 .brand p { margin: 1px 0 0; color: #8390aa; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
 
 .brand-mark {
-  position: relative;
-  width: 42px;
-  height: 42px;
-  border: 2px solid #5d8fff;
-  border-radius: 15px;
+  width: 58px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: 16px;
   transform: rotate(-8deg);
   box-shadow: 0 0 22px rgba(61, 125, 255, 0.28);
 }
-
-.brand-mark span {
-  position: absolute;
-  top: 18px;
-  width: 17px;
-  height: 3px;
-  border-radius: 3px;
-  background: #8eacff;
-}
-
-.brand-mark span:first-child { left: -5px; transform: rotate(34deg); }
-.brand-mark span:last-child { right: -5px; transform: rotate(-34deg); }
 
 .language-button {
   border: 1px solid #2c3445;
