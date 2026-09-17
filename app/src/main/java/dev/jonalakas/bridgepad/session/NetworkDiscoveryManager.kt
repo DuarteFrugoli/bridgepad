@@ -34,87 +34,144 @@ class NetworkDiscoveryManager(context: Context) {
     val error: StateFlow<String?> = mutableError.asStateFlow()
     private val serviceToPeer = mutableMapOf<String, String>()
     private val resolutionQueue = ArrayDeque<NsdServiceInfo>()
+    private val lifecycle = DiscoveryLifecycle()
     private var resolving = false
-    private var started = false
+    private var listener: NsdManager.DiscoveryListener? = null
+    private var generation = 0L
 
-    private val discoveryListener = object : NsdManager.DiscoveryListener {
+    @Synchronized
+    fun start() {
+        if (lifecycle.requestStart() == DiscoveryLifecycle.Command.START) startLocked()
+    }
+
+    @Synchronized
+    fun stop() {
+        if (lifecycle.requestStop() != DiscoveryLifecycle.Command.STOP) return
+        val current = listener ?: return finishStopLocked(allowRestart = false)
+        runCatching { nsdManager.stopServiceDiscovery(current) }
+            .onFailure { failure ->
+                mutableError.value = "discovery_stop_failed:${failure.javaClass.simpleName}"
+                finishStopLocked(allowRestart = false)
+            }
+    }
+
+    @Synchronized
+    private fun startLocked() {
+        val currentGeneration = ++generation
+        val current = createListener(currentGeneration)
+        listener = current
+        if (!multicastLock.isHeld) runCatching { multicastLock.acquire() }
+        runCatching {
+            nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, current)
+        }.onFailure { failure ->
+            if (listener === current) {
+                listener = null
+                lifecycle.startFailed()
+                clearCycleLocked(clearDesktops = true)
+                releaseMulticastLockLocked()
+                mutableError.value = "discovery_start_failed:${failure.javaClass.simpleName}"
+            }
+        }
+    }
+
+    private fun createListener(currentGeneration: Long) = object : NsdManager.DiscoveryListener {
         override fun onDiscoveryStarted(serviceType: String) {
-            mutableError.value = null
+            synchronized(this@NetworkDiscoveryManager) {
+                if (listener !== this) return
+                lifecycle.started()
+                mutableError.value = null
+            }
         }
 
         override fun onServiceFound(serviceInfo: NsdServiceInfo) {
             synchronized(this@NetworkDiscoveryManager) {
-                if (serviceInfo.serviceType.startsWith(SERVICE_TYPE)) {
-                    resolutionQueue.removeAll { it.serviceName == serviceInfo.serviceName }
-                    resolutionQueue.addLast(serviceInfo)
-                    resolveNextLocked()
-                }
+                if (listener !== this || !serviceInfo.serviceType.startsWith(SERVICE_TYPE)) return
+                resolutionQueue.removeAll { it.serviceName == serviceInfo.serviceName }
+                resolutionQueue.addLast(serviceInfo)
+                resolveNextLocked(currentGeneration)
             }
         }
 
         override fun onServiceLost(serviceInfo: NsdServiceInfo) {
             synchronized(this@NetworkDiscoveryManager) {
+                if (listener !== this) return
                 val peerId = serviceToPeer.remove(serviceInfo.serviceName) ?: return
                 mutableDesktops.value = mutableDesktops.value.filterNot { it.peerIdHex == peerId }
             }
         }
 
-        override fun onDiscoveryStopped(serviceType: String) = Unit
+        override fun onDiscoveryStopped(serviceType: String) {
+            synchronized(this@NetworkDiscoveryManager) {
+                if (listener === this) finishStopLocked(allowRestart = true)
+            }
+        }
 
         override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-            mutableError.value = "discovery_start_failed:$errorCode"
-            started = false
-            runCatching { nsdManager.stopServiceDiscovery(this) }
+            synchronized(this@NetworkDiscoveryManager) {
+                if (listener !== this) return
+                listener = null
+                lifecycle.startFailed()
+                clearCycleLocked(clearDesktops = true)
+                releaseMulticastLockLocked()
+                mutableError.value = "discovery_start_failed:$errorCode"
+            }
         }
 
         override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-            mutableError.value = "discovery_stop_failed:$errorCode"
+            synchronized(this@NetworkDiscoveryManager) {
+                if (listener !== this) return
+                mutableError.value = "discovery_stop_failed:$errorCode"
+                if (lifecycle.stopFailed() == DiscoveryLifecycle.Command.STOP) {
+                    runCatching { nsdManager.stopServiceDiscovery(this) }
+                        .onFailure { finishStopLocked(allowRestart = false) }
+                }
+            }
         }
     }
 
-    @Synchronized
-    fun start() {
-        if (started) return
-        started = true
-        runCatching { multicastLock.acquire() }
-        runCatching {
-            nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
-        }.onFailure { failure ->
-            started = false
-            if (multicastLock.isHeld) multicastLock.release()
-            mutableError.value = "discovery_start_failed:${failure.javaClass.simpleName}"
-        }
+    /** Preserve resolved PCs across quick Activity stop/start transitions. */
+    private fun finishStopLocked(allowRestart: Boolean) {
+        listener = null
+        val command = lifecycle.stopped()
+        val shouldRestart = allowRestart && command == DiscoveryLifecycle.Command.START
+        clearCycleLocked(clearDesktops = !shouldRestart)
+        if (shouldRestart) startLocked() else releaseLockIfIdleLocked()
     }
 
-    @Synchronized
-    fun stop() {
-        if (!started) return
-        started = false
-        runCatching { nsdManager.stopServiceDiscovery(discoveryListener) }
-        if (multicastLock.isHeld) multicastLock.release()
+    private fun clearCycleLocked(clearDesktops: Boolean) {
         resolutionQueue.clear()
         resolving = false
         serviceToPeer.clear()
-        mutableDesktops.value = emptyList()
+        if (clearDesktops) mutableDesktops.value = emptyList()
+    }
+
+    private fun releaseLockIfIdleLocked() {
+        if (!lifecycle.wantsDiscovery()) releaseMulticastLockLocked()
+    }
+
+    private fun releaseMulticastLockLocked() {
+        if (multicastLock.isHeld) multicastLock.release()
     }
 
     @SuppressLint("NewApi")
     @Synchronized
-    private fun resolveNextLocked() {
+    private fun resolveNextLocked(currentGeneration: Long) {
         if (resolving) return
         val service = resolutionQueue.pollFirst() ?: return
         resolving = true
         nsdManager.resolveService(service, object : NsdManager.ResolveListener {
             override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                 synchronized(this@NetworkDiscoveryManager) {
+                    if (generation != currentGeneration || listener == null) return
                     resolving = false
                     mutableError.value = "resolve_failed:$errorCode"
-                    resolveNextLocked()
+                    resolveNextLocked(currentGeneration)
                 }
             }
 
             override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                 synchronized(this@NetworkDiscoveryManager) {
+                    if (generation != currentGeneration || listener == null) return
                     resolving = false
                     parse(serviceInfo)?.let { desktop ->
                         serviceToPeer[serviceInfo.serviceName] = desktop.peerIdHex
@@ -123,7 +180,7 @@ class NetworkDiscoveryManager(context: Context) {
                             ).sortedBy { it.name.lowercase() }
                         mutableError.value = null
                     }
-                    resolveNextLocked()
+                    resolveNextLocked(currentGeneration)
                 }
             }
         })

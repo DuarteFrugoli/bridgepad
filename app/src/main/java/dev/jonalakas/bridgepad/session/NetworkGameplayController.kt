@@ -32,12 +32,13 @@ class NetworkGameplayController(
     ) {
         stopCurrent(immediate = true)
         val currentGeneration = ++generation
-        inputRouter.selectAutomatic(physicalCaptureMode)
         val nextClient = NetworkGamepadClient(request) { update ->
             handleClientStatus(currentGeneration, update)
         }
         client = nextClient
-        inputSubscription = inputRouter.observe { routed -> nextClient.send(routed.gamepad) }
+        inputSubscription = inputRouter.observe(physicalCaptureMode) { routed ->
+            nextClient.send(routed.gamepad)
+        }
         pointerJob = scope.launch {
             while (isActive) {
                 inputRouter.consumePointer()?.let(nextClient::sendPointer)

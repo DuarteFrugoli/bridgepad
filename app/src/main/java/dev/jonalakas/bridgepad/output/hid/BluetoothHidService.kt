@@ -72,6 +72,7 @@ class BluetoothHidService : Service() {
     private val outputScheduler = OutputScheduler(OUTPUT_RATE_HZ)
     private lateinit var inputRouter: InputRouter
     private var inputSubscription: InputSubscription? = null
+    private var activeCaptureMode = PhysicalCaptureMode.COMPATIBILITY
     private var discoverabilityTimeout: Runnable? = null
     private var pendingConnection: Runnable? = null
     private var lastCaptureState: CaptureState? = null
@@ -309,29 +310,30 @@ class BluetoothHidService : Service() {
                 val captureMode = intent.getStringExtra(EXTRA_PHYSICAL_CAPTURE_MODE)
                     ?.let { runCatching { PhysicalCaptureMode.valueOf(it) }.getOrNull() }
                     ?: PhysicalCaptureMode.COMPATIBILITY
+                activeCaptureMode = captureMode
+                observeInputRouter()
                 HidSessionStore.update {
                     it.copy(
                         physicalCaptureMode = captureMode,
-                        directUsbActive = inputRouter.current.directUsbActive,
+                        directUsbActive = inputRouter.current(activeCaptureMode).directUsbActive,
                         destinationType = activeDestination,
                         connectionMethod = ConnectionMethod.BLUETOOTH,
                         outputAdapterId = activeProfile.adapter.id,
                     )
                 }
-                inputRouter.selectAutomatic(captureMode)
                 updateNotification()
                 startHid()
             }
             ACTION_CONNECT -> connect(intent.getStringExtra(EXTRA_ADDRESS))
             ACTION_RECONNECT -> reconnect()
             ACTION_ENABLE_BACKGROUND_USB -> {
+                activeCaptureMode = PhysicalCaptureMode.BACKGROUND_USB
+                observeInputRouter()
                 HidSessionStore.update { it.copy(physicalCaptureMode = PhysicalCaptureMode.BACKGROUND_USB) }
-                inputRouter.selectAutomatic(PhysicalCaptureMode.BACKGROUND_USB)
-                outputScheduler.submit(inputRouter.current.gamepad)
             }
             ACTION_ENABLE_COMPATIBILITY_INPUT -> {
-                inputRouter.selectAutomatic(PhysicalCaptureMode.COMPATIBILITY)
-                outputScheduler.submit(inputRouter.current.gamepad)
+                activeCaptureMode = PhysicalCaptureMode.COMPATIBILITY
+                observeInputRouter()
                 HidSessionStore.update {
                     it.copy(
                         physicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
@@ -546,15 +548,16 @@ class BluetoothHidService : Service() {
                 feedbackLevel = HidFeedbackLevel.INFO,
             )
         }
-        syncCaptureState(inputRouter.current, force = true)
+        syncCaptureState(inputRouter.current(activeCaptureMode), force = true)
         startOutputPipeline()
     }
 
     private fun observeInputRouter() {
-        val initial = inputRouter.current
+        inputSubscription?.cancel()
+        val initial = inputRouter.current(activeCaptureMode)
         lastObservedInputCount.set(initial.inputEventCount)
         outputScheduler.submit(initial.gamepad)
-        inputSubscription = inputRouter.observe { state ->
+        inputSubscription = inputRouter.observe(activeCaptureMode) { state ->
             outputScheduler.submit(state.gamepad)
             val previousCount = lastObservedInputCount.getAndSet(state.inputEventCount)
             val newEvents = (state.inputEventCount - previousCount).coerceAtLeast(0L)
@@ -592,10 +595,10 @@ class BluetoothHidService : Service() {
         outputRunning.set(false)
         outputHandler.removeCallbacks(outputTick)
         outputScheduler.stop()
-        outputScheduler.submit(inputRouter.current.gamepad)
+        outputScheduler.submit(inputRouter.current(activeCaptureMode).gamepad)
         metricsStartedNanos = monotonicNanos()
         lastMetricsUpdateNanos = metricsStartedNanos
-        lastObservedInputCount.set(inputRouter.current.inputEventCount)
+        lastObservedInputCount.set(inputRouter.current(activeCaptureMode).inputEventCount)
         inputEventsSinceConnection.set(0L)
         reportsSinceConnection = 0
         pendingInputTimestampNanos.set(NO_INPUT_TIMESTAMP)

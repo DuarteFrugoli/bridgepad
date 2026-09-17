@@ -39,19 +39,19 @@ fun interface InputSubscription {
  */
 class InputRouter(scope: CoroutineScope) {
     private val stateLock = Any()
-    private val observers = linkedSetOf<(RoutedInputState) -> Unit>()
-    private var captureMode = PhysicalCaptureMode.COMPATIBILITY
-    private val adaptiveOwnership = AdaptiveInputOwnership()
+    private val observers = linkedSetOf<RouteObserver>()
+    private val compatibilityOwnership = AdaptiveInputOwnership()
+    private val directUsbOwnership = AdaptiveInputOwnership()
     private var physical = PhysicalGamepadStore.state.value
     private var touch = TouchGamepadStore.state.value
     private var directUsb = DirectUsbGamepadStore.state.value
     private var lastPhysicalCount = physical.inputEventCount
     private var lastTouchCount = touch.inputEventCount
     private var lastDirectUsbCount = directUsb.inputEventCount
-    private var routedEventCount = 0L
-    @Volatile
-    private var latest = buildState(null)
-    val current: RoutedInputState get() = latest
+    private var compatibilityEventCount = 0L
+    private var directUsbEventCount = 0L
+    private var compatibilityTimestampNanos: Long? = null
+    private var directUsbTimestampNanos: Long? = null
 
     init {
         scope.launch {
@@ -60,7 +60,11 @@ class InputRouter(scope: CoroutineScope) {
                     val changed = state.inputEventCount != lastPhysicalCount
                     lastPhysicalCount = state.inputEventCount
                     physical = state
-                    publishLocked(if (changed && usesCompatibilityInput()) state.lastInputTimestampNanos else null)
+                    if (changed) {
+                        compatibilityEventCount++
+                        compatibilityTimestampNanos = state.lastInputTimestampNanos
+                    }
+                    publishLocked()
                 }
             }
         }
@@ -70,7 +74,13 @@ class InputRouter(scope: CoroutineScope) {
                     val changed = state.inputEventCount != lastTouchCount
                     lastTouchCount = state.inputEventCount
                     touch = state
-                    publishLocked(if (changed) state.lastInputTimestampNanos else null)
+                    if (changed) {
+                        compatibilityEventCount++
+                        directUsbEventCount++
+                        compatibilityTimestampNanos = state.lastInputTimestampNanos
+                        directUsbTimestampNanos = state.lastInputTimestampNanos
+                    }
+                    publishLocked()
                 }
             }
         }
@@ -80,27 +90,31 @@ class InputRouter(scope: CoroutineScope) {
                     val changed = state.inputEventCount != lastDirectUsbCount
                     lastDirectUsbCount = state.inputEventCount
                     directUsb = state
-                    publishLocked(if (changed && usesDirectUsbInput()) state.lastInputTimestampNanos else null)
+                    if (changed) {
+                        directUsbEventCount++
+                        directUsbTimestampNanos = state.lastInputTimestampNanos
+                    }
+                    publishLocked()
                 }
             }
         }
     }
 
-    fun selectAutomatic(captureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY) {
-        synchronized(stateLock) {
-            this.captureMode = captureMode
-            adaptiveOwnership.clear()
-            publishLocked(null)
-        }
+    fun current(captureMode: PhysicalCaptureMode): RoutedInputState = synchronized(stateLock) {
+        buildState(captureMode)
     }
 
-    fun observe(observer: (RoutedInputState) -> Unit): InputSubscription {
+    fun observe(
+        captureMode: PhysicalCaptureMode,
+        observer: (RoutedInputState) -> Unit,
+    ): InputSubscription {
+        val routeObserver = RouteObserver(captureMode, observer)
         synchronized(stateLock) {
-            observers += observer
-            observer(latest)
+            observers += routeObserver
+            observer(buildState(captureMode))
         }
         return InputSubscription {
-            synchronized(stateLock) { observers -= observer }
+            synchronized(stateLock) { observers -= routeObserver }
         }
     }
 
@@ -109,15 +123,13 @@ class InputRouter(scope: CoroutineScope) {
     fun clearPointer() = TouchMouseStore.clear()
 
     /** Called with [stateLock] held so inputs from independent adapters remain ordered. */
-    private fun publishLocked(eventTimestampNanos: Long?) {
-        if (eventTimestampNanos != null) routedEventCount++
-        latest = buildState(eventTimestampNanos ?: latest.lastInputTimestampNanos)
-        observers.forEach { it(latest) }
+    private fun publishLocked() {
+        observers.forEach { route -> route.observer(buildState(route.captureMode)) }
     }
 
-    private fun buildState(timestampNanos: Long?): RoutedInputState {
-        val directActive = usesDirectUsbInput()
-        val physicalSources = if (usesCompatibilityInput()) {
+    private fun buildState(captureMode: PhysicalCaptureMode): RoutedInputState {
+        val directActive = captureMode == PhysicalCaptureMode.BACKGROUND_USB && directUsb.active
+        val physicalSources = if (captureMode == PhysicalCaptureMode.COMPATIBILITY) {
             physical.sourceStates.map { (sourceId, gamepad) -> SourceGamepadState(sourceId, gamepad) }
         } else {
             emptyList()
@@ -131,13 +143,26 @@ class InputRouter(scope: CoroutineScope) {
                 DIRECT_USB_SOURCE_ID,
                 if (directActive) directUsb.gamepad else VirtualGamepadState(),
             )
+        val adaptiveOwnership = if (captureMode == PhysicalCaptureMode.BACKGROUND_USB) {
+            directUsbOwnership
+        } else {
+            compatibilityOwnership
+        }
         sources.forEach(adaptiveOwnership::observe)
         adaptiveOwnership.retainSources(sources.mapTo(mutableSetOf(), SourceGamepadState::sourceId))
         val ownership = adaptiveOwnership.ownership(sources)
         return RoutedInputState(
             gamepad = InputMerger.merge(sources, ownership),
-            inputEventCount = routedEventCount,
-            lastInputTimestampNanos = timestampNanos,
+            inputEventCount = if (captureMode == PhysicalCaptureMode.BACKGROUND_USB) {
+                directUsbEventCount
+            } else {
+                compatibilityEventCount
+            },
+            lastInputTimestampNanos = if (captureMode == PhysicalCaptureMode.BACKGROUND_USB) {
+                directUsbTimestampNanos
+            } else {
+                compatibilityTimestampNanos
+            },
             directUsbActive = directUsb.active,
             captureMessage = directUsb.statusMessage,
             captureError = directUsb.statusIsError,
@@ -145,12 +170,10 @@ class InputRouter(scope: CoroutineScope) {
         )
     }
 
-    private fun usesCompatibilityInput(): Boolean =
-        captureMode == PhysicalCaptureMode.COMPATIBILITY
-
-    private fun usesDirectUsbInput(): Boolean =
-        captureMode == PhysicalCaptureMode.BACKGROUND_USB &&
-            directUsb.active
+    private data class RouteObserver(
+        val captureMode: PhysicalCaptureMode,
+        val observer: (RoutedInputState) -> Unit,
+    )
 
     private companion object {
         val DIRECT_USB_SOURCE_ID = SourceId("direct-usb")

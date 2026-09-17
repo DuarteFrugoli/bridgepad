@@ -140,22 +140,20 @@ class NetworkDesktopCoordinator(
             return
         }
         val discovered = discovery.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
-        if (discovered == null) {
-            gameplay.reportFailure(NetworkFailureReason.DESKTOP_UNAVAILABLE, "Desktop is offline")
-            return
-        }
-        if (!trusted.certificateSha256.equals(discovered.certificateSha256, ignoreCase = true)) {
+        if (discovered != null &&
+            !trusted.certificateSha256.equals(discovered.certificateSha256, ignoreCase = true)
+        ) {
             gameplay.reportFailure(
                 NetworkFailureReason.CERTIFICATE_CHANGED,
                 "Discovered certificate does not match the trusted desktop",
             )
             return
         }
-        trustedStore.updateEndpoint(discovered)
+        if (discovered != null) trustedStore.updateEndpoint(discovered)
         gameplay.start(
             request = NetworkGamepadRequest(
-                host = discovered.host,
-                port = discovered.port,
+                host = discovered?.host ?: trusted.lastHost,
+                port = discovered?.port ?: trusted.port,
                 certificateSha256 = trusted.certificateSha256,
                 credentials = NetworkCredentials(
                     clientPeerId = trustedStore.clientPeerId,
