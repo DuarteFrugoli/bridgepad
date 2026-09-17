@@ -83,6 +83,9 @@
     <string name="configure_gamepad_mapping">Configurar botões do controle</string>
     <string name="mapping_optional_both_modes">Opcional. O mapeamento personalizado funciona em Compatibilidade e USB em segundo plano.</string>
     <string name="settings">Configurações</string>
+    <string name="touchpad_settings">Mouse touchpad</string>
+    <string name="touchpad_settings_description">Personalize como os gestos dos dedos controlam a rolagem.</string>
+    <string name="invert_touchpad_scroll">Inverter direção da rolagem</string>
     <string name="session_active">Sessão em andamento</string>
     <string name="home_title">Vamos jogar?</string>
     <string name="home_description">Escolha onde jogar, como conectar e quais controles usar.</string>

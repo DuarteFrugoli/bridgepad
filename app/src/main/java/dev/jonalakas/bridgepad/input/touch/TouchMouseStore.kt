@@ -11,6 +11,7 @@ object TouchMouseStore {
     private var releasePending = false
     private var inFlight: PendingPointer? = null
     private var inputEventCount = 0L
+    private var invertedScroll = true
 
     @Synchronized
     fun move(deltaX: Float, deltaY: Float) {
@@ -23,8 +24,14 @@ object TouchMouseStore {
     @Synchronized
     fun scroll(deltaY: Float) {
         if (deltaY == 0f) return
-        accumulatedScrollY += deltaY * SCROLL_SENSITIVITY
+        val direction = if (invertedScroll) 1f else -1f
+        accumulatedScrollY += deltaY * SCROLL_SENSITIVITY * direction
         inputEventCount++
+    }
+
+    @Synchronized
+    fun setInvertedScroll(inverted: Boolean) {
+        invertedScroll = inverted
     }
 
     @Synchronized
@@ -140,7 +147,7 @@ object TouchMouseStore {
     private const val LEFT_BUTTON = 1
     private const val RIGHT_BUTTON = 2
     private const val POINTER_SENSITIVITY = 0.8f
-    private const val SCROLL_SENSITIVITY = -0.05f
+    private const val SCROLL_SENSITIVITY = 0.05f
 }
 
 data class TouchMouseDiagnostics(

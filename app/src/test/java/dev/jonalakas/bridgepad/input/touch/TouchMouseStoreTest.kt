@@ -7,7 +7,10 @@ import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TouchMouseStoreTest {
-    @After fun clear() = TouchMouseStore.clear()
+    @After fun clear() {
+        TouchMouseStore.clear()
+        TouchMouseStore.setInvertedScroll(true)
+    }
 
     @Test fun unchangedTouchpadProducesNoReport() {
         assertNull(TouchMouseStore.consume())
@@ -60,6 +63,13 @@ class TouchMouseStoreTest {
     }
 
     @Test fun twoFingerMovementProducesWheelReports() {
+        TouchMouseStore.scroll(-40f)
+        assertEquals(-2, TouchMouseStore.consume()?.scrollY)
+        assertNull(TouchMouseStore.consume())
+    }
+
+    @Test fun scrollDirectionCanReturnToNonInvertedBehavior() {
+        TouchMouseStore.setInvertedScroll(false)
         TouchMouseStore.scroll(-40f)
         assertEquals(2, TouchMouseStore.consume()?.scrollY)
         assertNull(TouchMouseStore.consume())

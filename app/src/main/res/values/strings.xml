@@ -83,6 +83,9 @@
     <string name="configure_gamepad_mapping">Configure controller buttons</string>
     <string name="mapping_optional_both_modes">Optional. Custom button mapping works with Compatibility and Background USB.</string>
     <string name="settings">Settings</string>
+    <string name="touchpad_settings">Mouse touchpad</string>
+    <string name="touchpad_settings_description">Customize how finger gestures control pointer scrolling.</string>
+    <string name="invert_touchpad_scroll">Invert scroll direction</string>
     <string name="session_active">Session in progress</string>
     <string name="home_title">Ready to play?</string>
     <string name="home_description">Choose where to play, how to connect and which controls to use.</string>

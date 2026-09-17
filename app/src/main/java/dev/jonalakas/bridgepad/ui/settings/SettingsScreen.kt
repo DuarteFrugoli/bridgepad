@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,11 +15,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
@@ -40,9 +43,11 @@ fun SettingsScreen(
     physicalControllerConnected: Boolean,
     mappingAvailable: Boolean,
     sessionOrientationMode: SessionOrientationMode,
+    invertedTouchpadScroll: Boolean,
     onEditTouchscreenLayout: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
     onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
+    onInvertedTouchpadScrollChanged: (Boolean) -> Unit,
     onOpenNetworkDiagnostic: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
     onCopyDiagnostics: () -> Unit,
@@ -88,6 +93,24 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.edit_controller_layout))
+                    }
+                }
+            }
+            item {
+                SettingsCard(title = stringResource(R.string.touchpad_settings)) {
+                    Text(stringResource(R.string.touchpad_settings_description))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.invert_touchpad_scroll),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(
+                            checked = invertedTouchpadScroll,
+                            onCheckedChange = onInvertedTouchpadScrollChanged,
+                        )
                     }
                 }
             }

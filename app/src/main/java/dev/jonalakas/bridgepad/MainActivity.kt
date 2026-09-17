@@ -54,6 +54,7 @@ import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import dev.jonalakas.bridgepad.input.android.AndroidGamepadController
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
+import dev.jonalakas.bridgepad.input.touch.TouchpadSettingsStore
 import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
 import dev.jonalakas.bridgepad.input.mapping.GamepadMappingStore
 import dev.jonalakas.bridgepad.session.FeedbackLevel as HidFeedbackLevel
@@ -214,6 +215,7 @@ class MainActivity : ComponentActivity() {
                 val networkDiscoveryError by networkDesktopCoordinator.discoveryError.collectAsState()
                 val touchscreenLayoutProfile by TouchscreenLayoutStore.profile.collectAsState()
                 val sessionOrientationMode by SessionOrientationStore.mode.collectAsState()
+                val invertedTouchpadScroll by TouchpadSettingsStore.invertedScroll.collectAsState()
                 val configurationOrientation = LocalConfiguration.current.orientation
                 val currentLayoutOrientation = if (configurationOrientation == Configuration.ORIENTATION_PORTRAIT) {
                     TouchscreenLayoutOrientation.PORTRAIT
@@ -543,6 +545,7 @@ class MainActivity : ComponentActivity() {
                         physicalControllerConnected = physicalControllerConnected,
                         mappingAvailable = mappingInput != null,
                         sessionOrientationMode = sessionOrientationMode,
+                        invertedTouchpadScroll = invertedTouchpadScroll,
                         onEditTouchscreenLayout = {
                             returnToSettingsAfterLayoutEditor = true
                             showSettings = false
@@ -556,6 +559,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onSessionOrientationModeChanged = SessionOrientationStore::set,
+                        onInvertedTouchpadScrollChanged = TouchpadSettingsStore::setInvertedScroll,
                         onOpenNetworkDiagnostic = {
                             showSettings = false
                             showNetworkDiagnostic = true
