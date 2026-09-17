@@ -26,6 +26,8 @@ import dev.jonalakas.bridgepad.core.session.SessionStatus
 import dev.jonalakas.bridgepad.diagnostics.DeviceInfo
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.session.SessionState
+import dev.jonalakas.bridgepad.ui.components.SessionOrientationSelector
+import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -35,7 +37,12 @@ fun SettingsScreen(
     deviceInfo: DeviceInfo,
     hidState: SessionState,
     physicalGamepadState: PhysicalGamepadState,
+    physicalControllerConnected: Boolean,
+    mappingAvailable: Boolean,
+    sessionOrientationMode: SessionOrientationMode,
     onEditTouchscreenLayout: () -> Unit,
+    onConfigureGamepadMapping: () -> Unit,
+    onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
     onOpenNetworkDiagnostic: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
     onCopyDiagnostics: () -> Unit,
@@ -65,6 +72,15 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
+                SettingsCard(title = stringResource(R.string.session_orientation)) {
+                    Text(stringResource(R.string.session_orientation_description))
+                    SessionOrientationSelector(
+                        selected = sessionOrientationMode,
+                        onSelected = onSessionOrientationModeChanged,
+                    )
+                }
+            }
+            item {
                 SettingsCard(title = stringResource(R.string.virtual_gamepad_settings)) {
                     Text(stringResource(R.string.virtual_gamepad_settings_description))
                     OutlinedButton(
@@ -72,6 +88,20 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.edit_controller_layout))
+                    }
+                }
+            }
+            if (physicalControllerConnected) {
+                item {
+                    SettingsCard(title = stringResource(R.string.physical_gamepad_settings)) {
+                        Text(stringResource(R.string.physical_gamepad_settings_description))
+                        OutlinedButton(
+                            onClick = onConfigureGamepadMapping,
+                            enabled = mappingAvailable,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.configure_gamepad_mapping))
+                        }
                     }
                 }
             }

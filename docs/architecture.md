@@ -67,6 +67,21 @@ a surface manually, input-device changes do not override that choice. The
 ViewModel also preserves the active surface across Activity recreation and
 orientation changes.
 
+Virtual-controller customization is stored as one `TouchscreenLayoutProfile`
+with separate portrait and landscape variants. Both variants belong to the same
+preset and are saved atomically. `SessionOrientationStore` independently keeps
+the session rotation policy (`AUTO`, portrait, reverse portrait, landscape, or
+reverse landscape), so the same policy applies to the virtual controller, mouse
+touchpad, and sessions driven by a physical controller. A configuration change
+selects the matching layout variant without restarting the transport session.
+
+Active Wi-Fi gameplay is hosted by `NetworkSessionService`, a connected-device
+foreground service. The service holds CPU and Wi-Fi locks only for the lifetime
+of the playable session, keeps direct USB capture alive when Background USB is
+selected, and releases every resource on stop or terminal failure. The Activity
+may be stopped, rotated, removed from the foreground, or have the screen turned
+off without owning the network transport lifetime.
+
 `BridgePadApplication` is the process-level composition root and owns the shared
 input router. The Bluetooth foreground service is only an Android lifecycle host
 for the Bluetooth adapter; it neither creates nor destroys the input pipeline and

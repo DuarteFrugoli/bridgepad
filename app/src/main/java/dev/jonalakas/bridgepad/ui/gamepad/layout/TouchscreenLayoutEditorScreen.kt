@@ -69,13 +69,15 @@ import kotlin.math.roundToInt
 
 @Composable
 fun TouchscreenLayoutEditorScreen(
-    initialLayout: TouchscreenLayout,
-    onSave: (TouchscreenLayout) -> Unit,
+    initialProfile: TouchscreenLayoutProfile,
+    editingOrientation: TouchscreenLayoutOrientation,
+    onEditingOrientationChanged: (TouchscreenLayoutOrientation) -> Unit,
+    onSave: (TouchscreenLayoutProfile) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var encodedDraft by rememberSaveable {
-        mutableStateOf(TouchscreenLayoutCodec.encode(initialLayout))
+        mutableStateOf(TouchscreenLayoutProfileCodec.encode(initialProfile))
     }
     var selectedName by rememberSaveable { mutableStateOf(TouchControlId.LEFT_STICK.name) }
     var toolbarExpanded by rememberSaveable { mutableStateOf(false) }
@@ -86,18 +88,27 @@ fun TouchscreenLayoutEditorScreen(
     var collapsedToolbarSize by remember { mutableStateOf(IntSize.Zero) }
     var expandedToolbarSize by remember { mutableStateOf(IntSize.Zero) }
     var optionsPanelSize by remember { mutableStateOf(IntSize.Zero) }
-    val draft = remember(encodedDraft) {
-        TouchscreenLayoutCodec.decode(encodedDraft) ?: DefaultTouchscreenLayout.value
+    val draftProfile = remember(encodedDraft) {
+        TouchscreenLayoutProfileCodec.decode(encodedDraft) ?: DefaultTouchscreenLayoutProfile.value
     }
+    val draft = draftProfile.layout(editingOrientation)
     val selected = TouchControlId.valueOf(selectedName)
 
-    fun replaceDraft(layout: TouchscreenLayout) {
-        encodedDraft = TouchscreenLayoutCodec.encode(layout)
+    fun replaceDraft(profile: TouchscreenLayoutProfile) {
+        encodedDraft = TouchscreenLayoutProfileCodec.encode(profile)
+    }
+
+    fun replaceCurrentLayout(layout: TouchscreenLayout) {
+        replaceDraft(draftProfile.update(editingOrientation, layout))
     }
 
     fun updateDraft(transform: (TouchscreenLayout) -> TouchscreenLayout) {
-        val current = TouchscreenLayoutCodec.decode(encodedDraft) ?: DefaultTouchscreenLayout.value
-        encodedDraft = TouchscreenLayoutCodec.encode(transform(current))
+        val currentProfile = TouchscreenLayoutProfileCodec.decode(encodedDraft)
+            ?: DefaultTouchscreenLayoutProfile.value
+        val currentLayout = currentProfile.layout(editingOrientation)
+        encodedDraft = TouchscreenLayoutProfileCodec.encode(
+            currentProfile.update(editingOrientation, transform(currentLayout)),
+        )
     }
 
     BackHandler(onBack = onCancel)
@@ -163,8 +174,9 @@ fun TouchscreenLayoutEditorScreen(
                 canvasHeightPixels = heightPixels,
                 onSelect = { selectedName = control.name },
                 onMove = { deltaX, deltaY ->
-                    val updated = (TouchscreenLayoutCodec.decode(encodedDraft)
-                        ?: DefaultTouchscreenLayout.value)
+                    val currentProfile = TouchscreenLayoutProfileCodec.decode(encodedDraft)
+                        ?: DefaultTouchscreenLayoutProfile.value
+                    val updated = currentProfile.layout(editingOrientation)
                         .move(control, deltaX, deltaY)
                     if (toolbarExpanded && optionsVisible) {
                         optionsCenterX = optionsPanelCenterAfterControlMove(
@@ -172,7 +184,7 @@ fun TouchscreenLayoutEditorScreen(
                             currentOptionsCenterX = optionsCenterX,
                         )
                     }
-                    replaceDraft(updated)
+                    replaceCurrentLayout(updated)
                 },
                 onResize = { widthDelta, heightDelta, centerDeltaX, centerDeltaY ->
                     updateDraft { current ->
@@ -193,7 +205,7 @@ fun TouchscreenLayoutEditorScreen(
                 onCollapse = { toolbarExpanded = false },
                 onToggleOptions = { optionsVisible = !optionsVisible },
                 onCancel = onCancel,
-                onSave = { onSave(draft) },
+                onSave = { onSave(draftProfile) },
                 modifier = toolbarModifier,
             )
         } else {
@@ -205,13 +217,15 @@ fun TouchscreenLayoutEditorScreen(
 
         if (toolbarExpanded && optionsVisible) {
             EditorOptionsPanel(
-                draft = draft,
+                draftProfile = draftProfile,
+                editingOrientation = editingOrientation,
                 selectedControl = selected,
+                onEditingOrientationChanged = onEditingOrientationChanged,
                 onSelectPreset = ::replaceDraft,
                 onDeadzoneChange = { deadzone ->
                     updateDraft { it.setDeadzone(selected, deadzone) }
                 },
-                onReset = { replaceDraft(DefaultTouchscreenLayout.value) },
+                onReset = { replaceDraft(DefaultTouchscreenLayoutProfile.value) },
                 onHorizontalDrag = { delta ->
                     optionsCenterX = moveFloatingOverlayCenter(
                         currentCenter = optionsCenterX,
@@ -318,14 +332,17 @@ private fun CollapsedEditorToolbar(
 
 @Composable
 private fun EditorOptionsPanel(
-    draft: TouchscreenLayout,
+    draftProfile: TouchscreenLayoutProfile,
+    editingOrientation: TouchscreenLayoutOrientation,
     selectedControl: TouchControlId,
-    onSelectPreset: (TouchscreenLayout) -> Unit,
+    onEditingOrientationChanged: (TouchscreenLayoutOrientation) -> Unit,
+    onSelectPreset: (TouchscreenLayoutProfile) -> Unit,
     onDeadzoneChange: (Float) -> Unit,
     onReset: () -> Unit,
     onHorizontalDrag: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val draft = draftProfile.layout(editingOrientation)
     val currentOnHorizontalDrag by rememberUpdatedState(onHorizontalDrag)
     val moveDescription = stringResource(R.string.move_layout_options)
     Surface(
@@ -356,6 +373,26 @@ private fun EditorOptionsPanel(
                 Text(OPTIONS_DRAG_SYMBOL, style = MaterialTheme.typography.titleLarge)
             }
             Text(stringResource(R.string.layout_editor_instructions), style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider()
+            Text(stringResource(R.string.layout_orientation), style = MaterialTheme.typography.titleSmall)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = editingOrientation == TouchscreenLayoutOrientation.LANDSCAPE,
+                    onClick = { onEditingOrientationChanged(TouchscreenLayoutOrientation.LANDSCAPE) },
+                    label = { Text(stringResource(R.string.orientation_landscape)) },
+                    modifier = Modifier.weight(1f),
+                )
+                FilterChip(
+                    selected = editingOrientation == TouchscreenLayoutOrientation.PORTRAIT,
+                    onClick = { onEditingOrientationChanged(TouchscreenLayoutOrientation.PORTRAIT) },
+                    label = { Text(stringResource(R.string.orientation_portrait)) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Text(stringResource(R.string.layout_orientation_hint), style = MaterialTheme.typography.bodySmall)
             if (selectedControl.adjustableDeadzone) {
                 val deadzone = draft.placement(selectedControl).deadzone
                 val selectedControlLabel = controlLabel(selectedControl)
@@ -402,10 +439,10 @@ private fun EditorOptionsPanel(
             HorizontalDivider()
             Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
             TouchscreenLayoutPreset.entries.forEach { preset ->
-                val presetLayout = BuiltInTouchscreenLayouts.layout(preset)
+                val presetProfile = BuiltInTouchscreenLayouts.profile(preset)
                 FilterChip(
-                    selected = draft == presetLayout,
-                    onClick = { onSelectPreset(presetLayout) },
+                    selected = draftProfile == presetProfile,
+                    onClick = { onSelectPreset(presetProfile) },
                     label = { Text(presetLabel(preset)) },
                     modifier = Modifier.fillMaxWidth(),
                 )

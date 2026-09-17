@@ -65,6 +65,7 @@ class NetworkGamepadClient(
     private val onStatus: (NetworkGamepadStatus) -> Unit,
 ) {
     private val stopping = AtomicBoolean(false)
+    private val hasBeenActive = AtomicBoolean(false)
     private val latestState = AtomicReference(VirtualGamepadState())
     private val pendingState = AtomicReference<VirtualGamepadState?>(VirtualGamepadState())
     private val pendingPointers = ArrayBlockingQueue<PointerReport>(POINTER_QUEUE_CAPACITY)
@@ -120,7 +121,10 @@ class NetworkGamepadClient(
                     onStatus(NetworkGamepadStatus.Stopped)
                     return
                 }
-                val failure = classifyFailure(error)
+                val failure = normalizeFailureAfterActiveSession(
+                    classifyFailure(error),
+                    hasBeenActive.get(),
+                )
                 val retryable = failure.reason in setOf(
                     NetworkFailureReason.DESKTOP_UNAVAILABLE,
                     NetworkFailureReason.CONNECTION_LOST,
@@ -184,6 +188,7 @@ class NetworkGamepadClient(
             check(BridgeCapability.GAMEPAD in ready.enabledCapabilities) {
                 "Desktop did not enable gamepad input"
             }
+            hasBeenActive.set(true)
             onStatus(NetworkGamepadStatus.Active)
 
             var lastSent: VirtualGamepadState? = null
@@ -272,5 +277,22 @@ class NetworkGamepadClient(
         const val IDLE_POLL_MILLIS = 4L
         const val POINTER_QUEUE_CAPACITY = 64
         val RECONNECT_DELAYS_MILLIS = longArrayOf(500, 1_000, 2_000)
+    }
+}
+
+internal fun normalizeFailureAfterActiveSession(
+    failure: NetworkGamepadStatus.Failed,
+    hasBeenActive: Boolean,
+): NetworkGamepadStatus.Failed {
+    if (!hasBeenActive) return failure
+    return if (failure.reason in setOf(
+            NetworkFailureReason.DESKTOP_UNAVAILABLE,
+            NetworkFailureReason.CONNECTION_LOST,
+            NetworkFailureReason.UNKNOWN,
+        )
+    ) {
+        failure.copy(reason = NetworkFailureReason.CONNECTION_LOST)
+    } else {
+        failure
     }
 }

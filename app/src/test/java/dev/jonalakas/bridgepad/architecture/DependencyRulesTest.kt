@@ -36,6 +36,27 @@ class DependencyRulesTest {
         assertTrue("Legacy connection timing flag must not return", "openAfterConnection" !in source)
     }
 
+    @Test
+    fun wifiBackgroundSessionHasAnAndroidLifecycleHost() {
+        val service = sourceRoot().resolve("session/NetworkSessionService.kt").readText()
+        val manifest = Path.of("src/main/AndroidManifest.xml").readText()
+        val coordinator = sourceRoot().resolve("session/NetworkDesktopCoordinator.kt").readText()
+
+        assertTrue("Wi-Fi gameplay must use a foreground service", "startForeground" in service)
+        assertTrue("Screen-off gameplay must keep the CPU awake", "PARTIAL_WAKE_LOCK" in service)
+        assertTrue("NetworkSessionService must be registered", ".session.NetworkSessionService" in manifest)
+        assertTrue("Starting gameplay must start the lifecycle host", "NetworkSessionService.start" in coordinator)
+        assertTrue("Stopping gameplay must stop the lifecycle host", "NetworkSessionService.stop" in coordinator)
+    }
+
+    @Test
+    fun interactiveGameplaySurfacesKeepTheScreenAwake() {
+        val activity = sourceRoot().resolve("MainActivity.kt").readText()
+
+        assertTrue("Interactive gameplay must use Android's keep-screen-on flag", "FLAG_KEEP_SCREEN_ON" in activity)
+        assertTrue("Background USB must remain eligible for screen-off play", "compatibilityInputNeedsScreen" in activity)
+    }
+
     private fun assertNoImport(root: Path, forbiddenPackage: String) {
         val violations = Files.walk(root).use { files ->
             files.filter { it.extension == "kt" }

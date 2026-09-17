@@ -31,6 +31,11 @@ enum class TouchscreenLayoutPreset {
     MOBILE,
 }
 
+enum class TouchscreenLayoutOrientation {
+    LANDSCAPE,
+    PORTRAIT,
+}
+
 data class TouchControlPlacement(
     val centerX: Float,
     val centerY: Float,
@@ -99,12 +104,12 @@ data class TouchscreenLayout(
         }
     }
 
-    fun sanitized(): TouchscreenLayout = TouchscreenLayout(
+    fun sanitized(
+        fallbackLayout: TouchscreenLayout = DefaultTouchscreenLayout.value,
+    ): TouchscreenLayout = TouchscreenLayout(
         TouchControlId.entries.associateWith { control ->
-            placement(control).sanitized(
-                control,
-                DefaultTouchscreenLayout.value.placements.getValue(control),
-            )
+            val fallback = fallbackLayout.placements.getValue(control)
+            (placements[control] ?: fallback).sanitized(control, fallback)
         },
     )
 
@@ -112,6 +117,29 @@ data class TouchscreenLayout(
         control: TouchControlId,
         transform: (TouchControlPlacement) -> TouchControlPlacement,
     ): TouchscreenLayout = copy(placements = placements + (control to transform(placement(control))))
+}
+
+data class TouchscreenLayoutProfile(
+    val landscape: TouchscreenLayout,
+    val portrait: TouchscreenLayout,
+) {
+    fun layout(orientation: TouchscreenLayoutOrientation): TouchscreenLayout = when (orientation) {
+        TouchscreenLayoutOrientation.LANDSCAPE -> landscape
+        TouchscreenLayoutOrientation.PORTRAIT -> portrait
+    }
+
+    fun update(
+        orientation: TouchscreenLayoutOrientation,
+        layout: TouchscreenLayout,
+    ): TouchscreenLayoutProfile = when (orientation) {
+        TouchscreenLayoutOrientation.LANDSCAPE -> copy(landscape = layout)
+        TouchscreenLayoutOrientation.PORTRAIT -> copy(portrait = layout)
+    }
+
+    fun sanitized(): TouchscreenLayoutProfile = TouchscreenLayoutProfile(
+        landscape = landscape.sanitized(BuiltInTouchscreenLayouts.mobile),
+        portrait = portrait.sanitized(BuiltInTouchscreenLayouts.mobilePortrait),
+    )
 }
 
 object BuiltInTouchscreenLayouts {
@@ -181,10 +209,76 @@ object BuiltInTouchscreenLayouts {
         ),
     )
 
-    fun layout(preset: TouchscreenLayoutPreset): TouchscreenLayout = when (preset) {
-        TouchscreenLayoutPreset.SYMMETRIC -> symmetric
-        TouchscreenLayoutPreset.ASYMMETRIC -> asymmetric
-        TouchscreenLayoutPreset.MOBILE -> mobile
+    val symmetricPortrait = TouchscreenLayout(
+        mapOf(
+            TouchControlId.MOUSE_TOUCHPAD to TouchControlPlacement(0.50f, 0.18f, 0.88f),
+            TouchControlId.DPAD to TouchControlPlacement(0.24f, 0.43f, 0.72f),
+            TouchControlId.LEFT_STICK to TouchControlPlacement(0.25f, 0.69f, 0.68f),
+            TouchControlId.RIGHT_STICK to TouchControlPlacement(0.75f, 0.69f, 0.68f),
+            TouchControlId.LEFT_TRIGGER to TouchControlPlacement(0.13f, 0.06f, 0.72f),
+            TouchControlId.LEFT_BUMPER to TouchControlPlacement(0.37f, 0.06f, 0.72f),
+            TouchControlId.RIGHT_BUMPER to TouchControlPlacement(0.63f, 0.06f, 0.72f),
+            TouchControlId.RIGHT_TRIGGER to TouchControlPlacement(0.87f, 0.06f, 0.72f),
+            TouchControlId.FACE_NORTH to TouchControlPlacement(0.76f, 0.34f, 0.82f),
+            TouchControlId.FACE_WEST to TouchControlPlacement(0.64f, 0.43f, 0.82f),
+            TouchControlId.FACE_EAST to TouchControlPlacement(0.88f, 0.43f, 0.82f),
+            TouchControlId.FACE_SOUTH to TouchControlPlacement(0.76f, 0.52f, 0.82f),
+            TouchControlId.SELECT to TouchControlPlacement(0.37f, 0.56f, 0.72f),
+            TouchControlId.START to TouchControlPlacement(0.63f, 0.56f, 0.72f),
+            TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.34f, 0.82f, 0.70f),
+            TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.82f, 0.70f),
+            TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.92f, 0.72f),
+        ),
+    )
+
+    val asymmetricPortrait = TouchscreenLayout(
+        mapOf(
+            TouchControlId.MOUSE_TOUCHPAD to TouchControlPlacement(0.50f, 0.18f, 0.88f),
+            TouchControlId.DPAD to TouchControlPlacement(0.24f, 0.68f, 0.72f),
+            TouchControlId.LEFT_STICK to TouchControlPlacement(0.24f, 0.42f, 0.68f),
+            TouchControlId.RIGHT_STICK to TouchControlPlacement(0.76f, 0.68f, 0.68f),
+            TouchControlId.LEFT_TRIGGER to TouchControlPlacement(0.13f, 0.06f, 0.72f),
+            TouchControlId.LEFT_BUMPER to TouchControlPlacement(0.37f, 0.06f, 0.72f),
+            TouchControlId.RIGHT_BUMPER to TouchControlPlacement(0.63f, 0.06f, 0.72f),
+            TouchControlId.RIGHT_TRIGGER to TouchControlPlacement(0.87f, 0.06f, 0.72f),
+            TouchControlId.FACE_NORTH to TouchControlPlacement(0.76f, 0.33f, 0.82f),
+            TouchControlId.FACE_WEST to TouchControlPlacement(0.64f, 0.42f, 0.82f),
+            TouchControlId.FACE_EAST to TouchControlPlacement(0.88f, 0.42f, 0.82f),
+            TouchControlId.FACE_SOUTH to TouchControlPlacement(0.76f, 0.51f, 0.82f),
+            TouchControlId.SELECT to TouchControlPlacement(0.37f, 0.56f, 0.72f),
+            TouchControlId.START to TouchControlPlacement(0.63f, 0.56f, 0.72f),
+            TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.34f, 0.82f, 0.70f),
+            TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.82f, 0.70f),
+            TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.92f, 0.72f),
+        ),
+    )
+
+    val mobilePortrait = TouchscreenLayout(
+        mapOf(
+            TouchControlId.MOUSE_TOUCHPAD to TouchControlPlacement(0.50f, 0.18f, 0.92f, 1.10f),
+            TouchControlId.DPAD to TouchControlPlacement(0.23f, 0.46f, 0.70f),
+            TouchControlId.LEFT_STICK to TouchControlPlacement(0.23f, 0.72f, 0.68f),
+            TouchControlId.RIGHT_STICK to TouchControlPlacement(0.77f, 0.72f, 0.68f),
+            TouchControlId.LEFT_TRIGGER to TouchControlPlacement(0.13f, 0.06f, 0.72f),
+            TouchControlId.LEFT_BUMPER to TouchControlPlacement(0.37f, 0.06f, 0.72f),
+            TouchControlId.RIGHT_BUMPER to TouchControlPlacement(0.63f, 0.06f, 0.72f),
+            TouchControlId.RIGHT_TRIGGER to TouchControlPlacement(0.87f, 0.06f, 0.72f),
+            TouchControlId.FACE_NORTH to TouchControlPlacement(0.77f, 0.37f, 0.82f),
+            TouchControlId.FACE_WEST to TouchControlPlacement(0.65f, 0.46f, 0.82f),
+            TouchControlId.FACE_EAST to TouchControlPlacement(0.89f, 0.46f, 0.82f),
+            TouchControlId.FACE_SOUTH to TouchControlPlacement(0.77f, 0.55f, 0.82f),
+            TouchControlId.SELECT to TouchControlPlacement(0.37f, 0.59f, 0.72f),
+            TouchControlId.START to TouchControlPlacement(0.63f, 0.59f, 0.72f),
+            TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.34f, 0.84f, 0.70f),
+            TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.84f, 0.70f),
+            TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.93f, 0.72f),
+        ),
+    )
+
+    fun profile(preset: TouchscreenLayoutPreset): TouchscreenLayoutProfile = when (preset) {
+        TouchscreenLayoutPreset.SYMMETRIC -> TouchscreenLayoutProfile(symmetric, symmetricPortrait)
+        TouchscreenLayoutPreset.ASYMMETRIC -> TouchscreenLayoutProfile(asymmetric, asymmetricPortrait)
+        TouchscreenLayoutPreset.MOBILE -> TouchscreenLayoutProfile(mobile, mobilePortrait)
     }
 }
 
@@ -192,43 +286,50 @@ object DefaultTouchscreenLayout {
     val value = BuiltInTouchscreenLayouts.mobile
 }
 
-internal object TouchscreenLayoutCodec {
-    private const val VERSION = "3"
+object DefaultTouchscreenLayoutProfile {
+    val value = BuiltInTouchscreenLayouts.profile(TouchscreenLayoutPreset.MOBILE)
+}
 
-    fun encode(layout: TouchscreenLayout): String = buildString {
+internal object TouchscreenLayoutProfileCodec {
+    private const val VERSION = "1"
+
+    fun encode(profile: TouchscreenLayoutProfile): String = buildString {
         appendLine(VERSION)
-        layout.sanitized().placements.forEach { (control, placement) ->
-            appendLine(
-                "${control.name},${placement.centerX},${placement.centerY}," +
-                    "${placement.widthScale},${placement.heightScale},${placement.deadzone}",
-            )
+        val sanitized = profile.sanitized()
+        TouchscreenLayoutOrientation.entries.forEach { orientation ->
+            sanitized.layout(orientation).placements.forEach { (control, placement) ->
+                appendLine(
+                    "${orientation.name},${control.name},${placement.centerX},${placement.centerY}," +
+                        "${placement.widthScale},${placement.heightScale},${placement.deadzone}",
+                )
+            }
         }
     }
 
-    fun decode(value: String?): TouchscreenLayout? {
+    fun decode(value: String?): TouchscreenLayoutProfile? {
         if (value.isNullOrBlank()) return null
         val lines = value.lineSequence().toList()
-        val version = lines.firstOrNull()
-        if (version != VERSION) return null
-        val placements = buildMap {
-            lines.drop(1).forEach { line ->
-                val parts = line.split(',')
-                if (parts.size != 6) return@forEach
-                runCatching {
-                    put(
-                        TouchControlId.valueOf(parts[0]),
-                        TouchControlPlacement(
-                            centerX = parts[1].toFloat(),
-                            centerY = parts[2].toFloat(),
-                            widthScale = parts[3].toFloat(),
-                            heightScale = parts[4].toFloat(),
-                            deadzone = parts[5].toFloat(),
-                        ),
-                    )
-                }
+        if (lines.firstOrNull() != VERSION) return null
+        val placements = TouchscreenLayoutOrientation.entries.associateWith { linkedMapOf<TouchControlId, TouchControlPlacement>() }
+        lines.drop(1).forEach { line ->
+            val parts = line.split(',')
+            if (parts.size != 7) return@forEach
+            runCatching {
+                placements.getValue(TouchscreenLayoutOrientation.valueOf(parts[0]))[
+                    TouchControlId.valueOf(parts[1])
+                ] = TouchControlPlacement(
+                    centerX = parts[2].toFloat(),
+                    centerY = parts[3].toFloat(),
+                    widthScale = parts[4].toFloat(),
+                    heightScale = parts[5].toFloat(),
+                    deadzone = parts[6].toFloat(),
+                )
             }
         }
-        return TouchscreenLayout(placements).sanitized()
+        return TouchscreenLayoutProfile(
+            landscape = TouchscreenLayout(placements.getValue(TouchscreenLayoutOrientation.LANDSCAPE)),
+            portrait = TouchscreenLayout(placements.getValue(TouchscreenLayoutOrientation.PORTRAIT)),
+        ).sanitized()
     }
 }
 

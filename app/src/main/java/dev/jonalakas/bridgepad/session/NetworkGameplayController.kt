@@ -34,9 +34,7 @@ class NetworkGameplayController(
         val currentGeneration = ++generation
         inputRouter.selectAutomatic(physicalCaptureMode)
         val nextClient = NetworkGamepadClient(request) { update ->
-            synchronized(this) {
-                if (generation == currentGeneration) mutableStatus.value = update
-            }
+            handleClientStatus(currentGeneration, update)
         }
         client = nextClient
         inputSubscription = inputRouter.observe { routed -> nextClient.send(routed.gamepad) }
@@ -66,16 +64,30 @@ class NetworkGameplayController(
     }
 
     private fun stopCurrent(immediate: Boolean) {
-        inputSubscription?.cancel()
-        inputSubscription = null
-        pointerJob?.cancel()
-        pointerJob = null
-        inputRouter.clearPointer()
+        releaseInputPipeline()
         client?.let { active ->
             if (immediate) active.closeImmediately() else active.stop()
         }
         client = null
         mutableStatus.value = NetworkGamepadStatus.Stopped
+    }
+
+    @Synchronized
+    private fun handleClientStatus(currentGeneration: Long, update: NetworkGamepadStatus) {
+        if (generation != currentGeneration) return
+        mutableStatus.value = update
+        if (update is NetworkGamepadStatus.Failed || update is NetworkGamepadStatus.Stopped) {
+            releaseInputPipeline()
+            client = null
+        }
+    }
+
+    private fun releaseInputPipeline() {
+        inputSubscription?.cancel()
+        inputSubscription = null
+        pointerJob?.cancel()
+        pointerJob = null
+        inputRouter.clearPointer()
     }
 
     private companion object {

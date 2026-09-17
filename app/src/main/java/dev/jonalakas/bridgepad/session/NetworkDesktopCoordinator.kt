@@ -45,8 +45,9 @@ class NetworkDesktopCoordinator(
     private val gameplay: NetworkGameplayController,
     private val scope: CoroutineScope,
 ) {
-    private val discovery = NetworkDiscoveryManager(context)
-    private val trustedStore = TrustedDesktopStore(context)
+    private val applicationContext = context.applicationContext
+    private val discovery = NetworkDiscoveryManager(applicationContext)
+    private val trustedStore = TrustedDesktopStore(applicationContext)
     private val applicationName = "${Build.MANUFACTURER} ${Build.MODEL}"
         .trim()
         .ifBlank { "Android" }
@@ -127,6 +128,7 @@ class NetworkDesktopCoordinator(
 
     fun prepareRepair(peerIdHex: String) {
         gameplay.stop()
+        NetworkSessionService.stop(applicationContext)
         trustedStore.forget(peerIdHex)
         clearPairingStatus()
     }
@@ -163,13 +165,18 @@ class NetworkDesktopCoordinator(
             ),
             physicalCaptureMode = captureMode,
         )
+        NetworkSessionService.start(applicationContext, captureMode)
     }
 
-    fun stopGameplay() = gameplay.stop()
+    fun stopGameplay() {
+        gameplay.stop()
+        NetworkSessionService.stop(applicationContext)
+    }
 
     fun shutdown() {
         discovery.stop()
         gameplay.shutdown()
+        NetworkSessionService.stop(applicationContext)
     }
 }
 

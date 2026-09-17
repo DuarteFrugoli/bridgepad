@@ -15,11 +15,40 @@ class TouchscreenLayoutTest {
     @Test
     fun everyBuiltInPresetContainsEveryControl() {
         TouchscreenLayoutPreset.entries.forEach { preset ->
-            assertEquals(
-                TouchControlId.entries.toSet(),
-                BuiltInTouchscreenLayouts.layout(preset).placements.keys,
-            )
+            TouchscreenLayoutOrientation.entries.forEach { orientation ->
+                assertEquals(
+                    TouchControlId.entries.toSet(),
+                    BuiltInTouchscreenLayouts.profile(preset).layout(orientation).placements.keys,
+                )
+            }
         }
+    }
+
+    @Test
+    fun profileCodecKeepsPortraitAndLandscapeTogether() {
+        val expected = DefaultTouchscreenLayoutProfile.value.copy(
+            landscape = DefaultTouchscreenLayoutProfile.value.landscape
+                .move(TouchControlId.LEFT_STICK, 0.05f, 0f),
+            portrait = DefaultTouchscreenLayoutProfile.value.portrait
+                .move(TouchControlId.RIGHT_STICK, -0.04f, 0f),
+        )
+
+        val decoded = TouchscreenLayoutProfileCodec.decode(
+            TouchscreenLayoutProfileCodec.encode(expected),
+        )
+
+        assertEquals(expected, decoded)
+    }
+
+    @Test
+    fun editingOneOrientationDoesNotChangeTheOther() {
+        val original = DefaultTouchscreenLayoutProfile.value
+        val changedPortrait = original.portrait.move(TouchControlId.DPAD, 0.1f, 0f)
+
+        val changed = original.update(TouchscreenLayoutOrientation.PORTRAIT, changedPortrait)
+
+        assertEquals(original.landscape, changed.landscape)
+        assertEquals(changedPortrait, changed.portrait)
     }
 
     @Test
@@ -43,20 +72,10 @@ class TouchscreenLayoutTest {
     }
 
     @Test
-    fun layoutCodecRoundTripsPlacements() {
-        val expected = DefaultTouchscreenLayout.value
-            .move(TouchControlId.LEFT_STICK, 0.05f, -0.04f)
-            .setDeadzone(TouchControlId.LEFT_STICK, 0.17f)
-            .resize(TouchControlId.FACE_SOUTH, widthScale = 1.25f, heightScale = 0.8f)
-
-        val decoded = TouchscreenLayoutCodec.decode(TouchscreenLayoutCodec.encode(expected))
-
-        assertEquals(expected, decoded)
-    }
-
-    @Test
     fun partialSavedLayoutUsesDefaultsForMissingControls() {
-        val decoded = TouchscreenLayoutCodec.decode("3\nFACE_SOUTH,0.5,0.5,1.2,0.8,0.05\n")
+        val decoded = TouchscreenLayoutProfileCodec.decode(
+            "1\nLANDSCAPE,FACE_SOUTH,0.5,0.5,1.2,0.8,0.05\n",
+        )?.landscape
 
         assertNotNull(decoded)
         assertEquals(TouchControlId.entries.size, decoded?.placements?.size)
@@ -71,7 +90,7 @@ class TouchscreenLayoutTest {
 
     @Test
     fun malformedVersionIsRejected() {
-        assertNull(TouchscreenLayoutCodec.decode("99\nLEFT_STICK,0.5,0.5,1.0"))
+        assertNull(TouchscreenLayoutProfileCodec.decode("99\nLANDSCAPE,LEFT_STICK,0.5,0.5,1.0,1.0,0.05"))
     }
 
     @Test
@@ -227,8 +246,10 @@ class TouchscreenLayoutTest {
 
     @Test
     fun invalidValuesAreSanitized() {
-        val decoded = TouchscreenLayoutCodec.decode("3\nLEFT_STICK,NaN,4.0,99.0,99.0,NaN\n")
-        val placement = decoded?.placement(TouchControlId.LEFT_STICK)
+        val decoded = TouchscreenLayoutProfileCodec.decode(
+            "1\nLANDSCAPE,LEFT_STICK,NaN,4.0,99.0,99.0,NaN\n",
+        )
+        val placement = decoded?.landscape?.placement(TouchControlId.LEFT_STICK)
 
         assertNotNull(placement)
         assertTrue(placement!!.centerX.isFinite())

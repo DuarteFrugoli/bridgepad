@@ -280,4 +280,20 @@
     <string name="wifi_protocol_error">This BridgePad Desktop version is not compatible with the app.</string>
     <string name="wifi_connection_failed">Could not connect to BridgePad Desktop. Check the network and try again.</string>
     <string name="wifi_reconnecting">Connection interrupted. Reconnecting… (%1$d/%2$d)</string>
+    <string name="virtual_controller">Virtual controller</string>
+    <string name="physical_controller">Physical controller</string>
+    <string name="physical_gamepad_settings">Physical controller</string>
+    <string name="physical_gamepad_settings_description">Customize the mapping used by the connected physical controller.</string>
+    <string name="session_orientation">Session orientation</string>
+    <string name="session_orientation_description">Choose how the virtual controller, mouse touchpad and physical-controller session screens rotate.</string>
+    <string name="orientation_auto">Automatic</string>
+    <string name="orientation_portrait">Portrait</string>
+    <string name="orientation_reverse_portrait">Reverse portrait</string>
+    <string name="orientation_landscape">Landscape</string>
+    <string name="orientation_reverse_landscape">Reverse landscape</string>
+    <string name="layout_orientation">Layout being edited</string>
+    <string name="layout_orientation_hint">Portrait and landscape are saved together as two variants of the same layout.</string>
+    <string name="network_session_notification_channel">Wi-Fi gameplay session</string>
+    <string name="notification_wifi_session_active">Wi-Fi session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
+    <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>
 </resources>

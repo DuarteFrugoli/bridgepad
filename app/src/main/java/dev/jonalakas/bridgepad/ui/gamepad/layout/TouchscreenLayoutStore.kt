@@ -7,29 +7,29 @@ import kotlinx.coroutines.flow.asStateFlow
 
 object TouchscreenLayoutStore {
     private const val PREFERENCES = "touchscreen_layout"
-    private const val ACTIVE_LAYOUT = "active_layout"
+    private const val ACTIVE_PROFILE = "active_profile"
 
     private lateinit var context: Context
-    private val mutableLayout = MutableStateFlow(DefaultTouchscreenLayout.value)
-    val layout: StateFlow<TouchscreenLayout> = mutableLayout.asStateFlow()
+    private val mutableProfile = MutableStateFlow(DefaultTouchscreenLayoutProfile.value)
+    val profile: StateFlow<TouchscreenLayoutProfile> = mutableProfile.asStateFlow()
 
     @Synchronized
     fun initialize(context: Context) {
         this.context = context.applicationContext
         val saved = this.context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-            .getString(ACTIVE_LAYOUT, null)
-        mutableLayout.value = TouchscreenLayoutCodec.decode(saved) ?: DefaultTouchscreenLayout.value
+            .getString(ACTIVE_PROFILE, null)
+        mutableProfile.value = TouchscreenLayoutProfileCodec.decode(saved) ?: DefaultTouchscreenLayoutProfile.value
     }
 
     @Synchronized
-    fun save(layout: TouchscreenLayout) {
+    fun save(profile: TouchscreenLayoutProfile) {
         check(::context.isInitialized)
-        val sanitized = layout.sanitized()
+        val sanitized = profile.sanitized()
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .edit()
-            .putString(ACTIVE_LAYOUT, TouchscreenLayoutCodec.encode(sanitized))
+            .putString(ACTIVE_PROFILE, TouchscreenLayoutProfileCodec.encode(sanitized))
             .apply()
-        mutableLayout.value = sanitized
+        mutableProfile.value = sanitized
     }
 
     @Synchronized
@@ -37,8 +37,8 @@ object TouchscreenLayoutStore {
         check(::context.isInitialized)
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .edit()
-            .remove(ACTIVE_LAYOUT)
+            .remove(ACTIVE_PROFILE)
             .apply()
-        mutableLayout.value = DefaultTouchscreenLayout.value
+        mutableProfile.value = DefaultTouchscreenLayoutProfile.value
     }
 }

@@ -22,6 +22,8 @@ import dev.jonalakas.bridgepad.transport.network.NetworkFailureReason
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
 import dev.jonalakas.bridgepad.ui.components.NoticeCard
 import dev.jonalakas.bridgepad.ui.components.NoticeTone
+import dev.jonalakas.bridgepad.ui.components.SessionOrientationSelector
+import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +64,8 @@ fun HomeScreen(
     onPlay: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
     onEditTouchscreenLayout: () -> Unit,
+    sessionOrientationMode: SessionOrientationMode,
+    onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
     onOpenTouchController: () -> Unit,
     onOpenMouseTouchpad: () -> Unit,
     onStopHid: () -> Unit,
@@ -206,7 +210,7 @@ fun HomeScreen(
                     }
                 }
             }
-            if (targetChosen || physicalConnected) {
+            if (targetChosen) {
                 item {
                     InputCard(
                         physicalGamepadState,
@@ -217,6 +221,8 @@ fun HomeScreen(
                         onPhysicalCaptureModeChanged,
                         onConfigureGamepadMapping,
                         onEditTouchscreenLayout,
+                        sessionOrientationMode,
+                        onSessionOrientationModeChanged,
                     )
                 }
             }
@@ -471,10 +477,21 @@ private fun InputCard(
     onCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
     onConfigureMapping: () -> Unit,
     onEditLayout: () -> Unit,
+    orientationMode: SessionOrientationMode,
+    onOrientationModeChanged: (SessionOrientationMode) -> Unit,
 ) {
     val physicalConnected = physical.devices.isNotEmpty() || usb.active
     SetupCard(R.string.step_input) {
         Text(stringResource(R.string.automatic_input_description))
+        Text(stringResource(R.string.session_orientation), style = MaterialTheme.typography.titleSmall)
+        SessionOrientationSelector(
+            selected = orientationMode,
+            enabled = !busy,
+            onSelected = onOrientationModeChanged,
+        )
+        Text(stringResource(R.string.session_orientation_description), style = MaterialTheme.typography.bodySmall)
+        HorizontalDivider()
+        Text(stringResource(R.string.virtual_controller), style = MaterialTheme.typography.titleSmall)
         OutlinedButton(onClick = onEditLayout, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.edit_controller_layout))
         }
@@ -482,6 +499,8 @@ private fun InputCard(
             Text(stringResource(R.string.automatic_input_virtual_ready), style = MaterialTheme.typography.bodySmall)
             return@SetupCard
         }
+        HorizontalDivider()
+        Text(stringResource(R.string.physical_controller), style = MaterialTheme.typography.titleSmall)
         val names = physical.devices.joinToString { it.name }
         Text(usb.deviceName ?: names, style = MaterialTheme.typography.bodyMedium)
         Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleSmall)

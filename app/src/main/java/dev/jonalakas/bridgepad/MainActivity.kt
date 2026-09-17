@@ -23,10 +23,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -68,6 +71,7 @@ import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutEditorScreen
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutOrientation
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
 import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
@@ -75,6 +79,8 @@ import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
 import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.session.SessionSurface
+import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
+import dev.jonalakas.bridgepad.ui.session.SessionOrientationStore
 import dev.jonalakas.bridgepad.ui.session.SessionUiEvent
 import dev.jonalakas.bridgepad.ui.session.SessionUiViewModel
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
@@ -101,10 +107,14 @@ class MainActivity : ComponentActivity() {
                 val sessionUiViewModel: SessionUiViewModel = viewModel()
                 val sessionUiState by sessionUiViewModel.state.collectAsState()
                 var showGamepadMapping by rememberSaveable { mutableStateOf(false) }
+                var returnToSettingsAfterGamepadMapping by rememberSaveable { mutableStateOf(false) }
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var showSettings by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
+                var layoutEditorOrientationName by rememberSaveable {
+                    mutableStateOf(TouchscreenLayoutOrientation.LANDSCAPE.name)
+                }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
@@ -205,7 +215,16 @@ class MainActivity : ComponentActivity() {
                 val trustedDesktops by networkDesktopCoordinator.trustedDesktops.collectAsState()
                 val networkPairingStatus by networkDesktopCoordinator.pairingStatus.collectAsState()
                 val networkDiscoveryError by networkDesktopCoordinator.discoveryError.collectAsState()
-                val touchscreenLayout by TouchscreenLayoutStore.layout.collectAsState()
+                val touchscreenLayoutProfile by TouchscreenLayoutStore.profile.collectAsState()
+                val sessionOrientationMode by SessionOrientationStore.mode.collectAsState()
+                val configurationOrientation = LocalConfiguration.current.orientation
+                val currentLayoutOrientation = if (configurationOrientation == Configuration.ORIENTATION_PORTRAIT) {
+                    TouchscreenLayoutOrientation.PORTRAIT
+                } else {
+                    TouchscreenLayoutOrientation.LANDSCAPE
+                }
+                val touchscreenLayout = touchscreenLayoutProfile.layout(currentLayoutOrientation)
+                val layoutEditorOrientation = TouchscreenLayoutOrientation.valueOf(layoutEditorOrientationName)
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
                 val physicalControllerConnected =
@@ -265,7 +284,11 @@ class MainActivity : ComponentActivity() {
                 }
 
                 LaunchedEffect(showGamepadMapping, mappingInput) {
-                    if (showGamepadMapping && mappingInput == null) showGamepadMapping = false
+                    if (showGamepadMapping && mappingInput == null) {
+                        showGamepadMapping = false
+                        if (returnToSettingsAfterGamepadMapping) showSettings = true
+                        returnToSettingsAfterGamepadMapping = false
+                    }
                 }
 
                 LaunchedEffect(networkPairingStatus) {
@@ -303,17 +326,51 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                val diagnosticUsesGamepadMode =
+                    showNetworkDiagnostic && networkGameplayStatus is NetworkGamepadStatus.Active
+                val compatibilityInputNeedsScreen =
+                    sessionUiState.activeTransport != null &&
+                        physicalControllerConnected &&
+                        effectiveCaptureMode == PhysicalCaptureMode.COMPATIBILITY
+                val keepScreenAwake =
+                    sessionUiState.surface != SessionSurface.NONE ||
+                        showTouchscreenLayoutEditor ||
+                        diagnosticUsesGamepadMode ||
+                        compatibilityInputNeedsScreen
+
+                DisposableEffect(keepScreenAwake) {
+                    if (keepScreenAwake) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                    onDispose {
+                        if (keepScreenAwake) {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
+                    }
+                }
+
                 LaunchedEffect(
                     sessionUiState.surface,
                     showNetworkDiagnostic,
                     networkGameplayStatus,
+                    showTouchscreenLayoutEditor,
+                    layoutEditorOrientation,
+                    sessionOrientationMode,
                 ) {
-                    val diagnosticUsesGamepadMode =
-                        showNetworkDiagnostic && networkGameplayStatus is NetworkGamepadStatus.Active
-                    if (sessionUiState.surface != SessionSurface.NONE || diagnosticUsesGamepadMode) {
-                        enterGamepadMode()
-                    } else {
-                        exitGamepadMode()
+                    when {
+                        showTouchscreenLayoutEditor -> enterGamepadMode(
+                            if (layoutEditorOrientation == TouchscreenLayoutOrientation.PORTRAIT) {
+                                SessionOrientationMode.PORTRAIT
+                            } else {
+                                SessionOrientationMode.LANDSCAPE
+                            },
+                        )
+                        sessionUiState.surface != SessionSurface.NONE || diagnosticUsesGamepadMode -> {
+                            enterGamepadMode(sessionOrientationMode)
+                        }
+                        else -> exitGamepadMode()
                     }
                 }
 
@@ -454,19 +511,21 @@ class MainActivity : ComponentActivity() {
                         },
                     )
                 } else if (showTouchscreenLayoutEditor) {
-                    LaunchedEffect(Unit) { enterGamepadMode() }
                     TouchscreenLayoutEditorScreen(
-                        initialLayout = touchscreenLayout,
-                        onSave = { layout ->
-                            TouchscreenLayoutStore.save(layout)
+                        initialProfile = touchscreenLayoutProfile,
+                        editingOrientation = layoutEditorOrientation,
+                        onEditingOrientationChanged = { orientation ->
+                            TouchGamepadStore.neutralize()
+                            layoutEditorOrientationName = orientation.name
+                        },
+                        onSave = { profile ->
+                            TouchscreenLayoutStore.save(profile)
                             showTouchscreenLayoutEditor = false
-                            exitGamepadMode()
                             if (returnToSettingsAfterLayoutEditor) showSettings = true
                             returnToSettingsAfterLayoutEditor = false
                         },
                         onCancel = {
                             showTouchscreenLayoutEditor = false
-                            exitGamepadMode()
                             if (returnToSettingsAfterLayoutEditor) showSettings = true
                             returnToSettingsAfterLayoutEditor = false
                         },
@@ -495,11 +554,23 @@ class MainActivity : ComponentActivity() {
                         deviceInfo = deviceInfo,
                         hidState = hidState,
                         physicalGamepadState = physicalGamepadState,
+                        physicalControllerConnected = physicalControllerConnected,
+                        mappingAvailable = mappingInput != null,
+                        sessionOrientationMode = sessionOrientationMode,
                         onEditTouchscreenLayout = {
                             returnToSettingsAfterLayoutEditor = true
                             showSettings = false
+                            layoutEditorOrientationName = currentLayoutOrientation.name
                             showTouchscreenLayoutEditor = true
                         },
+                        onConfigureGamepadMapping = {
+                            if (mappingInput != null) {
+                                returnToSettingsAfterGamepadMapping = true
+                                showSettings = false
+                                showGamepadMapping = true
+                            }
+                        },
+                        onSessionOrientationModeChanged = SessionOrientationStore::set,
                         onOpenNetworkDiagnostic = {
                             showSettings = false
                             showNetworkDiagnostic = true
@@ -560,8 +631,14 @@ class MainActivity : ComponentActivity() {
                                 gamepadController.reloadMappings()
                             }
                             showGamepadMapping = false
+                            if (returnToSettingsAfterGamepadMapping) showSettings = true
+                            returnToSettingsAfterGamepadMapping = false
                         },
-                        onCancel = { showGamepadMapping = false },
+                        onCancel = {
+                            showGamepadMapping = false
+                            if (returnToSettingsAfterGamepadMapping) showSettings = true
+                            returnToSettingsAfterGamepadMapping = false
+                        },
                     )
                 } else if (sessionUiState.surface == SessionSurface.TOUCH_CONTROLLER) {
                     TouchscreenGamepadScreen(
@@ -687,11 +764,19 @@ class MainActivity : ComponentActivity() {
                             pendingDestination = DestinationSelection.requestFor(selectedAddress, pairNewPcSelected, bluetoothReady)
                         }
                     },
-                    onConfigureGamepadMapping = { if (mappingInput != null) showGamepadMapping = true },
+                    onConfigureGamepadMapping = {
+                        if (mappingInput != null) {
+                            returnToSettingsAfterGamepadMapping = false
+                            showGamepadMapping = true
+                        }
+                    },
                     onEditTouchscreenLayout = {
                         returnToSettingsAfterLayoutEditor = false
+                        layoutEditorOrientationName = currentLayoutOrientation.name
                         showTouchscreenLayoutEditor = true
                     },
+                    sessionOrientationMode = sessionOrientationMode,
+                    onSessionOrientationModeChanged = SessionOrientationStore::set,
                     onOpenTouchController = {
                         sessionUiViewModel.dispatch(
                             SessionUiEvent.SurfaceSelected(SessionSurface.TOUCH_CONTROLLER),
@@ -741,8 +826,13 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        val sessionCoordinator = (application as BridgePadApplication).sessionCoordinator
-        if (isFinishing && !sessionCoordinator.state.value.sessionActive) {
+        val bridgePadApplication = application as BridgePadApplication
+        val sessionCoordinator = bridgePadApplication.sessionCoordinator
+        val networkStatus = bridgePadApplication.networkGameplayController.status.value
+        val networkSessionRunning = networkStatus is NetworkGamepadStatus.Connecting ||
+            networkStatus is NetworkGamepadStatus.Reconnecting ||
+            networkStatus is NetworkGamepadStatus.Active
+        if (isFinishing && !sessionCoordinator.state.value.sessionActive && !networkSessionRunning) {
             sessionCoordinator.preparePhysicalCapture(null)
         }
         super.onDestroy()
@@ -756,8 +846,15 @@ class MainActivity : ComponentActivity() {
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
         gamepadController.handleMotionEvent(event) || super.dispatchGenericMotionEvent(event)
 
-    private fun enterGamepadMode() {
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    private fun enterGamepadMode(orientationMode: SessionOrientationMode) {
+        TouchGamepadStore.neutralize()
+        requestedOrientation = when (orientationMode) {
+            SessionOrientationMode.AUTO -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+            SessionOrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            SessionOrientationMode.REVERSE_PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT
+            SessionOrientationMode.LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            SessionOrientationMode.REVERSE_LANDSCAPE -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+        }
         WindowCompat.getInsetsController(window, window.decorView).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             hide(WindowInsetsCompat.Type.systemBars())
