@@ -128,24 +128,68 @@ class TouchscreenLayoutTest {
     }
 
     @Test
-    fun mobilePresetKeepsDpadAndSurfacesRounded() {
+    fun presetsUseConsistentControlShapes() {
         val roundedControls = setOf(
             TouchControlId.MOUSE_TOUCHPAD,
             TouchControlId.DPAD,
+            TouchControlId.LEFT_TRIGGER,
+            TouchControlId.LEFT_BUMPER,
+            TouchControlId.RIGHT_BUMPER,
+            TouchControlId.RIGHT_TRIGGER,
+            TouchControlId.SELECT,
+            TouchControlId.START,
             TouchControlId.SESSION_MENU,
         )
 
-        TouchscreenLayoutOrientation.entries.forEach { orientation ->
-            val layout = BuiltInTouchscreenLayouts.profile(TouchscreenLayoutPreset.MOBILE)
-                .layout(orientation)
-            TouchControlId.entries.forEach { control ->
-                val expected = if (control in roundedControls) {
-                    TouchControlShape.ROUNDED_RECTANGLE
-                } else {
-                    TouchControlShape.CIRCLE
+        TouchscreenLayoutPreset.entries.forEach { preset ->
+            TouchscreenLayoutOrientation.entries.forEach { orientation ->
+                val layout = BuiltInTouchscreenLayouts.profile(preset).layout(orientation)
+                TouchControlId.entries.forEach { control ->
+                    val expected = if (control in roundedControls) {
+                        TouchControlShape.ROUNDED_RECTANGLE
+                    } else {
+                        TouchControlShape.CIRCLE
+                    }
+                    assertEquals(expected, layout.shape(control))
                 }
-                assertEquals(expected, layout.shape(control))
             }
+        }
+    }
+
+    @Test
+    fun mobileFaceButtonsFollowTheReferenceArc() {
+        listOf(BuiltInTouchscreenLayouts.mobile, BuiltInTouchscreenLayouts.mobilePortrait)
+            .forEach { layout ->
+                val ordered = listOf(
+                    TouchControlId.FACE_NORTH,
+                    TouchControlId.FACE_WEST,
+                    TouchControlId.FACE_EAST,
+                    TouchControlId.FACE_SOUTH,
+                ).map(layout::placement)
+
+                assertTrue(ordered.zipWithNext().all { (first, second) ->
+                    first.centerX > second.centerX && first.centerY < second.centerY
+                })
+            }
+    }
+
+    @Test
+    fun portraitPresetsFollowTheVerticalReferenceZones() {
+        TouchscreenLayoutPreset.entries.forEach { preset ->
+            val layout = BuiltInTouchscreenLayouts.profile(preset).portrait
+            assertTrue(
+                layout.placement(TouchControlId.MOUSE_TOUCHPAD).centerY <
+                    layout.placement(TouchControlId.LEFT_TRIGGER).centerY,
+            )
+            assertTrue(
+                layout.placement(TouchControlId.LEFT_TRIGGER).centerY <
+                    layout.placement(TouchControlId.SELECT).centerY,
+            )
+            assertTrue(
+                layout.placement(TouchControlId.SELECT).centerY <
+                    layout.placement(TouchControlId.LEFT_STICK).centerY,
+            )
+            assertEquals(false, layout.isVisible(TouchControlId.SESSION_MENU))
         }
     }
 
