@@ -292,7 +292,7 @@
     <string name="orientation_landscape">Landscape</string>
     <string name="orientation_reverse_landscape">Reverse landscape</string>
     <string name="layout_orientation">Layout being edited</string>
-    <string name="layout_orientation_hint">Portrait and landscape are saved together as two variants of the same layout.</string>
+    <string name="layout_orientation_auto_hint">Rotate your device to edit the other orientation. Portrait and landscape are independent and saved together.</string>
     <string name="network_session_notification_channel">Wi-Fi gameplay session</string>
     <string name="notification_wifi_session_active">Wi-Fi session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
     <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>

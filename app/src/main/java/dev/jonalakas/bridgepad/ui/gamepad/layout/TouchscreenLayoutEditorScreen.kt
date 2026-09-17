@@ -71,7 +71,6 @@ import kotlin.math.roundToInt
 fun TouchscreenLayoutEditorScreen(
     initialProfile: TouchscreenLayoutProfile,
     editingOrientation: TouchscreenLayoutOrientation,
-    onEditingOrientationChanged: (TouchscreenLayoutOrientation) -> Unit,
     onSave: (TouchscreenLayoutProfile) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -220,12 +219,15 @@ fun TouchscreenLayoutEditorScreen(
                 draftProfile = draftProfile,
                 editingOrientation = editingOrientation,
                 selectedControl = selected,
-                onEditingOrientationChanged = onEditingOrientationChanged,
-                onSelectPreset = ::replaceDraft,
+                onSelectPreset = ::replaceCurrentLayout,
                 onDeadzoneChange = { deadzone ->
                     updateDraft { it.setDeadzone(selected, deadzone) }
                 },
-                onReset = { replaceDraft(DefaultTouchscreenLayoutProfile.value) },
+                onReset = {
+                    replaceCurrentLayout(
+                        DefaultTouchscreenLayoutProfile.value.layout(editingOrientation),
+                    )
+                },
                 onHorizontalDrag = { delta ->
                     optionsCenterX = moveFloatingOverlayCenter(
                         currentCenter = optionsCenterX,
@@ -335,8 +337,7 @@ private fun EditorOptionsPanel(
     draftProfile: TouchscreenLayoutProfile,
     editingOrientation: TouchscreenLayoutOrientation,
     selectedControl: TouchControlId,
-    onEditingOrientationChanged: (TouchscreenLayoutOrientation) -> Unit,
-    onSelectPreset: (TouchscreenLayoutProfile) -> Unit,
+    onSelectPreset: (TouchscreenLayout) -> Unit,
     onDeadzoneChange: (Float) -> Unit,
     onReset: () -> Unit,
     onHorizontalDrag: (Float) -> Unit,
@@ -375,24 +376,17 @@ private fun EditorOptionsPanel(
             Text(stringResource(R.string.layout_editor_instructions), style = MaterialTheme.typography.bodySmall)
             HorizontalDivider()
             Text(stringResource(R.string.layout_orientation), style = MaterialTheme.typography.titleSmall)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(
-                    selected = editingOrientation == TouchscreenLayoutOrientation.LANDSCAPE,
-                    onClick = { onEditingOrientationChanged(TouchscreenLayoutOrientation.LANDSCAPE) },
-                    label = { Text(stringResource(R.string.orientation_landscape)) },
-                    modifier = Modifier.weight(1f),
-                )
-                FilterChip(
-                    selected = editingOrientation == TouchscreenLayoutOrientation.PORTRAIT,
-                    onClick = { onEditingOrientationChanged(TouchscreenLayoutOrientation.PORTRAIT) },
-                    label = { Text(stringResource(R.string.orientation_portrait)) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            Text(stringResource(R.string.layout_orientation_hint), style = MaterialTheme.typography.bodySmall)
+            Text(
+                stringResource(
+                    if (editingOrientation == TouchscreenLayoutOrientation.PORTRAIT) {
+                        R.string.orientation_portrait
+                    } else {
+                        R.string.orientation_landscape
+                    },
+                ),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(stringResource(R.string.layout_orientation_auto_hint), style = MaterialTheme.typography.bodySmall)
             if (selectedControl.adjustableDeadzone) {
                 val deadzone = draft.placement(selectedControl).deadzone
                 val selectedControlLabel = controlLabel(selectedControl)
@@ -439,10 +433,10 @@ private fun EditorOptionsPanel(
             HorizontalDivider()
             Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
             TouchscreenLayoutPreset.entries.forEach { preset ->
-                val presetProfile = BuiltInTouchscreenLayouts.profile(preset)
+                val presetLayout = BuiltInTouchscreenLayouts.profile(preset).layout(editingOrientation)
                 FilterChip(
-                    selected = draftProfile == presetProfile,
-                    onClick = { onSelectPreset(presetProfile) },
+                    selected = draft == presetLayout,
+                    onClick = { onSelectPreset(presetLayout) },
                     label = { Text(presetLabel(preset)) },
                     modifier = Modifier.fillMaxWidth(),
                 )

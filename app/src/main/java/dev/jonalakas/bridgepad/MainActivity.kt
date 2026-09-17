@@ -112,9 +112,6 @@ class MainActivity : ComponentActivity() {
                 var showSettings by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
-                var layoutEditorOrientationName by rememberSaveable {
-                    mutableStateOf(TouchscreenLayoutOrientation.LANDSCAPE.name)
-                }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
@@ -224,7 +221,6 @@ class MainActivity : ComponentActivity() {
                     TouchscreenLayoutOrientation.LANDSCAPE
                 }
                 val touchscreenLayout = touchscreenLayoutProfile.layout(currentLayoutOrientation)
-                val layoutEditorOrientation = TouchscreenLayoutOrientation.valueOf(layoutEditorOrientationName)
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
                 val physicalControllerConnected =
@@ -356,17 +352,10 @@ class MainActivity : ComponentActivity() {
                     showNetworkDiagnostic,
                     networkGameplayStatus,
                     showTouchscreenLayoutEditor,
-                    layoutEditorOrientation,
                     sessionOrientationMode,
                 ) {
                     when {
-                        showTouchscreenLayoutEditor -> enterGamepadMode(
-                            if (layoutEditorOrientation == TouchscreenLayoutOrientation.PORTRAIT) {
-                                SessionOrientationMode.PORTRAIT
-                            } else {
-                                SessionOrientationMode.LANDSCAPE
-                            },
-                        )
+                        showTouchscreenLayoutEditor -> enterGamepadMode(SessionOrientationMode.AUTO)
                         sessionUiState.surface != SessionSurface.NONE || diagnosticUsesGamepadMode -> {
                             enterGamepadMode(sessionOrientationMode)
                         }
@@ -513,11 +502,7 @@ class MainActivity : ComponentActivity() {
                 } else if (showTouchscreenLayoutEditor) {
                     TouchscreenLayoutEditorScreen(
                         initialProfile = touchscreenLayoutProfile,
-                        editingOrientation = layoutEditorOrientation,
-                        onEditingOrientationChanged = { orientation ->
-                            TouchGamepadStore.neutralize()
-                            layoutEditorOrientationName = orientation.name
-                        },
+                        editingOrientation = currentLayoutOrientation,
                         onSave = { profile ->
                             TouchscreenLayoutStore.save(profile)
                             showTouchscreenLayoutEditor = false
@@ -560,7 +545,6 @@ class MainActivity : ComponentActivity() {
                         onEditTouchscreenLayout = {
                             returnToSettingsAfterLayoutEditor = true
                             showSettings = false
-                            layoutEditorOrientationName = currentLayoutOrientation.name
                             showTouchscreenLayoutEditor = true
                         },
                         onConfigureGamepadMapping = {
@@ -772,7 +756,6 @@ class MainActivity : ComponentActivity() {
                     },
                     onEditTouchscreenLayout = {
                         returnToSettingsAfterLayoutEditor = false
-                        layoutEditorOrientationName = currentLayoutOrientation.name
                         showTouchscreenLayoutEditor = true
                     },
                     sessionOrientationMode = sessionOrientationMode,
