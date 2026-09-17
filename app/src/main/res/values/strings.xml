@@ -39,7 +39,9 @@
     <string name="latency_label">Last event latency</string>
     <string name="open_touch_controller">Open touchscreen controller</string>
     <string name="open_mouse_touchpad">Open mouse touchpad</string>
-    <string name="mouse_touchpad_instructions">Drag anywhere to move the PC pointer. Tap for a left click.</string>
+    <string name="mouse_touchpad_instructions">Move with one finger and tap for a left click. Tap with two fingers for a right click or drag them vertically to scroll.</string>
+    <string name="right_click_short">R</string>
+    <string name="right_click">Right click</string>
     <string name="mouse_touchpad_back_hint">← Use Android Back to open the session menu</string>
     <string name="onboarding_title">Your phone, your controller</string>
     <string name="onboarding_description">Choose your destination and connect over Bluetooth or Wi-Fi. Virtual and physical controls work together automatically.</string>
@@ -150,7 +152,7 @@
     <string name="unnamed_pc">Unnamed PC</string>
     <string name="notice_attention">Attention</string>
     <string name="session_menu">Session menu</string>
-    <string name="mouse_surface">Mouse\nDrag to move · Tap to click</string>
+    <string name="mouse_surface">Mouse\n1 finger: move and click · 2 fingers: right click and scroll</string>
     <string name="left_stick">Left stick</string>
     <string name="right_stick">Right stick</string>
     <string name="control_pressed">Pressed</string>

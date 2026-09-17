@@ -54,6 +54,18 @@ class BridgePacketCodecTest {
     }
 
     @Test
+    fun pointer_withWheel_roundTripsExtendedPayload() {
+        val report = PointerReport(buttons = 2, deltaX = 0, deltaY = 0, scrollY = -3)
+        val packet = BridgePacket(1, 2, 3, BridgeMessage.PointerFrame(report))
+
+        assertEquals(
+            report,
+            (BridgePacketCodec.decode(BridgePacketCodec.encode(packet)).message as
+                BridgeMessage.PointerFrame).report,
+        )
+    }
+
+    @Test
     fun controlMessages_roundTripWithoutTransportKnowledge() {
         val peerId = PeerId(0x0102, 0x0304)
         val capabilities = BridgeCapabilities.of(

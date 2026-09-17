@@ -33,7 +33,7 @@ object GenericCompositeHidProfile : BluetoothHidProfile {
 
     override fun encodePointer(report: PointerReport) = HidReport(
         GamepadHidDescriptor.MOUSE_REPORT_ID,
-        GamepadHidDescriptor.mouseReport(report.buttons, report.deltaX, report.deltaY),
+        GamepadHidDescriptor.mouseReport(report.buttons, report.deltaX, report.deltaY, report.scrollY),
     )
 
     override fun encodeKeyboard(input: KeyboardInput): List<HidReport> =

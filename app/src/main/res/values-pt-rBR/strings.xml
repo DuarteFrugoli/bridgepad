@@ -39,7 +39,9 @@
     <string name="latency_label">Latência do último comando</string>
     <string name="open_touch_controller">Abrir controle virtual</string>
     <string name="open_mouse_touchpad">Abrir touchpad do mouse</string>
-    <string name="mouse_touchpad_instructions">Arraste para mover o ponteiro do PC. Toque para clicar com o botão esquerdo.</string>
+    <string name="mouse_touchpad_instructions">Mova com um dedo e toque para o clique esquerdo. Toque com dois dedos para o clique direito ou arraste-os verticalmente para rolar.</string>
+    <string name="right_click_short">D</string>
+    <string name="right_click">Clique direito</string>
     <string name="mouse_touchpad_back_hint">← Use Voltar do Android para abrir o menu da sessão</string>
     <string name="onboarding_title">Seu celular, seu controle</string>
     <string name="onboarding_description">Escolha o destino e conecte por Bluetooth ou Wi-Fi. Os controles virtual e físico funcionam juntos automaticamente.</string>
@@ -150,7 +152,7 @@
     <string name="unnamed_pc">PC sem nome</string>
     <string name="notice_attention">Atenção</string>
     <string name="session_menu">Menu da sessão</string>
-    <string name="mouse_surface">Mouse\nArraste para mover · Toque para clicar</string>
+    <string name="mouse_surface">Mouse\n1 dedo: mover e clicar · 2 dedos: clique direito e rolagem</string>
     <string name="left_stick">Analógico esquerdo</string>
     <string name="right_stick">Analógico direito</string>
     <string name="control_pressed">Pressionado</string>

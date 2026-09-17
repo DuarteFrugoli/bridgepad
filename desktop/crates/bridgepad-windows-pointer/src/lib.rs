@@ -9,7 +9,8 @@ mod platform {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_KEYUP,
         KEYEVENTF_UNICODE, MOUSE_EVENT_FLAGS, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-        MOUSEEVENTF_MOVE, MOUSEINPUT, SendInput, VIRTUAL_KEY, VK_BACK, VK_ESCAPE, VK_RETURN, VK_TAB,
+        MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
+        MOUSEINPUT, SendInput, VIRTUAL_KEY, VK_BACK, VK_ESCAPE, VK_RETURN, VK_TAB,
     };
 
     pub struct WindowsPointer {
@@ -37,7 +38,7 @@ mod platform {
                     mi: MOUSEINPUT {
                         dx: report.delta_x,
                         dy: report.delta_y,
-                        mouseData: 0,
+                        mouseData: report.scroll_y.saturating_mul(WHEEL_DELTA) as u32,
                         dwFlags: flags,
                         time: 0,
                         dwExtraInfo: 0,
@@ -153,6 +154,9 @@ mod platform {
         if report.delta_x != 0 || report.delta_y != 0 {
             flags |= MOUSEEVENTF_MOVE;
         }
+        if report.scroll_y != 0 {
+            flags |= MOUSEEVENTF_WHEEL;
+        }
         let previous_left = previous_buttons & 1 != 0;
         let next_left = report.buttons & 1 != 0;
         if previous_left != next_left {
@@ -162,8 +166,19 @@ mod platform {
                 MOUSEEVENTF_LEFTUP
             };
         }
+        let previous_right = previous_buttons & 2 != 0;
+        let next_right = report.buttons & 2 != 0;
+        if previous_right != next_right {
+            flags |= if next_right {
+                MOUSEEVENTF_RIGHTDOWN
+            } else {
+                MOUSEEVENTF_RIGHTUP
+            };
+        }
         flags
     }
+
+    const WHEEL_DELTA: i32 = 120;
 
     #[cfg(test)]
     mod tests {
@@ -177,6 +192,7 @@ mod platform {
                     buttons: 1,
                     delta_x: 4,
                     delta_y: -3,
+                    scroll_y: 0,
                 },
             );
             assert!(down.contains(MOUSEEVENTF_MOVE));
@@ -185,6 +201,23 @@ mod platform {
 
             let up = mouse_flags(1, PointerReport::default());
             assert!(up.contains(MOUSEEVENTF_LEFTUP));
+        }
+
+        #[test]
+        fn combines_right_click_and_wheel() {
+            let down = mouse_flags(
+                0,
+                PointerReport {
+                    buttons: 2,
+                    scroll_y: -1,
+                    ..PointerReport::default()
+                },
+            );
+            assert!(down.contains(MOUSEEVENTF_RIGHTDOWN));
+            assert!(down.contains(MOUSEEVENTF_WHEEL));
+
+            let up = mouse_flags(2, PointerReport::default());
+            assert!(up.contains(MOUSEEVENTF_RIGHTUP));
         }
     }
 }

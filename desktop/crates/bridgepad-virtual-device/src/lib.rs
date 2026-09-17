@@ -72,6 +72,7 @@ pub struct PointerReport {
     pub buttons: u8,
     pub delta_x: i32,
     pub delta_y: i32,
+    pub scroll_y: i32,
 }
 
 pub trait VirtualPointerDevice: Send {

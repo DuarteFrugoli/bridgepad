@@ -8,6 +8,7 @@ data class PointerReport(
     val buttons: Int = 0,
     val deltaX: Int = 0,
     val deltaY: Int = 0,
+    val scrollY: Int = 0,
 )
 
 enum class KeyboardKey {

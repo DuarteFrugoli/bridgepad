@@ -28,9 +28,22 @@ class TouchMouseStoreTest {
         assertNull(TouchMouseStore.consume())
     }
 
+    @Test fun rightClickProducesPressAndReleaseReports() {
+        TouchMouseStore.rightClick()
+        assertEquals(2, TouchMouseStore.consume()?.buttons)
+        assertEquals(0, TouchMouseStore.consume()?.buttons)
+        assertNull(TouchMouseStore.consume())
+    }
+
+    @Test fun twoFingerMovementProducesWheelReports() {
+        TouchMouseStore.scroll(-40f)
+        assertEquals(2, TouchMouseStore.consume()?.scrollY)
+        assertNull(TouchMouseStore.consume())
+    }
+
     @Test fun encoderClampsMouseMovement() {
         assertArrayEquals(
-            byteArrayOf(1, 127, -127),
+            byteArrayOf(1, 127, -127, 0),
             dev.jonalakas.bridgepad.output.hid.GamepadHidDescriptor.mouseReport(1, 500, -500),
         )
     }

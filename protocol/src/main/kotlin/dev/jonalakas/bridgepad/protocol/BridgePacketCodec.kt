@@ -336,12 +336,14 @@ object BridgePacketCodec {
         writeByte(report.buttons)
         writeInt(report.deltaX)
         writeInt(report.deltaY)
+        if (report.scrollY != 0) writeInt(report.scrollY)
     }
 
     private fun DataInputStream.readPointer() = PointerReport(
         buttons = readUnsignedByte(),
         deltaX = readInt(),
         deltaY = readInt(),
+        scrollY = if (available() >= Int.SIZE_BYTES) readInt() else 0,
     )
 
     private fun DataOutputStream.writeKeyboard(input: KeyboardInput) {

@@ -76,12 +76,13 @@ object GamepadHidDescriptor {
         0x05, 0x01,
         0x09, 0x30,       // Usage (X)
         0x09, 0x31,       // Usage (Y)
+        0x09, 0x38,       // Usage (Wheel)
         0x15, 0x81.toByte(),
         0x25, 0x7F,
         0x35, 0x81.toByte(), // Physical Minimum (-127)
         0x45, 0x7F,       // Physical Maximum (127)
         0x75, 0x08,
-        0x95.toByte(), 0x02,
+        0x95.toByte(), 0x03,
         0x81.toByte(), 0x06, // Data, Variable, Relative
         0xC0.toByte(),
         0xC0.toByte(),
@@ -113,9 +114,10 @@ object GamepadHidDescriptor {
 
     fun neutralReport(): ByteArray = HidReportEncoder.encode(VirtualGamepadState())
 
-    fun mouseReport(buttons: Int, deltaX: Int, deltaY: Int): ByteArray = byteArrayOf(
+    fun mouseReport(buttons: Int, deltaX: Int, deltaY: Int, scrollY: Int = 0): ByteArray = byteArrayOf(
         (buttons and 0x07).toByte(),
         deltaX.coerceIn(-127, 127).toByte(),
         deltaY.coerceIn(-127, 127).toByte(),
+        scrollY.coerceIn(-127, 127).toByte(),
     )
 }

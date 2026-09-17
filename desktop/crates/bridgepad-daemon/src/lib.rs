@@ -571,6 +571,7 @@ fn serve(
                         buttons: report.buttons,
                         delta_x: report.delta_x,
                         delta_y: report.delta_y,
+                        scroll_y: report.scroll_y,
                     })?;
             }
             MessageType::Keyboard => {

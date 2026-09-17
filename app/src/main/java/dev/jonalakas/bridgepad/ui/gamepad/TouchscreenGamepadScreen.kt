@@ -10,9 +10,13 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -323,22 +327,48 @@ fun MouseTouchpadScreen(
 ) {
     BackHandler(onBack = onExit)
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(12.dp),
     ) {
-        MouseTouchpad(modifier = Modifier.fillMaxSize())
-        Text(
-            text = stringResource(R.string.mouse_touchpad_back_hint),
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.labelSmall,
-        )
+                .fillMaxWidth()
+                .height(44.dp),
+        ) {
+            AndroidKeyboardButton(
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.size(44.dp),
+            )
+            TouchButton(
+                label = stringResource(R.string.right_click_short),
+                onPressedChange = { pressed -> if (pressed) TouchMouseStore.rightClick() },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .size(44.dp),
+                accessibilityLabel = stringResource(R.string.right_click),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .weight(1f)
+                .fillMaxWidth(),
+        ) {
+            MouseTouchpad(modifier = Modifier.fillMaxSize())
+            Text(
+                text = stringResource(R.string.mouse_touchpad_back_hint),
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
     }
 }
 
@@ -359,22 +389,33 @@ private fun MouseTouchpad(
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    val pointerId = down.id
+                    awaitFirstDown(requireUnconsumed = false)
                     var distance = 0f
+                    var maximumPointerCount = 1
                     while (true) {
-                        val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
-                            ?: break
-                        if (!change.pressed) break
-                        val delta = change.positionChange()
+                        val changes = awaitPointerEvent().changes
+                        val pressedChanges = changes.filter { it.pressed }
+                        if (pressedChanges.isEmpty()) break
+                        maximumPointerCount = maxOf(maximumPointerCount, pressedChanges.size)
+                        val delta = pressedChanges.fold(Offset.Zero) { total, change ->
+                            total + change.positionChange()
+                        } / pressedChanges.size.toFloat()
                         distance += hypot(delta.x, delta.y)
                         if (delta != Offset.Zero) {
-                            TouchMouseStore.move(delta.x, delta.y)
+                            if (maximumPointerCount >= 2) {
+                                TouchMouseStore.scroll(delta.y)
+                            } else {
+                                TouchMouseStore.move(delta.x, delta.y)
+                            }
                         }
-                        change.consume()
+                        changes.forEach { it.consume() }
                     }
                     if (distance <= 12.dp.toPx()) {
-                        TouchMouseStore.click()
+                        if (maximumPointerCount >= 2) {
+                            TouchMouseStore.rightClick()
+                        } else {
+                            TouchMouseStore.click()
+                        }
                     }
                 }
             },
@@ -428,6 +469,7 @@ private fun TouchButton(
     onPressedChange: (Boolean) -> Unit,
     shape: Shape,
     modifier: Modifier = Modifier,
+    accessibilityLabel: String = label,
 ) {
     var pressed by remember { mutableStateOf(false) }
     val pressDescription = stringResource(if (pressed) R.string.control_pressed else R.string.control_released)
@@ -445,7 +487,7 @@ private fun TouchButton(
         modifier = modifier
             .fillMaxSize()
             .semantics {
-                contentDescription = label
+                contentDescription = accessibilityLabel
                 role = Role.Button
                 stateDescription = pressDescription
             }

@@ -231,14 +231,25 @@ pub struct PointerReport {
     pub buttons: u8,
     pub delta_x: i32,
     pub delta_y: i32,
+    pub scroll_y: i32,
 }
 
 pub fn decode_pointer(packet: Packet<'_>) -> Result<PointerReport, ProtocolError> {
-    require_payload_length(packet.payload, 9)?;
+    if packet.payload.len() != 9 && packet.payload.len() != 13 {
+        return Err(ProtocolError::InvalidPayloadLength {
+            expected: 9,
+            actual: packet.payload.len(),
+        });
+    }
     Ok(PointerReport {
         buttons: packet.payload[0],
         delta_x: read_i32(packet.payload, 1),
         delta_y: read_i32(packet.payload, 5),
+        scroll_y: if packet.payload.len() == 13 {
+            read_i32(packet.payload, 9)
+        } else {
+            0
+        },
     })
 }
 
@@ -451,6 +462,7 @@ mod tests {
                 buttons: 3,
                 delta_x: -250,
                 delta_y: 500,
+                scroll_y: 0,
             })
         );
         assert_eq!(
