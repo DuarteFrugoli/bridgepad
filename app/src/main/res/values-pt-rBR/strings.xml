@@ -296,6 +296,14 @@
     <string name="layout_orientation_auto_hint">Gire o dispositivo para editar a outra orientação. Retrato e paisagem são independentes e salvos juntos.</string>
     <string name="layout_orientation_rotate_portrait">Gire o dispositivo para editar em retrato.</string>
     <string name="layout_orientation_rotate_landscape">Gire o dispositivo para editar em paisagem.</string>
+    <string name="control_appearance">Aparência dos controles</string>
+    <string name="control_appearance_hint">Escolha um formato ou oculte o controle. Controles ocultos mantêm sua configuração.</string>
+    <string name="control_shape_circle">Círculo</string>
+    <string name="control_shape_rounded">Arredondado</string>
+    <string name="control_visible">Visível</string>
+    <string name="control_hidden">Oculto</string>
+    <string name="guide_button">Guia</string>
+    <string name="capture_button">Captura</string>
     <string name="network_session_notification_channel">Sessão jogável por Wi-Fi</string>
     <string name="notification_wifi_session_active">Sessão Wi-Fi ativa. Mantenha o BridgePad aberto para usar a tela ou controles no modo compatibilidade.</string>
     <string name="notification_wifi_background_usb_active">Sessão Wi-Fi e USB em segundo plano ativos. Você pode jogar com o BridgePad minimizado ou a tela apagada.</string>

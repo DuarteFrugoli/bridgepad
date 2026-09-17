@@ -169,7 +169,7 @@ fun TouchscreenLayoutEditorScreen(
             }
         }.zIndex(EDITOR_OVERLAY_Z_INDEX)
         LayoutGrid(Modifier.fillMaxSize())
-        TouchControlId.entries.forEach { control ->
+        TouchControlId.entries.filter(draft::isVisible).forEach { control ->
             EditableControl(
                 control = control,
                 placement = draft.placement(control),
@@ -236,6 +236,25 @@ fun TouchscreenLayoutEditorScreen(
                 onDeadzoneChange = { deadzone ->
                     updateDraft { it.setDeadzone(selected, deadzone) }
                 },
+                onDisplayOptionChange = { control, option ->
+                    updateDraft { current ->
+                        when (option) {
+                            ControlDisplayOption.VISIBLE -> current.setVisible(control, true)
+                            ControlDisplayOption.CIRCLE -> current
+                                .setShape(control, TouchControlShape.CIRCLE)
+                                .setVisible(control, true)
+                            ControlDisplayOption.ROUNDED_RECTANGLE -> current
+                                .setShape(control, TouchControlShape.ROUNDED_RECTANGLE)
+                                .setVisible(control, true)
+                            ControlDisplayOption.HIDDEN -> current.setVisible(control, false)
+                        }
+                    }
+                    if (option == ControlDisplayOption.HIDDEN && selected == control) {
+                        TouchControlId.entries
+                            .firstOrNull { candidate -> candidate != control && draft.isVisible(candidate) }
+                            ?.let { selectedName = it.name }
+                    }
+                },
                 onReset = {
                     replaceCurrentLayout(
                         DefaultTouchscreenLayoutProfile.value.layout(editingOrientation),
@@ -271,7 +290,7 @@ fun TouchscreenLayoutEditorScreen(
                                 y = 60.dp.roundToPx(),
                             )
                         }
-                        .widthIn(max = 300.dp)
+                        .widthIn(max = 340.dp)
                         .heightIn(max = (maxHeight - 68.dp).coerceAtLeast(120.dp))
                 } else {
                     Modifier
@@ -438,6 +457,7 @@ private fun EditorOptionsPanel(
     selectedControl: TouchControlId,
     onSelectPreset: (TouchscreenLayout) -> Unit,
     onDeadzoneChange: (Float) -> Unit,
+    onDisplayOptionChange: (TouchControlId, ControlDisplayOption) -> Unit,
     onReset: () -> Unit,
     horizontal: Boolean,
     onMove: (Float) -> Unit,
@@ -472,6 +492,7 @@ private fun EditorOptionsPanel(
                 selectedControl = selectedControl,
                 onSelectPreset = onSelectPreset,
                 onDeadzoneChange = onDeadzoneChange,
+                onDisplayOptionChange = onDisplayOptionChange,
                 onReset = onReset,
             )
         } else {
@@ -547,9 +568,17 @@ private fun EditorOptionsPanel(
                 )
             }
             HorizontalDivider()
+            ControlAppearanceOptions(
+                layout = draft,
+                horizontal = false,
+                onDisplayOptionChange = onDisplayOptionChange,
+            )
+            HorizontalDivider()
             Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
             TouchscreenLayoutPreset.entries.forEach { preset ->
-                val presetLayout = BuiltInTouchscreenLayouts.profile(preset).layout(editingOrientation)
+                val presetLayout = BuiltInTouchscreenLayouts.profile(preset)
+                    .layout(editingOrientation)
+                    .sanitized()
                 FilterChip(
                     selected = draft == presetLayout,
                     onClick = { onSelectPreset(presetLayout) },
@@ -576,6 +605,7 @@ private fun HorizontalEditorOptions(
     selectedControl: TouchControlId,
     onSelectPreset: (TouchscreenLayout) -> Unit,
     onDeadzoneChange: (Float) -> Unit,
+    onDisplayOptionChange: (TouchControlId, ControlDisplayOption) -> Unit,
     onReset: () -> Unit,
 ) {
     Row(
@@ -623,7 +653,9 @@ private fun HorizontalEditorOptions(
             Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TouchscreenLayoutPreset.entries.forEach { preset ->
-                    val presetLayout = BuiltInTouchscreenLayouts.profile(preset).layout(editingOrientation)
+                    val presetLayout = BuiltInTouchscreenLayouts.profile(preset)
+                        .layout(editingOrientation)
+                        .sanitized()
                     FilterChip(
                         selected = draft == presetLayout,
                         onClick = { onSelectPreset(presetLayout) },
@@ -632,6 +664,12 @@ private fun HorizontalEditorOptions(
                 }
             }
         }
+        VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
+        ControlAppearanceOptions(
+            layout = draft,
+            horizontal = true,
+            onDisplayOptionChange = onDisplayOptionChange,
+        )
         if (selectedControl.adjustableDeadzone) {
             val deadzone = draft.placement(selectedControl).deadzone
             val selectedControlLabel = controlLabel(selectedControl)
@@ -670,6 +708,106 @@ private fun HorizontalEditorOptions(
 }
 
 @Composable
+private fun ControlAppearanceOptions(
+    layout: TouchscreenLayout,
+    horizontal: Boolean,
+    onDisplayOptionChange: (TouchControlId, ControlDisplayOption) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.control_appearance), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.control_appearance_hint), style = MaterialTheme.typography.bodySmall)
+        if (horizontal) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TouchControlId.entries.forEach { control ->
+                    ControlAppearanceOption(
+                        control = control,
+                        layout = layout,
+                        onDisplayOptionChange = onDisplayOptionChange,
+                        modifier = Modifier.widthIn(min = 220.dp),
+                    )
+                }
+            }
+        } else {
+            TouchControlId.entries.forEach { control ->
+                ControlAppearanceOption(
+                    control = control,
+                    layout = layout,
+                    onDisplayOptionChange = onDisplayOptionChange,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ControlAppearanceOption(
+    control: TouchControlId,
+    layout: TouchscreenLayout,
+    onDisplayOptionChange: (TouchControlId, ControlDisplayOption) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val visible = layout.isVisible(control)
+    val shape = layout.shape(control)
+    Column(
+        modifier = modifier.padding(vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(controlLabel(control), style = MaterialTheme.typography.bodyMedium)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (control.customizableShape) {
+                DisplayOptionChip(
+                    selected = visible && shape == TouchControlShape.CIRCLE,
+                    label = stringResource(R.string.control_shape_circle),
+                    onClick = { onDisplayOptionChange(control, ControlDisplayOption.CIRCLE) },
+                )
+                DisplayOptionChip(
+                    selected = visible && shape == TouchControlShape.ROUNDED_RECTANGLE,
+                    label = stringResource(R.string.control_shape_rounded),
+                    onClick = {
+                        onDisplayOptionChange(control, ControlDisplayOption.ROUNDED_RECTANGLE)
+                    },
+                )
+            } else {
+                DisplayOptionChip(
+                    selected = visible,
+                    label = stringResource(R.string.control_visible),
+                    onClick = { onDisplayOptionChange(control, ControlDisplayOption.VISIBLE) },
+                )
+            }
+            DisplayOptionChip(
+                selected = !visible,
+                label = stringResource(R.string.control_hidden),
+                onClick = { onDisplayOptionChange(control, ControlDisplayOption.HIDDEN) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun DisplayOptionChip(
+    selected: Boolean,
+    label: String,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+    )
+}
+
+private enum class ControlDisplayOption {
+    VISIBLE,
+    CIRCLE,
+    ROUNDED_RECTANGLE,
+    HIDDEN,
+}
+
+@Composable
 private fun BoxWithConstraintsScope.EditableControl(
     control: TouchControlId,
     placement: TouchControlPlacement,
@@ -681,8 +819,10 @@ private fun BoxWithConstraintsScope.EditableControl(
     onResize: (Float, Float, Float, Float) -> Unit,
 ) {
     val density = LocalDensity.current
-    val width = (control.baseWidthDp * placement.widthScale).dp
-    val height = (control.baseHeightDp * placement.heightScale).dp
+    val width = controlWidthDp(control, placement).dp
+    val height = controlHeightDp(control, placement).dp
+    val lockAspectRatio = control.lockAspectRatio ||
+        (placement.shape ?: control.defaultShape) == TouchControlShape.CIRCLE
     val widthPixels = with(density) { width.toPx() }
     val heightPixels = with(density) { height.toPx() }
     val currentOnSelect by rememberUpdatedState(onSelect)
@@ -726,7 +866,11 @@ private fun BoxWithConstraintsScope.EditableControl(
                     }
                 },
         ) {
-            ControlPreview(control, Modifier.fillMaxSize())
+            ControlPreview(
+                control = control,
+                shape = placement.shape ?: control.defaultShape,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         if (selected) {
             Box(
@@ -735,7 +879,7 @@ private fun BoxWithConstraintsScope.EditableControl(
                     .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(6.dp)),
             )
             ResizeAnchor.entries
-                .filter { !control.lockAspectRatio || it.isCorner }
+                .filter { !lockAspectRatio || it.isCorner }
                 .forEach { anchor ->
                     ResizeHandle(
                         anchor = anchor,
@@ -743,14 +887,20 @@ private fun BoxWithConstraintsScope.EditableControl(
                         currentWidthScale = placement.widthScale,
                         currentHeightScale = placement.heightScale,
                         baseControlWidthPixels = with(density) {
-                            control.baseWidthDp.dp.toPx()
+                            controlWidthDp(
+                                control,
+                                placement.copy(widthScale = 1f, heightScale = 1f),
+                            ).dp.toPx()
                         },
                         baseControlHeightPixels = with(density) {
-                            control.baseHeightDp.dp.toPx()
+                            controlHeightDp(
+                                control,
+                                placement.copy(widthScale = 1f, heightScale = 1f),
+                            ).dp.toPx()
                         },
                         canvasWidthPixels = canvasWidthPixels,
                         canvasHeightPixels = canvasHeightPixels,
-                        lockAspectRatio = control.lockAspectRatio,
+                        lockAspectRatio = lockAspectRatio,
                         onSelect = currentOnSelect,
                         onResize = currentOnResize,
                     )
@@ -842,7 +992,11 @@ private fun BoxScope.ResizeHandle(
 }
 
 @Composable
-private fun ControlPreview(control: TouchControlId, modifier: Modifier = Modifier) {
+private fun ControlPreview(
+    control: TouchControlId,
+    shape: TouchControlShape,
+    modifier: Modifier = Modifier,
+) {
     val label = controlLabel(control)
     when (control) {
         TouchControlId.LEFT_STICK, TouchControlId.RIGHT_STICK -> Box(
@@ -866,7 +1020,7 @@ private fun ControlPreview(control: TouchControlId, modifier: Modifier = Modifie
         }
         TouchControlId.MOUSE_TOUCHPAD -> Surface(
             modifier = modifier,
-            shape = touchControlShape(control),
+            shape = touchControlShape(control, shape),
             color = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
             tonalElevation = 2.dp,
@@ -878,7 +1032,7 @@ private fun ControlPreview(control: TouchControlId, modifier: Modifier = Modifie
         }
         else -> Surface(
             modifier = modifier,
-            shape = touchControlShape(control),
+            shape = touchControlShape(control, shape),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 2.dp,
         ) {
@@ -919,6 +1073,8 @@ internal fun controlLabel(control: TouchControlId): String = when (control) {
     TouchControlId.START -> "Start"
     TouchControlId.LEFT_STICK_BUTTON -> "L3"
     TouchControlId.RIGHT_STICK_BUTTON -> "R3"
+    TouchControlId.GUIDE -> stringResource(R.string.guide_button)
+    TouchControlId.CAPTURE -> stringResource(R.string.capture_button)
     TouchControlId.SESSION_MENU -> stringResource(R.string.session_menu)
 }
 

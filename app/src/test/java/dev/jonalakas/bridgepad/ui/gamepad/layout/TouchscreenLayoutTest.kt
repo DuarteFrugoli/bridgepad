@@ -52,6 +52,37 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun controlVisibilityIsIndependentBetweenOrientations() {
+        val original = DefaultTouchscreenLayoutProfile.value
+        val hiddenPortrait = original.portrait.setVisible(TouchControlId.FACE_NORTH, false)
+
+        val changed = original.update(TouchscreenLayoutOrientation.PORTRAIT, hiddenPortrait)
+
+        assertTrue(changed.landscape.isVisible(TouchControlId.FACE_NORTH))
+        assertEquals(false, changed.portrait.isVisible(TouchControlId.FACE_NORTH))
+    }
+
+    @Test
+    fun hiddenControlKeepsItsPlacementAndSurvivesCodecRoundTrip() {
+        val original = DefaultTouchscreenLayoutProfile.value
+        val expectedPlacement = original.landscape.placement(TouchControlId.FACE_NORTH)
+        val expected = original.update(
+            TouchscreenLayoutOrientation.LANDSCAPE,
+            original.landscape.setVisible(TouchControlId.FACE_NORTH, false),
+        )
+
+        val decoded = TouchscreenLayoutProfileCodec.decode(
+            TouchscreenLayoutProfileCodec.encode(expected),
+        )
+
+        assertEquals(false, decoded?.landscape?.isVisible(TouchControlId.FACE_NORTH))
+        assertEquals(
+            expectedPlacement.copy(visible = false),
+            decoded?.landscape?.placement(TouchControlId.FACE_NORTH),
+        )
+    }
+
+    @Test
     fun builtInPresetsHaveDistinctStickArrangements() {
         val symmetric = BuiltInTouchscreenLayouts.symmetric
         val asymmetric = BuiltInTouchscreenLayouts.asymmetric
@@ -72,9 +103,46 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun mobilePresetUsesCircularControlsExceptForTouchpadAndSessionMenu() {
+        val roundedControls = setOf(
+            TouchControlId.MOUSE_TOUCHPAD,
+            TouchControlId.SESSION_MENU,
+        )
+
+        TouchscreenLayoutOrientation.entries.forEach { orientation ->
+            val layout = BuiltInTouchscreenLayouts.profile(TouchscreenLayoutPreset.MOBILE)
+                .layout(orientation)
+            TouchControlId.entries.forEach { control ->
+                val expected = if (control in roundedControls) {
+                    TouchControlShape.ROUNDED_RECTANGLE
+                } else {
+                    TouchControlShape.CIRCLE
+                }
+                assertEquals(expected, layout.shape(control))
+            }
+        }
+    }
+
+    @Test
+    fun circularShapeUsesEqualDimensionsAndSurvivesBeingHidden() {
+        val layout = DefaultTouchscreenLayout.value
+            .setShape(TouchControlId.LEFT_TRIGGER, TouchControlShape.CIRCLE)
+            .setVisible(TouchControlId.LEFT_TRIGGER, false)
+        val placement = layout.placement(TouchControlId.LEFT_TRIGGER)
+
+        assertEquals(TouchControlShape.CIRCLE, layout.shape(TouchControlId.LEFT_TRIGGER))
+        assertEquals(false, layout.isVisible(TouchControlId.LEFT_TRIGGER))
+        assertEquals(
+            controlWidthDp(TouchControlId.LEFT_TRIGGER, placement),
+            controlHeightDp(TouchControlId.LEFT_TRIGGER, placement),
+            0.0001f,
+        )
+    }
+
+    @Test
     fun partialSavedLayoutUsesDefaultsForMissingControls() {
         val decoded = TouchscreenLayoutProfileCodec.decode(
-            "1\nLANDSCAPE,FACE_SOUTH,0.5,0.5,1.2,0.8,0.05\n",
+            "3\nLANDSCAPE,FACE_SOUTH,0.5,0.5,1.2,0.8,0.05,true,ROUNDED_RECTANGLE\n",
         )?.landscape
 
         assertNotNull(decoded)
@@ -106,9 +174,9 @@ class TouchscreenLayoutTest {
     @Test
     fun movementIsBoundedButSizeOnlyHasAMinimum() {
         val layout = DefaultTouchscreenLayout.value
-            .move(TouchControlId.DPAD, -5f, 8f)
-            .resize(TouchControlId.DPAD, widthScale = 12f, heightScale = -4f)
-        val placement = layout.placement(TouchControlId.DPAD)
+            .move(TouchControlId.SESSION_MENU, -5f, 8f)
+            .resize(TouchControlId.SESSION_MENU, widthScale = 12f, heightScale = -4f)
+        val placement = layout.placement(TouchControlId.SESSION_MENU)
 
         assertEquals(0f, placement.centerX)
         assertEquals(1f, placement.centerY)
@@ -247,7 +315,7 @@ class TouchscreenLayoutTest {
     @Test
     fun invalidValuesAreSanitized() {
         val decoded = TouchscreenLayoutProfileCodec.decode(
-            "1\nLANDSCAPE,LEFT_STICK,NaN,4.0,99.0,99.0,NaN\n",
+            "3\nLANDSCAPE,LEFT_STICK,NaN,4.0,99.0,99.0,NaN,true,CIRCLE\n",
         )
         val placement = decoded?.landscape?.placement(TouchControlId.LEFT_STICK)
 

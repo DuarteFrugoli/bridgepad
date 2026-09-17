@@ -105,7 +105,7 @@ mod platform {
         insert_button(
             &mut buttons,
             source.buttons,
-            button::EXTRA_1,
+            button::GUIDE,
             X360Button::GUIDE,
         );
 
@@ -161,7 +161,7 @@ mod platform {
         #[test]
         fn maps_bridgepad_buttons_and_diagonal_dpad_to_xinput() {
             let report = to_x360_report(GamepadReport {
-                buttons: button::SOUTH | button::LEFT_BUMPER | button::START,
+                buttons: button::SOUTH | button::LEFT_BUMPER | button::START | button::GUIDE,
                 dpad: DpadDirection::SouthWest,
                 ..GamepadReport::default()
             });
@@ -169,6 +169,7 @@ mod platform {
             assert!(report.buttons.contains(X360Button::A));
             assert!(report.buttons.contains(X360Button::LEFT_SHOULDER));
             assert!(report.buttons.contains(X360Button::START));
+            assert!(report.buttons.contains(X360Button::GUIDE));
             assert!(report.buttons.contains(X360Button::DPAD_DOWN));
             assert!(report.buttons.contains(X360Button::DPAD_LEFT));
             assert!(!report.buttons.contains(X360Button::B));

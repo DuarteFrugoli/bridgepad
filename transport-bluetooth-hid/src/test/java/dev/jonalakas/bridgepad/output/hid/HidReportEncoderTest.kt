@@ -45,4 +45,16 @@ class HidReportEncoderTest {
             report,
         )
     }
+
+    @Test
+    fun encodesGuideAndCaptureAsStableExtraButtons() {
+        val report = HidReportEncoder.encode(
+            VirtualGamepadState(
+                pressedButtons = setOf(VirtualControl.GUIDE, VirtualControl.CAPTURE),
+            ),
+        )
+
+        assertEquals(0, report[0].toInt())
+        assertEquals(12, report[1].toInt())
+    }
 }

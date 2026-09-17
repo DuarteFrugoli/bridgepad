@@ -412,8 +412,8 @@ object BridgePacketCodec {
             VirtualControl.SELECT -> 7
             VirtualControl.LEFT_STICK_BUTTON -> 8
             VirtualControl.RIGHT_STICK_BUTTON -> 9
-            VirtualControl.EXTRA_1 -> 10
-            VirtualControl.EXTRA_2 -> 11
+            VirtualControl.GUIDE -> 10
+            VirtualControl.CAPTURE -> 11
             VirtualControl.EXTRA_3 -> 12
             VirtualControl.EXTRA_4 -> 13
             VirtualControl.EXTRA_5 -> 14

@@ -3,6 +3,24 @@ package dev.jonalakas.bridgepad.ui.gamepad.layout
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 
+internal fun controlWidthDp(
+    control: TouchControlId,
+    placement: TouchControlPlacement,
+): Float = if ((placement.shape ?: control.defaultShape) == TouchControlShape.CIRCLE) {
+    maxOf(control.baseWidthDp, control.baseHeightDp) * placement.widthScale
+} else {
+    control.baseWidthDp * placement.widthScale
+}
+
+internal fun controlHeightDp(
+    control: TouchControlId,
+    placement: TouchControlPlacement,
+): Float = if ((placement.shape ?: control.defaultShape) == TouchControlShape.CIRCLE) {
+    maxOf(control.baseWidthDp, control.baseHeightDp) * placement.heightScale
+} else {
+    control.baseHeightDp * placement.heightScale
+}
+
 internal fun controlOffset(
     placement: TouchControlPlacement,
     containerWidth: Float,

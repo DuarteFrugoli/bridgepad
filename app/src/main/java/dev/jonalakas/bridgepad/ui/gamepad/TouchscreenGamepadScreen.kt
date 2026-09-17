@@ -54,7 +54,9 @@ import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlId
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlPlacement
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
+import dev.jonalakas.bridgepad.ui.gamepad.layout.controlHeightDp
 import dev.jonalakas.bridgepad.ui.gamepad.layout.controlOffset
+import dev.jonalakas.bridgepad.ui.gamepad.layout.controlWidthDp
 import dev.jonalakas.bridgepad.ui.gamepad.layout.touchControlShape
 import kotlin.math.PI
 import kotlin.math.atan2
@@ -81,7 +83,7 @@ fun TouchscreenGamepadScreen(
     ) {
         val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val heightPixels = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-        TouchControlId.entries.forEach { control ->
+        TouchControlId.entries.filter(layout::isVisible).forEach { control ->
             RuntimeLayoutControl(
                 control = control,
                 placement = layout.placement(control),
@@ -102,8 +104,9 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
     onExit: () -> Unit,
 ) {
     val density = LocalDensity.current
-    val width = (control.baseWidthDp * placement.widthScale).dp
-    val height = (control.baseHeightDp * placement.heightScale).dp
+    val width = controlWidthDp(control, placement).dp
+    val height = controlHeightDp(control, placement).dp
+    val shape = touchControlShape(control, placement.shape ?: control.defaultShape)
     val offset = controlOffset(
         placement = placement,
         containerWidth = containerWidthPixels,
@@ -117,8 +120,14 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
             .size(width, height),
     ) {
         when (control) {
-            TouchControlId.MOUSE_TOUCHPAD -> MouseTouchpad(Modifier.fillMaxSize())
-            TouchControlId.DPAD -> DpadPad(Modifier.fillMaxSize())
+            TouchControlId.MOUSE_TOUCHPAD -> MouseTouchpad(
+                modifier = Modifier.fillMaxSize(),
+                shape = shape,
+            )
+            TouchControlId.DPAD -> DpadPad(
+                shape = shape,
+                modifier = Modifier.fillMaxSize(),
+            )
             TouchControlId.LEFT_STICK -> VirtualStick(
                 VirtualAxis.LEFT_X,
                 VirtualAxis.LEFT_Y,
@@ -136,79 +145,91 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
             TouchControlId.LEFT_TRIGGER -> TriggerButton(
                 "L2",
                 VirtualAxis.LEFT_TRIGGER,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.LEFT_BUMPER -> GamepadButton(
                 "L1",
                 VirtualControl.LEFT_BUMPER,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.RIGHT_BUMPER -> GamepadButton(
                 "R1",
                 VirtualControl.RIGHT_BUMPER,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.RIGHT_TRIGGER -> TriggerButton(
                 "R2",
                 VirtualAxis.RIGHT_TRIGGER,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.FACE_NORTH -> GamepadButton(
                 "Y",
                 VirtualControl.FACE_NORTH,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.FACE_WEST -> GamepadButton(
                 "X",
                 VirtualControl.FACE_WEST,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.FACE_EAST -> GamepadButton(
                 "B",
                 VirtualControl.FACE_EAST,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.FACE_SOUTH -> GamepadButton(
                 "A",
                 VirtualControl.FACE_SOUTH,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.SELECT -> GamepadButton(
                 "Select",
                 VirtualControl.SELECT,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.START -> GamepadButton(
                 "Start",
                 VirtualControl.START,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.LEFT_STICK_BUTTON -> GamepadButton(
                 "L3",
                 VirtualControl.LEFT_STICK_BUTTON,
-                touchControlShape(control),
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.RIGHT_STICK_BUTTON -> GamepadButton(
                 "R3",
                 VirtualControl.RIGHT_STICK_BUTTON,
-                touchControlShape(control),
+                shape,
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.GUIDE -> GamepadButton(
+                stringResource(R.string.guide_button),
+                VirtualControl.GUIDE,
+                shape,
+                Modifier.fillMaxSize(),
+            )
+            TouchControlId.CAPTURE -> GamepadButton(
+                stringResource(R.string.capture_button),
+                VirtualControl.CAPTURE,
+                shape,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.SESSION_MENU -> TouchButton(
                 label = stringResource(R.string.session_menu),
                 onPressedChange = { pressed -> if (pressed) onExit() },
-                shape = touchControlShape(control),
+                shape = shape,
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -242,7 +263,10 @@ fun MouseTouchpadScreen(
 }
 
 @Composable
-private fun MouseTouchpad(modifier: Modifier = Modifier) {
+private fun MouseTouchpad(
+    modifier: Modifier = Modifier,
+    shape: Shape = touchControlShape(TouchControlId.MOUSE_TOUCHPAD),
+) {
     val touchpadLabel = stringResource(R.string.open_mouse_touchpad)
     val touchpadHint = stringResource(R.string.mouse_touchpad_instructions)
     val container = MaterialTheme.colorScheme.surfaceVariant
@@ -274,7 +298,7 @@ private fun MouseTouchpad(modifier: Modifier = Modifier) {
                     }
                 }
             },
-        shape = touchControlShape(TouchControlId.MOUSE_TOUCHPAD),
+        shape = shape,
         color = container,
         border = androidx.compose.foundation.BorderStroke(2.dp, outline),
     ) {
@@ -428,7 +452,10 @@ private fun VirtualStick(
 }
 
 @Composable
-private fun DpadPad(modifier: Modifier = Modifier) {
+private fun DpadPad(
+    shape: Shape,
+    modifier: Modifier = Modifier,
+) {
     val dpadLabel = stringResource(R.string.dpad_name)
     var direction by remember { mutableStateOf(DpadDirection.NEUTRAL) }
     val base = MaterialTheme.colorScheme.surfaceVariant
@@ -437,6 +464,10 @@ private fun DpadPad(modifier: Modifier = Modifier) {
 
     Box(
         modifier = modifier
+            .background(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
+                shape = shape,
+            )
             .semantics {
                 contentDescription = dpadLabel
                 stateDescription = direction.name

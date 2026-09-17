@@ -40,8 +40,8 @@ pub mod button {
     pub const SELECT: u16 = 1 << 7;
     pub const LEFT_STICK: u16 = 1 << 8;
     pub const RIGHT_STICK: u16 = 1 << 9;
-    pub const EXTRA_1: u16 = 1 << 10;
-    pub const EXTRA_2: u16 = 1 << 11;
+    pub const GUIDE: u16 = 1 << 10;
+    pub const CAPTURE: u16 = 1 << 11;
     pub const EXTRA_3: u16 = 1 << 12;
     pub const EXTRA_4: u16 = 1 << 13;
     pub const EXTRA_5: u16 = 1 << 14;

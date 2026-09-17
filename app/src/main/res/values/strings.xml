@@ -296,6 +296,14 @@
     <string name="layout_orientation_auto_hint">Rotate your device to edit the other orientation. Portrait and landscape are independent and saved together.</string>
     <string name="layout_orientation_rotate_portrait">Rotate your device to edit portrait.</string>
     <string name="layout_orientation_rotate_landscape">Rotate your device to edit landscape.</string>
+    <string name="control_appearance">Control appearance</string>
+    <string name="control_appearance_hint">Choose a shape or hide the control. Hidden controls keep their configuration.</string>
+    <string name="control_shape_circle">Circle</string>
+    <string name="control_shape_rounded">Rounded</string>
+    <string name="control_visible">Visible</string>
+    <string name="control_hidden">Hidden</string>
+    <string name="guide_button">Guide</string>
+    <string name="capture_button">Capture</string>
     <string name="network_session_notification_channel">Wi-Fi gameplay session</string>
     <string name="notification_wifi_session_active">Wi-Fi session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
     <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>

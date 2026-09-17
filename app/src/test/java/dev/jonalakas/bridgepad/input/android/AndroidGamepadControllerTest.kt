@@ -21,6 +21,8 @@ class AndroidGamepadControllerTest {
             KeyEvent.KEYCODE_BUTTON_SELECT to VirtualControl.SELECT,
             KeyEvent.KEYCODE_BUTTON_THUMBL to VirtualControl.LEFT_STICK_BUTTON,
             KeyEvent.KEYCODE_BUTTON_THUMBR to VirtualControl.RIGHT_STICK_BUTTON,
+            KeyEvent.KEYCODE_BUTTON_1 to VirtualControl.GUIDE,
+            KeyEvent.KEYCODE_BUTTON_2 to VirtualControl.CAPTURE,
         )
 
         expected.forEach { (keyCode, control) ->

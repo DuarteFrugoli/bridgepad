@@ -59,8 +59,8 @@ private val steps = listOf(
     MappingStep.Axis(VirtualAxis.RIGHT_TRIGGER, 1, R.string.mapping_prompt_22),
     MappingStep.Button(VirtualControl.SELECT, R.string.mapping_prompt_23),
     MappingStep.Button(VirtualControl.START, R.string.mapping_prompt_24),
-    MappingStep.Button(VirtualControl.EXTRA_1, R.string.mapping_prompt_25),
-    MappingStep.Button(VirtualControl.EXTRA_2, R.string.mapping_prompt_26),
+    MappingStep.Button(VirtualControl.GUIDE, R.string.mapping_prompt_25),
+    MappingStep.Button(VirtualControl.CAPTURE, R.string.mapping_prompt_26),
 )
 
 data class GamepadMappingInput(
@@ -273,8 +273,8 @@ private fun VirtualControl.displayName(): String = when (this) {
     VirtualControl.SELECT -> "Back / Select / Share"
     VirtualControl.LEFT_STICK_BUTTON -> "L3"
     VirtualControl.RIGHT_STICK_BUTTON -> "R3"
-    VirtualControl.EXTRA_1 -> "Guide / PS / Home"
-    VirtualControl.EXTRA_2 -> "Share / Capture"
+    VirtualControl.GUIDE -> "Guide / PS / Home"
+    VirtualControl.CAPTURE -> "Share / Capture"
     else -> name.replace('_', ' ')
 }
 

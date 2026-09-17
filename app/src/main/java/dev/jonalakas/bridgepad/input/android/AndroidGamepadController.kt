@@ -287,8 +287,8 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
             KeyEvent.KEYCODE_BUTTON_SELECT -> VirtualControl.SELECT
             KeyEvent.KEYCODE_BUTTON_THUMBL -> VirtualControl.LEFT_STICK_BUTTON
             KeyEvent.KEYCODE_BUTTON_THUMBR -> VirtualControl.RIGHT_STICK_BUTTON
-            KeyEvent.KEYCODE_BUTTON_1 -> VirtualControl.EXTRA_1
-            KeyEvent.KEYCODE_BUTTON_2 -> VirtualControl.EXTRA_2
+            KeyEvent.KEYCODE_BUTTON_1 -> VirtualControl.GUIDE
+            KeyEvent.KEYCODE_BUTTON_2 -> VirtualControl.CAPTURE
             KeyEvent.KEYCODE_BUTTON_3 -> VirtualControl.EXTRA_3
             KeyEvent.KEYCODE_BUTTON_4 -> VirtualControl.EXTRA_4
             KeyEvent.KEYCODE_BUTTON_5 -> VirtualControl.EXTRA_5

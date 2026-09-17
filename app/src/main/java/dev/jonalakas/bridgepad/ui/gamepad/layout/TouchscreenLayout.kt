@@ -1,27 +1,36 @@
 package dev.jonalakas.bridgepad.ui.gamepad.layout
 
+enum class TouchControlShape {
+    CIRCLE,
+    ROUNDED_RECTANGLE,
+}
+
 enum class TouchControlId(
     val baseWidthDp: Float,
     val baseHeightDp: Float,
     val lockAspectRatio: Boolean = false,
     val adjustableDeadzone: Boolean = false,
+    val defaultShape: TouchControlShape = TouchControlShape.ROUNDED_RECTANGLE,
+    val customizableShape: Boolean = true,
 ) {
-    MOUSE_TOUCHPAD(210f, 92f),
-    DPAD(132f, 132f),
-    LEFT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true),
-    RIGHT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true),
+    MOUSE_TOUCHPAD(210f, 92f, customizableShape = false),
+    DPAD(132f, 132f, customizableShape = false),
+    LEFT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true, defaultShape = TouchControlShape.CIRCLE, customizableShape = false),
+    RIGHT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true, defaultShape = TouchControlShape.CIRCLE, customizableShape = false),
     LEFT_TRIGGER(76f, 52f),
     LEFT_BUMPER(76f, 52f),
     RIGHT_BUMPER(76f, 52f),
     RIGHT_TRIGGER(76f, 52f),
-    FACE_NORTH(58f, 58f),
-    FACE_WEST(58f, 58f),
-    FACE_EAST(58f, 58f),
-    FACE_SOUTH(58f, 58f),
+    FACE_NORTH(58f, 58f, defaultShape = TouchControlShape.CIRCLE),
+    FACE_WEST(58f, 58f, defaultShape = TouchControlShape.CIRCLE),
+    FACE_EAST(58f, 58f, defaultShape = TouchControlShape.CIRCLE),
+    FACE_SOUTH(58f, 58f, defaultShape = TouchControlShape.CIRCLE),
     SELECT(76f, 48f),
     START(76f, 48f),
     LEFT_STICK_BUTTON(64f, 48f),
     RIGHT_STICK_BUTTON(64f, 48f),
+    GUIDE(64f, 48f),
+    CAPTURE(64f, 48f),
     SESSION_MENU(116f, 48f),
 }
 
@@ -42,13 +51,16 @@ data class TouchControlPlacement(
     val widthScale: Float = 1f,
     val heightScale: Float = widthScale,
     val deadzone: Float = DEFAULT_STICK_DEADZONE,
+    val visible: Boolean = true,
+    val shape: TouchControlShape? = null,
 ) {
     fun sanitized(
         control: TouchControlId,
         fallback: TouchControlPlacement,
     ): TouchControlPlacement {
+        val resolvedShape = shape ?: control.defaultShape
         val safeWidthScale = widthScale.finiteOr(fallback.widthScale).coerceAtLeast(MIN_CONTROL_SCALE)
-        val safeHeightScale = if (control.lockAspectRatio) {
+        val safeHeightScale = if (control.lockAspectRatio || resolvedShape == TouchControlShape.CIRCLE) {
             safeWidthScale
         } else {
             heightScale.finiteOr(fallback.heightScale).coerceAtLeast(MIN_CONTROL_SCALE)
@@ -63,6 +75,8 @@ data class TouchControlPlacement(
             } else {
                 DEFAULT_STICK_DEADZONE
             },
+            visible = visible,
+            shape = resolvedShape,
         )
     }
 }
@@ -72,6 +86,11 @@ data class TouchscreenLayout(
 ) {
     fun placement(control: TouchControlId): TouchControlPlacement =
         placements[control] ?: DefaultTouchscreenLayout.value.placements.getValue(control)
+
+    fun isVisible(control: TouchControlId): Boolean = placement(control).visible
+
+    fun shape(control: TouchControlId): TouchControlShape =
+        placement(control).shape ?: control.defaultShape
 
     fun move(control: TouchControlId, deltaX: Float, deltaY: Float): TouchscreenLayout =
         update(control) {
@@ -87,9 +106,11 @@ data class TouchscreenLayout(
         heightScale: Float = widthScale,
     ): TouchscreenLayout = update(control) {
         val safeWidthScale = widthScale.coerceAtLeast(MIN_CONTROL_SCALE)
+        val lockAspectRatio = control.lockAspectRatio ||
+            (it.shape ?: control.defaultShape) == TouchControlShape.CIRCLE
         it.copy(
             widthScale = safeWidthScale,
-            heightScale = if (control.lockAspectRatio) {
+            heightScale = if (lockAspectRatio) {
                 safeWidthScale
             } else {
                 heightScale.coerceAtLeast(MIN_CONTROL_SCALE)
@@ -103,6 +124,27 @@ data class TouchscreenLayout(
             it.copy(deadzone = deadzone.coerceIn(MIN_STICK_DEADZONE, MAX_STICK_DEADZONE))
         }
     }
+
+    fun setVisible(control: TouchControlId, visible: Boolean): TouchscreenLayout =
+        update(control) { it.copy(visible = visible) }
+
+    fun setShape(control: TouchControlId, shape: TouchControlShape): TouchscreenLayout =
+        update(control) { placement ->
+            if (shape == TouchControlShape.CIRCLE) {
+                val baseDiameter = maxOf(control.baseWidthDp, control.baseHeightDp)
+                val diameterScale = maxOf(
+                    control.baseWidthDp * placement.widthScale,
+                    control.baseHeightDp * placement.heightScale,
+                ) / baseDiameter
+                placement.copy(
+                    widthScale = diameterScale,
+                    heightScale = diameterScale,
+                    shape = shape,
+                )
+            } else {
+                placement.copy(shape = shape)
+            }
+        }
 
     fun sanitized(
         fallbackLayout: TouchscreenLayout = DefaultTouchscreenLayout.value,
@@ -161,6 +203,8 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.START to TouchControlPlacement(0.56f, 0.43f, 0.82f),
             TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.44f, 0.60f, 0.75f),
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.56f, 0.60f, 0.75f),
+            TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.70f, 0.65f),
+            TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.53f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.87f, 0.70f),
         ),
     )
@@ -183,6 +227,8 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.START to TouchControlPlacement(0.56f, 0.46f, 0.82f),
             TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.44f, 0.62f, 0.75f),
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.56f, 0.62f, 0.75f),
+            TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.72f, 0.65f),
+            TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.54f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.84f, 0.70f),
         ),
     )
@@ -205,9 +251,11 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.START to TouchControlPlacement(0.57f, 0.56f),
             TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.43f, 0.72f),
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.57f, 0.72f),
+            TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.81f, 0.65f),
+            TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.64f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.90f),
         ),
-    )
+    ).withMobileShapes()
 
     val symmetricPortrait = TouchscreenLayout(
         mapOf(
@@ -227,6 +275,8 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.START to TouchControlPlacement(0.63f, 0.56f, 0.72f),
             TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.34f, 0.82f, 0.70f),
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.82f, 0.70f),
+            TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.82f, 0.65f),
+            TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.68f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.92f, 0.72f),
         ),
     )
@@ -249,6 +299,8 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.START to TouchControlPlacement(0.63f, 0.56f, 0.72f),
             TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.34f, 0.82f, 0.70f),
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.82f, 0.70f),
+            TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.82f, 0.65f),
+            TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.68f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.92f, 0.72f),
         ),
     )
@@ -271,9 +323,11 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.START to TouchControlPlacement(0.63f, 0.59f, 0.72f),
             TouchControlId.LEFT_STICK_BUTTON to TouchControlPlacement(0.34f, 0.84f, 0.70f),
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.84f, 0.70f),
+            TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.83f, 0.65f),
+            TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.70f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.93f, 0.72f),
         ),
-    )
+    ).withMobileShapes()
 
     fun profile(preset: TouchscreenLayoutPreset): TouchscreenLayoutProfile = when (preset) {
         TouchscreenLayoutPreset.SYMMETRIC -> TouchscreenLayoutProfile(symmetric, symmetricPortrait)
@@ -281,6 +335,18 @@ object BuiltInTouchscreenLayouts {
         TouchscreenLayoutPreset.MOBILE -> TouchscreenLayoutProfile(mobile, mobilePortrait)
     }
 }
+
+private fun TouchscreenLayout.withMobileShapes(): TouchscreenLayout = copy(
+    placements = placements.mapValues { (control, placement) ->
+        placement.copy(
+            shape = when (control) {
+                TouchControlId.MOUSE_TOUCHPAD,
+                TouchControlId.SESSION_MENU -> TouchControlShape.ROUNDED_RECTANGLE
+                else -> TouchControlShape.CIRCLE
+            },
+        )
+    },
+)
 
 object DefaultTouchscreenLayout {
     val value = BuiltInTouchscreenLayouts.mobile
@@ -291,7 +357,7 @@ object DefaultTouchscreenLayoutProfile {
 }
 
 internal object TouchscreenLayoutProfileCodec {
-    private const val VERSION = "1"
+    private const val VERSION = "3"
 
     fun encode(profile: TouchscreenLayoutProfile): String = buildString {
         appendLine(VERSION)
@@ -300,7 +366,8 @@ internal object TouchscreenLayoutProfileCodec {
             sanitized.layout(orientation).placements.forEach { (control, placement) ->
                 appendLine(
                     "${orientation.name},${control.name},${placement.centerX},${placement.centerY}," +
-                        "${placement.widthScale},${placement.heightScale},${placement.deadzone}",
+                        "${placement.widthScale},${placement.heightScale},${placement.deadzone}," +
+                        "${placement.visible},${(placement.shape ?: control.defaultShape).name}",
                 )
             }
         }
@@ -313,7 +380,7 @@ internal object TouchscreenLayoutProfileCodec {
         val placements = TouchscreenLayoutOrientation.entries.associateWith { linkedMapOf<TouchControlId, TouchControlPlacement>() }
         lines.drop(1).forEach { line ->
             val parts = line.split(',')
-            if (parts.size != 7) return@forEach
+            if (parts.size != 9) return@forEach
             runCatching {
                 placements.getValue(TouchscreenLayoutOrientation.valueOf(parts[0]))[
                     TouchControlId.valueOf(parts[1])
@@ -323,6 +390,8 @@ internal object TouchscreenLayoutProfileCodec {
                     widthScale = parts[4].toFloat(),
                     heightScale = parts[5].toFloat(),
                     deadzone = parts[6].toFloat(),
+                    visible = parts[7].toBooleanStrict(),
+                    shape = TouchControlShape.valueOf(parts[8]),
                 )
             }
         }
