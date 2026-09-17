@@ -251,6 +251,9 @@ fun TouchscreenLayoutEditorScreen(
                 onDeadzoneChange = { deadzone ->
                     updateDraft { it.setDeadzone(selected, deadzone) }
                 },
+                onInteractionChange = { interaction ->
+                    updateDraft { it.setInteraction(selected, interaction) }
+                },
                 onDisplayOptionChange = { control, option ->
                     updateDraft { current ->
                         when (option) {
@@ -502,6 +505,7 @@ private fun EditorOptionsPanel(
     selectedControl: TouchControlId,
     onSelectPreset: (TouchscreenLayout) -> Unit,
     onDeadzoneChange: (Float) -> Unit,
+    onInteractionChange: (TouchControlInteraction) -> Unit,
     onDisplayOptionChange: (TouchControlId, ControlDisplayOption) -> Unit,
     onReset: () -> Unit,
     horizontal: Boolean,
@@ -537,6 +541,7 @@ private fun EditorOptionsPanel(
                 selectedControl = selectedControl,
                 onSelectPreset = onSelectPreset,
                 onDeadzoneChange = onDeadzoneChange,
+                onInteractionChange = onInteractionChange,
                 onDisplayOptionChange = onDisplayOptionChange,
                 onReset = onReset,
             )
@@ -626,6 +631,13 @@ private fun EditorOptionsPanel(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+            if (selectedControl.supportsToggle) {
+                HorizontalDivider()
+                ControlInteractionOptions(
+                    interaction = draft.placement(selectedControl).interaction,
+                    onInteractionChange = onInteractionChange,
+                )
+            }
             HorizontalDivider()
             ControlAppearanceOptions(
                 layout = draft,
@@ -650,6 +662,7 @@ private fun HorizontalEditorOptions(
     selectedControl: TouchControlId,
     onSelectPreset: (TouchscreenLayout) -> Unit,
     onDeadzoneChange: (Float) -> Unit,
+    onInteractionChange: (TouchControlInteraction) -> Unit,
     onDisplayOptionChange: (TouchControlId, ControlDisplayOption) -> Unit,
     onReset: () -> Unit,
 ) {
@@ -745,10 +758,43 @@ private fun HorizontalEditorOptions(
                 }
             }
         }
+        if (selectedControl.supportsToggle) {
+            VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
+            ControlInteractionOptions(
+                interaction = draft.placement(selectedControl).interaction,
+                onInteractionChange = onInteractionChange,
+            )
+        }
         VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
         OutlinedButton(onClick = onReset) {
             Text(stringResource(R.string.reset_layout))
         }
+    }
+}
+
+@Composable
+private fun ControlInteractionOptions(
+    interaction: TouchControlInteraction,
+    onInteractionChange: (TouchControlInteraction) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(stringResource(R.string.control_interaction), style = MaterialTheme.typography.titleSmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = interaction == TouchControlInteraction.HOLD,
+                onClick = { onInteractionChange(TouchControlInteraction.HOLD) },
+                label = { Text(stringResource(R.string.control_interaction_hold)) },
+            )
+            FilterChip(
+                selected = interaction == TouchControlInteraction.TOGGLE,
+                onClick = { onInteractionChange(TouchControlInteraction.TOGGLE) },
+                label = { Text(stringResource(R.string.control_interaction_toggle)) },
+            )
+        }
+        Text(
+            stringResource(R.string.control_interaction_hint),
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 

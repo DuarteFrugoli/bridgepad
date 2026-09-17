@@ -5,6 +5,11 @@ enum class TouchControlShape {
     ROUNDED_RECTANGLE,
 }
 
+enum class TouchControlInteraction {
+    HOLD,
+    TOGGLE,
+}
+
 enum class TouchControlId(
     val baseWidthDp: Float,
     val baseHeightDp: Float,
@@ -12,25 +17,26 @@ enum class TouchControlId(
     val adjustableDeadzone: Boolean = false,
     val defaultShape: TouchControlShape = TouchControlShape.ROUNDED_RECTANGLE,
     val customizableShape: Boolean = true,
+    val supportsToggle: Boolean = false,
 ) {
     MOUSE_TOUCHPAD(210f, 92f, customizableShape = false),
     DPAD(132f, 132f, lockAspectRatio = true, customizableShape = false),
     LEFT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true, defaultShape = TouchControlShape.CIRCLE, customizableShape = false),
     RIGHT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true, defaultShape = TouchControlShape.CIRCLE, customizableShape = false),
-    LEFT_TRIGGER(76f, 52f),
-    LEFT_BUMPER(76f, 52f),
-    RIGHT_BUMPER(76f, 52f),
-    RIGHT_TRIGGER(76f, 52f),
-    FACE_NORTH(58f, 58f, defaultShape = TouchControlShape.CIRCLE),
-    FACE_WEST(58f, 58f, defaultShape = TouchControlShape.CIRCLE),
-    FACE_EAST(58f, 58f, defaultShape = TouchControlShape.CIRCLE),
-    FACE_SOUTH(58f, 58f, defaultShape = TouchControlShape.CIRCLE),
-    SELECT(76f, 48f),
-    START(76f, 48f),
-    LEFT_STICK_BUTTON(64f, 48f),
-    RIGHT_STICK_BUTTON(64f, 48f),
-    GUIDE(64f, 48f),
-    CAPTURE(64f, 48f),
+    LEFT_TRIGGER(76f, 52f, supportsToggle = true),
+    LEFT_BUMPER(76f, 52f, supportsToggle = true),
+    RIGHT_BUMPER(76f, 52f, supportsToggle = true),
+    RIGHT_TRIGGER(76f, 52f, supportsToggle = true),
+    FACE_NORTH(58f, 58f, defaultShape = TouchControlShape.CIRCLE, supportsToggle = true),
+    FACE_WEST(58f, 58f, defaultShape = TouchControlShape.CIRCLE, supportsToggle = true),
+    FACE_EAST(58f, 58f, defaultShape = TouchControlShape.CIRCLE, supportsToggle = true),
+    FACE_SOUTH(58f, 58f, defaultShape = TouchControlShape.CIRCLE, supportsToggle = true),
+    SELECT(76f, 48f, supportsToggle = true),
+    START(76f, 48f, supportsToggle = true),
+    LEFT_STICK_BUTTON(64f, 48f, supportsToggle = true),
+    RIGHT_STICK_BUTTON(64f, 48f, supportsToggle = true),
+    GUIDE(64f, 48f, supportsToggle = true),
+    CAPTURE(64f, 48f, supportsToggle = true),
     KEYBOARD(64f, 48f),
     SESSION_MENU(116f, 48f),
 }
@@ -54,6 +60,7 @@ data class TouchControlPlacement(
     val deadzone: Float = DEFAULT_STICK_DEADZONE,
     val visible: Boolean = true,
     val shape: TouchControlShape? = null,
+    val interaction: TouchControlInteraction = TouchControlInteraction.HOLD,
 ) {
     fun sanitized(
         control: TouchControlId,
@@ -78,6 +85,7 @@ data class TouchControlPlacement(
             },
             visible = visible,
             shape = resolvedShape,
+            interaction = if (control.supportsToggle) interaction else TouchControlInteraction.HOLD,
         )
     }
 }
@@ -146,6 +154,14 @@ data class TouchscreenLayout(
                 placement.copy(shape = shape)
             }
         }
+
+    fun setInteraction(
+        control: TouchControlId,
+        interaction: TouchControlInteraction,
+    ): TouchscreenLayout {
+        require(control.supportsToggle) { "This control does not support toggle interaction." }
+        return update(control) { it.copy(interaction = interaction) }
+    }
 
     fun sanitized(
         fallbackLayout: TouchscreenLayout = DefaultTouchscreenLayout.value,
@@ -365,7 +381,7 @@ object DefaultTouchscreenLayoutProfile {
 }
 
 internal object TouchscreenLayoutProfileCodec {
-    private const val VERSION = "4"
+    private const val VERSION = "5"
 
     fun encode(profile: TouchscreenLayoutProfile): String = buildString {
         appendLine(VERSION)
@@ -375,7 +391,8 @@ internal object TouchscreenLayoutProfileCodec {
                 appendLine(
                     "${orientation.name},${control.name},${placement.centerX},${placement.centerY}," +
                         "${placement.widthScale},${placement.heightScale},${placement.deadzone}," +
-                        "${placement.visible},${(placement.shape ?: control.defaultShape).name}",
+                        "${placement.visible},${(placement.shape ?: control.defaultShape).name}," +
+                        placement.interaction.name,
                 )
             }
         }
@@ -388,7 +405,7 @@ internal object TouchscreenLayoutProfileCodec {
         val placements = TouchscreenLayoutOrientation.entries.associateWith { linkedMapOf<TouchControlId, TouchControlPlacement>() }
         lines.drop(1).forEach { line ->
             val parts = line.split(',')
-            if (parts.size != 9) return@forEach
+            if (parts.size != 10) return@forEach
             runCatching {
                 placements.getValue(TouchscreenLayoutOrientation.valueOf(parts[0]))[
                     TouchControlId.valueOf(parts[1])
@@ -400,6 +417,7 @@ internal object TouchscreenLayoutProfileCodec {
                     deadzone = parts[6].toFloat(),
                     visible = parts[7].toBooleanStrict(),
                     shape = TouchControlShape.valueOf(parts[8]),
+                    interaction = TouchControlInteraction.valueOf(parts[9]),
                 )
             }
         }

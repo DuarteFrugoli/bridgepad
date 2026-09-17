@@ -1,5 +1,8 @@
 package dev.jonalakas.bridgepad.ui.gamepad
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.Canvas
@@ -29,9 +32,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +51,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -66,6 +72,7 @@ import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlId
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlInteraction
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlPlacement
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
 import dev.jonalakas.bridgepad.ui.gamepad.layout.controlHeightDp
@@ -82,9 +89,14 @@ fun TouchscreenGamepadScreen(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    DisposableEffect(Unit) {
+    val activity = LocalContext.current.findActivity()
+    DisposableEffect(activity) {
         TouchGamepadStore.activate()
-        onDispose { TouchGamepadStore.deactivate() }
+        onDispose {
+            if (activity?.isChangingConfigurations != true) {
+                TouchGamepadStore.deactivate()
+            }
+        }
     }
     BackHandler(onBack = onExit)
 
@@ -159,84 +171,98 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
                 "L2",
                 VirtualAxis.LEFT_TRIGGER,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.LEFT_BUMPER -> GamepadButton(
                 "L1",
                 VirtualControl.LEFT_BUMPER,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.RIGHT_BUMPER -> GamepadButton(
                 "R1",
                 VirtualControl.RIGHT_BUMPER,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.RIGHT_TRIGGER -> TriggerButton(
                 "R2",
                 VirtualAxis.RIGHT_TRIGGER,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.FACE_NORTH -> GamepadButton(
                 "Y",
                 VirtualControl.FACE_NORTH,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.FACE_WEST -> GamepadButton(
                 "X",
                 VirtualControl.FACE_WEST,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.FACE_EAST -> GamepadButton(
                 "B",
                 VirtualControl.FACE_EAST,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.FACE_SOUTH -> GamepadButton(
                 "A",
                 VirtualControl.FACE_SOUTH,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.SELECT -> GamepadButton(
                 "Select",
                 VirtualControl.SELECT,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.START -> GamepadButton(
                 "Start",
                 VirtualControl.START,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.LEFT_STICK_BUTTON -> GamepadButton(
                 "L3",
                 VirtualControl.LEFT_STICK_BUTTON,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.RIGHT_STICK_BUTTON -> GamepadButton(
                 "R3",
                 VirtualControl.RIGHT_STICK_BUTTON,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.GUIDE -> GamepadButton(
                 stringResource(R.string.guide_button),
                 VirtualControl.GUIDE,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.CAPTURE -> GamepadButton(
                 stringResource(R.string.capture_button),
                 VirtualControl.CAPTURE,
                 shape,
+                placement.interaction,
                 Modifier.fillMaxSize(),
             )
             TouchControlId.KEYBOARD -> AndroidKeyboardButton(
@@ -438,13 +464,22 @@ private fun GamepadButton(
     label: String,
     control: VirtualControl,
     shape: Shape,
+    interaction: TouchControlInteraction,
     modifier: Modifier = Modifier,
 ) {
+    val snapshot by TouchGamepadStore.state.collectAsState()
+    val activeInGamepadState = control in snapshot.gamepad.pressedButtons
     TouchButton(
         label = label,
         shape = shape,
         modifier = modifier,
-        onPressedChange = { TouchGamepadStore.setButton(control, it) },
+        latched = activeInGamepadState,
+        onPressedChange = { pressed ->
+            when (interaction) {
+                TouchControlInteraction.HOLD -> TouchGamepadStore.setButton(control, pressed)
+                TouchControlInteraction.TOGGLE -> if (pressed) TouchGamepadStore.toggleButton(control)
+            }
+        },
     )
 }
 
@@ -453,14 +488,33 @@ private fun TriggerButton(
     label: String,
     axis: VirtualAxis,
     shape: Shape,
+    interaction: TouchControlInteraction,
     modifier: Modifier = Modifier,
 ) {
+    val snapshot by TouchGamepadStore.state.collectAsState()
+    val triggerValue = when (axis) {
+        VirtualAxis.LEFT_TRIGGER -> snapshot.gamepad.leftTrigger
+        VirtualAxis.RIGHT_TRIGGER -> snapshot.gamepad.rightTrigger
+        else -> 0f
+    }
     TouchButton(
         label = label,
         shape = shape,
         modifier = modifier,
-        onPressedChange = { TouchGamepadStore.setTrigger(axis, it) },
+        latched = triggerValue > 0f,
+        onPressedChange = { pressed ->
+            when (interaction) {
+                TouchControlInteraction.HOLD -> TouchGamepadStore.setTrigger(axis, pressed)
+                TouchControlInteraction.TOGGLE -> if (pressed) TouchGamepadStore.toggleTrigger(axis)
+            }
+        },
     )
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable
@@ -470,14 +524,17 @@ private fun TouchButton(
     shape: Shape,
     modifier: Modifier = Modifier,
     accessibilityLabel: String = label,
+    latched: Boolean = false,
 ) {
     var pressed by remember { mutableStateOf(false) }
-    val pressDescription = stringResource(if (pressed) R.string.control_pressed else R.string.control_released)
+    val currentOnPressedChange by rememberUpdatedState(onPressedChange)
+    val active = pressed || latched
+    val pressDescription = stringResource(if (active) R.string.control_pressed else R.string.control_released)
     val containerColor by animateColorAsState(
-        if (pressed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
         label = "button color",
     )
-    val contentColor = if (pressed) {
+    val contentColor = if (active) {
         MaterialTheme.colorScheme.onPrimary
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
@@ -495,10 +552,10 @@ private fun TouchButton(
                 detectTapGestures(
                     onPress = {
                         pressed = true
-                        onPressedChange(true)
+                        currentOnPressedChange(true)
                         tryAwaitRelease()
                         pressed = false
-                        onPressedChange(false)
+                        currentOnPressedChange(false)
                     },
                 )
             },

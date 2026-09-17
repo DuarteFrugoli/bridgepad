@@ -28,7 +28,11 @@ object TouchGamepadStore {
     val state: StateFlow<TouchGamepadSnapshot> = mutableState.asStateFlow()
     val updates: Flow<TouchGamepadSnapshot> = updateChannel.receiveAsFlow()
 
-    fun activate() = publish(mutableState.value.copy(active = true, gamepad = VirtualGamepadState()))
+    fun activate() {
+        if (!mutableState.value.active) {
+            publish(mutableState.value.copy(active = true, gamepad = VirtualGamepadState()))
+        }
+    }
 
     fun deactivate() = publish(mutableState.value.copy(active = false, gamepad = VirtualGamepadState()))
 
@@ -45,6 +49,10 @@ object TouchGamepadStore {
                 },
             ),
         )
+    }
+
+    fun toggleButton(control: VirtualControl) {
+        setButton(control, control !in mutableState.value.gamepad.pressedButtons)
     }
 
     fun setDpad(direction: DpadDirection) {
@@ -76,6 +84,16 @@ object TouchGamepadStore {
             else -> error("Only trigger axes can be controlled as touch triggers.")
         }
         updateGamepad(next)
+    }
+
+    fun toggleTrigger(axis: VirtualAxis) {
+        val current = mutableState.value.gamepad
+        val pressed = when (axis) {
+            VirtualAxis.LEFT_TRIGGER -> current.leftTrigger > 0f
+            VirtualAxis.RIGHT_TRIGGER -> current.rightTrigger > 0f
+            else -> error("Only trigger axes can be controlled as touch triggers.")
+        }
+        setTrigger(axis, !pressed)
     }
 
     private fun updateGamepad(gamepad: VirtualGamepadState) {

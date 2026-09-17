@@ -311,6 +311,10 @@
     <string name="guide_button">Guia</string>
     <string name="capture_button">Captura</string>
     <string name="keyboard_button">Teclado</string>
+    <string name="control_interaction">Comportamento do botão</string>
+    <string name="control_interaction_hold">Segurar</string>
+    <string name="control_interaction_toggle">Alternar</string>
+    <string name="control_interaction_hint">Alternar mantém o comando pressionado até você tocar novamente.</string>
     <string name="network_session_notification_channel">Sessão jogável por Wi-Fi</string>
     <string name="notification_wifi_session_active">Sessão Wi-Fi ativa. Mantenha o BridgePad aberto para usar a tela ou controles no modo compatibilidade.</string>
     <string name="notification_wifi_background_usb_active">Sessão Wi-Fi e USB em segundo plano ativos. Você pode jogar com o BridgePad minimizado ou a tela apagada.</string>

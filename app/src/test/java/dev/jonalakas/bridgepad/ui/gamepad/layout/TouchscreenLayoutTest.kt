@@ -63,6 +63,31 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun toggleInteractionIsSavedPerControlAndOrientation() {
+        val original = DefaultTouchscreenLayoutProfile.value
+        val expected = original.update(
+            TouchscreenLayoutOrientation.LANDSCAPE,
+            original.landscape.setInteraction(
+                TouchControlId.LEFT_TRIGGER,
+                TouchControlInteraction.TOGGLE,
+            ),
+        )
+
+        val decoded = TouchscreenLayoutProfileCodec.decode(
+            TouchscreenLayoutProfileCodec.encode(expected),
+        )
+
+        assertEquals(
+            TouchControlInteraction.TOGGLE,
+            decoded?.landscape?.placement(TouchControlId.LEFT_TRIGGER)?.interaction,
+        )
+        assertEquals(
+            TouchControlInteraction.HOLD,
+            decoded?.portrait?.placement(TouchControlId.LEFT_TRIGGER)?.interaction,
+        )
+    }
+
+    @Test
     fun hiddenControlKeepsItsPlacementAndSurvivesCodecRoundTrip() {
         val original = DefaultTouchscreenLayoutProfile.value
         val expectedPlacement = original.landscape.placement(TouchControlId.FACE_NORTH)
@@ -153,7 +178,7 @@ class TouchscreenLayoutTest {
     @Test
     fun partialSavedLayoutUsesDefaultsForMissingControls() {
         val decoded = TouchscreenLayoutProfileCodec.decode(
-            "4\nLANDSCAPE,FACE_SOUTH,0.5,0.5,1.2,0.8,0.05,true,ROUNDED_RECTANGLE\n",
+            "5\nLANDSCAPE,FACE_SOUTH,0.5,0.5,1.2,0.8,0.05,true,ROUNDED_RECTANGLE,TOGGLE\n",
         )?.landscape
 
         assertNotNull(decoded)
@@ -161,6 +186,7 @@ class TouchscreenLayoutTest {
         assertEquals(0.5f, decoded?.placement(TouchControlId.FACE_SOUTH)?.centerX)
         assertEquals(1.2f, decoded?.placement(TouchControlId.FACE_SOUTH)?.widthScale)
         assertEquals(0.8f, decoded?.placement(TouchControlId.FACE_SOUTH)?.heightScale)
+        assertEquals(TouchControlInteraction.TOGGLE, decoded?.placement(TouchControlId.FACE_SOUTH)?.interaction)
         assertEquals(
             DefaultTouchscreenLayout.value.placement(TouchControlId.LEFT_STICK),
             decoded?.placement(TouchControlId.LEFT_STICK),
@@ -326,7 +352,7 @@ class TouchscreenLayoutTest {
     @Test
     fun invalidValuesAreSanitized() {
         val decoded = TouchscreenLayoutProfileCodec.decode(
-            "4\nLANDSCAPE,LEFT_STICK,NaN,4.0,99.0,99.0,NaN,true,CIRCLE\n",
+            "5\nLANDSCAPE,LEFT_STICK,NaN,4.0,99.0,99.0,NaN,true,CIRCLE,TOGGLE\n",
         )
         val placement = decoded?.landscape?.placement(TouchControlId.LEFT_STICK)
 
@@ -336,5 +362,6 @@ class TouchscreenLayoutTest {
         assertEquals(99f, placement.widthScale)
         assertEquals(99f, placement.heightScale)
         assertEquals(DEFAULT_STICK_DEADZONE, placement.deadzone)
+        assertEquals(TouchControlInteraction.HOLD, placement.interaction)
     }
 }

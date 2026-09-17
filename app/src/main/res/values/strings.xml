@@ -311,6 +311,10 @@
     <string name="guide_button">Guide</string>
     <string name="capture_button">Capture</string>
     <string name="keyboard_button">Keyboard</string>
+    <string name="control_interaction">Press behavior</string>
+    <string name="control_interaction_hold">Hold</string>
+    <string name="control_interaction_toggle">Toggle</string>
+    <string name="control_interaction_hint">Toggle keeps the control pressed until you tap it again.</string>
     <string name="network_session_notification_channel">Wi-Fi gameplay session</string>
     <string name="notification_wifi_session_active">Wi-Fi session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
     <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>

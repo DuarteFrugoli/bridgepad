@@ -504,6 +504,7 @@ class MainActivity : ComponentActivity() {
                         initialProfile = touchscreenLayoutProfile,
                         editingOrientation = currentLayoutOrientation,
                         onSave = { profile ->
+                            TouchGamepadStore.neutralize()
                             TouchscreenLayoutStore.save(profile)
                             showTouchscreenLayoutEditor = false
                             if (returnToSettingsAfterLayoutEditor) showSettings = true
