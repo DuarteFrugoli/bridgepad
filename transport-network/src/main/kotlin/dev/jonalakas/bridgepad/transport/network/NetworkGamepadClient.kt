@@ -16,6 +16,7 @@ import java.security.SecureRandom
 import java.security.cert.CertificateException
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.SSLSocket
@@ -56,6 +57,15 @@ sealed interface NetworkGamepadStatus {
     data class Failed(val reason: NetworkFailureReason, val detail: String) : NetworkGamepadStatus
 }
 
+data class NetworkInputDiagnostics(
+    val acceptedPointerReports: Long,
+    val pointerBackpressureCount: Long,
+    val pendingPointerReports: Int,
+    val acceptedKeyboardInputs: Long,
+    val keyboardBackpressureCount: Long,
+    val pendingKeyboardInputs: Int,
+)
+
 /**
  * Bounded sender shared by diagnostic and paired product sessions. Complete
  * gamepad state is retained across reconnects; relative pointer deltas are not
@@ -71,6 +81,10 @@ class NetworkGamepadClient(
     private val pendingState = AtomicReference<VirtualGamepadState?>(VirtualGamepadState())
     private val pendingPointers = ArrayBlockingQueue<PointerReport>(POINTER_QUEUE_CAPACITY)
     private val pendingKeyboard = ArrayBlockingQueue<KeyboardInput>(KEYBOARD_QUEUE_CAPACITY)
+    private val acceptedPointerReports = AtomicLong(0)
+    private val pointerBackpressureCount = AtomicLong(0)
+    private val acceptedKeyboardInputs = AtomicLong(0)
+    private val keyboardBackpressureCount = AtomicLong(0)
     @Volatile
     private var socket: SSLSocket? = null
     @Volatile
@@ -93,21 +107,35 @@ class NetworkGamepadClient(
         }
     }
 
-    fun sendPointer(report: PointerReport) {
-        if (stopping.get()) return
-        if (!pendingPointers.offer(report)) {
-            pendingPointers.poll()
-            pendingPointers.offer(report)
-        }
+    /**
+     * Returns true only after the report has been accepted by the bounded
+     * network queue. A false result lets the producer retain and coalesce the
+     * report instead of silently losing a click or relative movement.
+     */
+    fun sendPointer(report: PointerReport): Boolean {
+        if (stopping.get()) return false
+        val accepted = pendingPointers.offer(report)
+        if (accepted) acceptedPointerReports.incrementAndGet()
+        else pointerBackpressureCount.incrementAndGet()
+        return accepted
     }
 
-    fun sendKeyboard(input: KeyboardInput) {
-        if (stopping.get()) return
-        if (!pendingKeyboard.offer(input)) {
-            pendingKeyboard.poll()
-            pendingKeyboard.offer(input)
-        }
+    fun sendKeyboard(input: KeyboardInput): Boolean {
+        if (stopping.get()) return false
+        val accepted = pendingKeyboard.offer(input)
+        if (accepted) acceptedKeyboardInputs.incrementAndGet()
+        else keyboardBackpressureCount.incrementAndGet()
+        return accepted
     }
+
+    fun inputDiagnostics(): NetworkInputDiagnostics = NetworkInputDiagnostics(
+        acceptedPointerReports = acceptedPointerReports.get(),
+        pointerBackpressureCount = pointerBackpressureCount.get(),
+        pendingPointerReports = pendingPointers.size,
+        acceptedKeyboardInputs = acceptedKeyboardInputs.get(),
+        keyboardBackpressureCount = keyboardBackpressureCount.get(),
+        pendingKeyboardInputs = pendingKeyboard.size,
+    )
 
     fun stop() {
         stopping.set(true)
@@ -298,7 +326,9 @@ class NetworkGamepadClient(
     private companion object {
         const val HEARTBEAT_INTERVAL_NANOS = 500_000_000L
         const val IDLE_POLL_MILLIS = 4L
-        const val POINTER_QUEUE_CAPACITY = 64
+        // Keep at most a short burst. A large relative-pointer backlog feels
+        // like input lag after a temporary Wi-Fi stall.
+        const val POINTER_QUEUE_CAPACITY = 8
         const val KEYBOARD_QUEUE_CAPACITY = 128
         val RECONNECT_DELAYS_MILLIS = longArrayOf(500, 1_000, 2_000)
     }

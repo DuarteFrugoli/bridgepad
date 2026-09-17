@@ -93,9 +93,21 @@ Input reports form a data plane that is kept separate from the UI and service
 control plane. Source adapters enqueue every changed state, `InputRouter`
 serializes updates from independent adapters, and `OutputScheduler` retains
 button/D-pad transitions while coalescing intermediate analog positions. The
-Bluetooth service sends scheduled reports on a dedicated output thread. Session
-notices and foreground-notification updates occur only when slow lifecycle or
-capture state changes, never for each controller event.
+Bluetooth service arbitrates gamepad, pointer and keyboard output on a dedicated
+thread, sends at most one logical input per scheduling slot, retries rejected
+input without consuming it and uses a low-rate keepalive instead of repeating an
+unchanged gamepad state continuously. Session notices and foreground-notification
+updates occur only when slow lifecycle or capture state changes, never for each
+controller event.
+
+Wi-Fi pointer and keyboard delivery uses the same transactional producer
+contract: an input is consumed only after the bounded network queue accepts it.
+Backpressure therefore coalesces relative movement at the source while retaining
+button press/release and keyboard ordering. The pointer queue intentionally holds
+only a short burst so a temporary network stall cannot turn into a long trail of
+delayed cursor movement. TCP/TLS remains responsible for ordered delivery after
+acceptance; reconnects discard relative deltas because replaying them could move
+the cursor twice.
 
 `SessionCoordinator` is the Android application boundary used by presentation
 code. It owns a catalog of `OutputSessionAdapter` implementations and selects an

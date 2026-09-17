@@ -414,29 +414,52 @@ private fun MouseTouchpad(
                 stateDescription = touchpadHint
             }
             .pointerInput(Unit) {
+                val motionThreshold = viewConfiguration.touchSlop
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
-                    var distance = 0f
                     var maximumPointerCount = 1
+                    var activePointerMode = 1
+                    var bufferedDelta = Offset.Zero
+                    var motionAccepted = false
+                    var producedMotion = false
                     while (true) {
                         val changes = awaitPointerEvent().changes
                         val pressedChanges = changes.filter { it.pressed }
                         if (pressedChanges.isEmpty()) break
-                        maximumPointerCount = maxOf(maximumPointerCount, pressedChanges.size)
+                        val pointerMode = if (pressedChanges.size >= 2) 2 else 1
+                        maximumPointerCount = maxOf(maximumPointerCount, pointerMode)
+                        if (pointerMode != activePointerMode) {
+                            activePointerMode = pointerMode
+                            bufferedDelta = Offset.Zero
+                            motionAccepted = false
+                        }
                         val delta = pressedChanges.fold(Offset.Zero) { total, change ->
                             total + change.positionChange()
                         } / pressedChanges.size.toFloat()
-                        distance += hypot(delta.x, delta.y)
                         if (delta != Offset.Zero) {
-                            if (maximumPointerCount >= 2) {
-                                TouchMouseStore.scroll(delta.y)
+                            if (motionAccepted) {
+                                if (activePointerMode >= 2) {
+                                    TouchMouseStore.scroll(delta.y)
+                                } else {
+                                    TouchMouseStore.move(delta.x, delta.y)
+                                }
                             } else {
-                                TouchMouseStore.move(delta.x, delta.y)
+                                bufferedDelta += delta
+                                if (hypot(bufferedDelta.x, bufferedDelta.y) >= motionThreshold) {
+                                    motionAccepted = true
+                                    producedMotion = true
+                                    if (activePointerMode >= 2) {
+                                        TouchMouseStore.scroll(bufferedDelta.y)
+                                    } else {
+                                        TouchMouseStore.move(bufferedDelta.x, bufferedDelta.y)
+                                    }
+                                    bufferedDelta = Offset.Zero
+                                }
                             }
                         }
                         changes.forEach { it.consume() }
                     }
-                    if (distance <= 12.dp.toPx()) {
+                    if (!producedMotion) {
                         if (maximumPointerCount >= 2) {
                             TouchMouseStore.rightClick()
                         } else {

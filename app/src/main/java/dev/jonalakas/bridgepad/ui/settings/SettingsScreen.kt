@@ -150,6 +150,15 @@ fun SettingsScreen(
                             formatMetric(hidState.maxOutputDelayMs),
                         ),
                     )
+                    Text(
+                        stringResource(
+                            R.string.diagnostic_pointer_metrics,
+                            formatMetric(hidState.pointerInputRateHz),
+                            formatMetric(hidState.pointerOutputRateHz),
+                            hidState.pointerRejectedReports,
+                            hidState.pointerPendingReports,
+                        ),
+                    )
                     if (physicalGamepadState.devices.isNotEmpty()) {
                         Text(
                             stringResource(R.string.physical_gamepad_diagnostic),

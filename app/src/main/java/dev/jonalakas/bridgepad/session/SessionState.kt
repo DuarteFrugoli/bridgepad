@@ -40,6 +40,10 @@ data class SessionState(
     val outputRateHz: Float = 0f,
     val lastLatencyMs: Float? = null,
     val maxOutputDelayMs: Float = 0f,
+    val pointerInputRateHz: Float = 0f,
+    val pointerOutputRateHz: Float = 0f,
+    val pointerRejectedReports: Long = 0L,
+    val pointerPendingReports: Int = 0,
 )
 
 object SessionStore {

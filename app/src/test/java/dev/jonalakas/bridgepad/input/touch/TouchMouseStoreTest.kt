@@ -21,6 +21,17 @@ class TouchMouseStoreTest {
         assertNull(TouchMouseStore.consume())
     }
 
+    @Test fun rejectedMovementRemainsAvailableForRetry() {
+        TouchMouseStore.move(10f, -5f)
+
+        val firstAttempt = TouchMouseStore.peek()
+        TouchMouseStore.acknowledge(sent = false)
+
+        assertEquals(firstAttempt, TouchMouseStore.peek())
+        TouchMouseStore.acknowledge(sent = true)
+        assertNull(TouchMouseStore.peek())
+    }
+
     @Test fun clickProducesPressAndReleaseReports() {
         TouchMouseStore.click()
         assertEquals(1, TouchMouseStore.consume()?.buttons)
@@ -33,6 +44,19 @@ class TouchMouseStoreTest {
         assertEquals(2, TouchMouseStore.consume()?.buttons)
         assertEquals(0, TouchMouseStore.consume()?.buttons)
         assertNull(TouchMouseStore.consume())
+    }
+
+    @Test fun rejectedClickDoesNotLoseItsPressOrRelease() {
+        TouchMouseStore.click()
+
+        assertEquals(1, TouchMouseStore.peek()?.buttons)
+        TouchMouseStore.acknowledge(sent = false)
+        assertEquals(1, TouchMouseStore.peek()?.buttons)
+        TouchMouseStore.acknowledge(sent = true)
+        assertEquals(0, TouchMouseStore.peek()?.buttons)
+        TouchMouseStore.acknowledge(sent = true)
+
+        assertNull(TouchMouseStore.peek())
     }
 
     @Test fun twoFingerMovementProducesWheelReports() {

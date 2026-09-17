@@ -81,21 +81,30 @@ class BluetoothHidService : Service() {
     private val pendingInputTimestampNanos = AtomicLong(NO_INPUT_TIMESTAMP)
     private var metricsStartedNanos = 0L
     private var reportsSinceConnection = 0L
+    private var pointerInputBaseline = 0L
+    private var pointerReportsSinceConnection = 0L
+    private var pointerRejectedReports = 0L
     private var lastMetricsUpdateNanos = 0L
     private var latestLatencyMs: Float? = null
-    private var expectedOutputTickNanos = 0L
+    private var nextOutputTickUptimeMs = 0L
     private var maxOutputDelayNanos = 0L
+    private var nextOutputKindIndex = 0
     private val outputTick = object : Runnable {
         override fun run() {
             if (shuttingDown || !outputRunning.get()) return
             recordOutputDelay()
-            sendScheduledReport()
-            sendMouseReport()
-            sendKeyboardReport()
+            sendNextOutputReport()
+            updateOutputMetrics()
             if (!shuttingDown && outputRunning.get()) {
-                outputHandler.postDelayed(this, OUTPUT_INTERVAL_MS)
+                scheduleNextOutputTick()
             }
         }
+    }
+
+    private enum class OutputKind {
+        GAMEPAD,
+        POINTER,
+        KEYBOARD,
     }
 
     private data class CaptureState(
@@ -602,59 +611,103 @@ class BluetoothHidService : Service() {
         lastObservedInputCount.set(inputRouter.current(activeCaptureMode).inputEventCount)
         inputEventsSinceConnection.set(0L)
         reportsSinceConnection = 0
+        pointerInputBaseline = inputRouter.pointerDiagnostics().inputEventCount
+        pointerReportsSinceConnection = 0
+        pointerRejectedReports = 0
         pendingInputTimestampNanos.set(NO_INPUT_TIMESTAMP)
         latestLatencyMs = null
-        expectedOutputTickNanos = metricsStartedNanos
+        nextOutputTickUptimeMs = SystemClock.uptimeMillis()
         maxOutputDelayNanos = 0L
+        nextOutputKindIndex = 0
         outputRunning.set(true)
-        outputHandler.post(outputTick)
+        outputHandler.postAtTime(outputTick, nextOutputTickUptimeMs)
     }
 
-    private fun sendScheduledReport() {
+    private fun sendNextOutputReport() {
         if (connectedDevice == null) return
         val now = monotonicNanos()
-        val state = outputScheduler.poll(now) ?: return
+        val kinds = OutputKind.entries
+        repeat(kinds.size) { offset ->
+            val index = (nextOutputKindIndex + offset) % kinds.size
+            val attempted = when (kinds[index]) {
+                OutputKind.GAMEPAD -> sendScheduledGamepadReport(now)
+                OutputKind.POINTER -> sendMouseReport()
+                OutputKind.KEYBOARD -> sendKeyboardReport()
+            }
+            if (attempted) {
+                nextOutputKindIndex = (index + 1) % kinds.size
+                return
+            }
+        }
+    }
+
+    private fun sendScheduledGamepadReport(now: Long): Boolean {
+        if (!outputScheduler.hasPending(now)) return false
+        val state = outputScheduler.poll(now) ?: return false
         val sent = synchronized(transportLock) { outputTransport.sendGamepad(state) }
+        outputScheduler.complete(state, sent, monotonicNanos())
         if (!sent) {
-            update(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_report_failed))
-            return
+            SessionLog.record("GAMEPAD", "A gamepad report was retained for retry")
+            return true
         }
         reportsSinceConnection++
         val timestamp = pendingInputTimestampNanos.getAndSet(NO_INPUT_TIMESTAMP)
         if (timestamp != NO_INPUT_TIMESTAMP) {
             latestLatencyMs = (now - timestamp).coerceAtLeast(0L) / 1_000_000f
         }
-        if (now - lastMetricsUpdateNanos >= METRICS_UPDATE_INTERVAL_NANOS) {
-            val elapsedSeconds = ((now - metricsStartedNanos).coerceAtLeast(1L)) / 1_000_000_000f
-            HidSessionStore.update {
-                it.copy(
-                    inputRateHz = inputEventsSinceConnection.get() / elapsedSeconds,
-                    outputRateHz = reportsSinceConnection / elapsedSeconds,
-                    lastLatencyMs = latestLatencyMs ?: it.lastLatencyMs,
-                    maxOutputDelayMs = maxOutputDelayNanos / 1_000_000f,
-                )
-            }
-            lastMetricsUpdateNanos = now
-            maxOutputDelayNanos = 0L
-        }
+        return true
     }
 
-    private fun sendMouseReport() {
-        if (connectedDevice == null) return
-        val report = inputRouter.consumePointer() ?: return
+    private fun sendMouseReport(): Boolean {
+        if (!inputRouter.hasPendingPointer()) return false
+        val report = inputRouter.peekPointer() ?: return false
         val sent = synchronized(transportLock) { outputTransport.sendPointer(report) }
+        inputRouter.acknowledgePointer(sent)
         if (!sent) {
-            SessionLog.record("MOUSE", "A mouse report could not be sent")
+            pointerRejectedReports++
+            SessionLog.record("MOUSE", "A mouse report was retained for retry")
+        } else {
+            reportsSinceConnection++
+            pointerReportsSinceConnection++
         }
+        return true
     }
 
-    private fun sendKeyboardReport() {
-        if (connectedDevice == null) return
-        val input = inputRouter.consumeKeyboard() ?: return
+    private fun sendKeyboardReport(): Boolean {
+        if (!inputRouter.hasPendingKeyboard()) return false
+        val input = inputRouter.peekKeyboard() ?: return false
         val sent = synchronized(transportLock) { outputTransport.sendKeyboard(input) }
+        inputRouter.acknowledgeKeyboard(sent)
         if (!sent) {
-            SessionLog.record("KEYBOARD", "A keyboard report could not be sent")
+            SessionLog.record("KEYBOARD", "A keyboard input was retained for retry")
+        } else {
+            reportsSinceConnection++
         }
+        return true
+    }
+
+    private fun updateOutputMetrics() {
+        val now = monotonicNanos()
+        if (now - lastMetricsUpdateNanos < METRICS_UPDATE_INTERVAL_NANOS) return
+
+        val elapsedSeconds = ((now - metricsStartedNanos).coerceAtLeast(1L)) / 1_000_000_000f
+        val pointerDiagnostics = inputRouter.pointerDiagnostics()
+        HidSessionStore.update {
+            it.copy(
+                inputRateHz = inputEventsSinceConnection.get() / elapsedSeconds,
+                outputRateHz = reportsSinceConnection / elapsedSeconds,
+                lastLatencyMs = latestLatencyMs ?: it.lastLatencyMs,
+                maxOutputDelayMs = maxOutputDelayNanos / 1_000_000f,
+                pointerInputRateHz =
+                    (pointerDiagnostics.inputEventCount - pointerInputBaseline).coerceAtLeast(0L) /
+                        elapsedSeconds,
+                pointerOutputRateHz = pointerReportsSinceConnection / elapsedSeconds,
+                pointerRejectedReports = pointerRejectedReports,
+                pointerPendingReports = pointerDiagnostics.pendingReportCount,
+            )
+        }
+        lastMetricsUpdateNanos = now
+        maxOutputDelayNanos = 0L
     }
 
     private fun stopOutputPipeline() {
@@ -667,11 +720,22 @@ class BluetoothHidService : Service() {
     }
 
     private fun recordOutputDelay() {
-        val now = monotonicNanos()
-        if (expectedOutputTickNanos > 0L) {
-            maxOutputDelayNanos = maxOf(maxOutputDelayNanos, (now - expectedOutputTickNanos).coerceAtLeast(0L))
+        val now = SystemClock.uptimeMillis()
+        if (nextOutputTickUptimeMs > 0L) {
+            maxOutputDelayNanos = maxOf(
+                maxOutputDelayNanos,
+                (now - nextOutputTickUptimeMs).coerceAtLeast(0L) * 1_000_000L,
+            )
         }
-        expectedOutputTickNanos = now + OUTPUT_INTERVAL_NANOS
+    }
+
+    private fun scheduleNextOutputTick() {
+        nextOutputTickUptimeMs += OUTPUT_INTERVAL_MS
+        val now = SystemClock.uptimeMillis()
+        if (nextOutputTickUptimeMs <= now) {
+            nextOutputTickUptimeMs = now + OUTPUT_INTERVAL_MS
+        }
+        outputHandler.postAtTime(outputTick, nextOutputTickUptimeMs)
     }
 
     private fun monotonicNanos(): Long = SystemClock.uptimeMillis() * 1_000_000L
@@ -840,7 +904,6 @@ class BluetoothHidService : Service() {
         private const val POST_PAIR_CONNECTION_DELAY_MS = 500L
         private const val OUTPUT_RATE_HZ = 100
         private const val OUTPUT_INTERVAL_MS = 10L
-        private const val OUTPUT_INTERVAL_NANOS = OUTPUT_INTERVAL_MS * 1_000_000L
         private const val METRICS_UPDATE_INTERVAL_NANOS = 500_000_000L
         private const val NO_INPUT_TIMESTAMP = -1L
         fun intent(context: Context, action: String) =

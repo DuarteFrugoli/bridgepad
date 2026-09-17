@@ -140,6 +140,7 @@
     <string name="diagnostic_status">Session: %1$s</string>
     <string name="diagnostic_version">BridgePad %1$s · %2$s · Android %3$s</string>
     <string name="diagnostic_metrics">Input: %1$s Hz\nOutput: %2$s Hz\nLast event latency: %3$s ms\nMaximum output delay: %4$s ms</string>
+    <string name="diagnostic_pointer_metrics">Pointer input: %1$s Hz\nPointer output: %2$s Hz\nRejected pointer reports: %3$d\nPending pointer reports: %4$d</string>
     <string name="diagnostics_technical_note">Technical reports keep identifiers and event logs for troubleshooting. Review the report before sharing it.</string>
     <string name="state_idle">Not connected</string>
     <string name="state_ready">Ready to connect</string>

@@ -13,6 +13,7 @@ import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadSnapshot
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
+import dev.jonalakas.bridgepad.input.touch.TouchMouseDiagnostics
 import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
 import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
 import dev.jonalakas.bridgepad.input.usb.DirectUsbState
@@ -123,6 +124,20 @@ class InputRouter(scope: CoroutineScope) {
     fun consumePointer(): PointerReport? = TouchMouseStore.consume()
 
     fun consumeKeyboard(): KeyboardInput? = TouchKeyboardStore.consume()
+
+    fun peekPointer(): PointerReport? = TouchMouseStore.peek()
+
+    fun acknowledgePointer(sent: Boolean) = TouchMouseStore.acknowledge(sent)
+
+    fun hasPendingPointer(): Boolean = TouchMouseStore.hasPending()
+
+    fun pointerDiagnostics(): TouchMouseDiagnostics = TouchMouseStore.diagnostics()
+
+    fun peekKeyboard(): KeyboardInput? = TouchKeyboardStore.peek()
+
+    fun acknowledgeKeyboard(sent: Boolean) = TouchKeyboardStore.acknowledge(sent)
+
+    fun hasPendingKeyboard(): Boolean = TouchKeyboardStore.hasPending()
 
     fun clearPointer() = TouchMouseStore.clear()
 

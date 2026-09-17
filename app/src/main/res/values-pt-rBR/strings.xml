@@ -140,6 +140,7 @@
     <string name="diagnostic_status">Sessão: %1$s</string>
     <string name="diagnostic_version">BridgePad %1$s · %2$s · Android %3$s</string>
     <string name="diagnostic_metrics">Entrada: %1$s Hz\nSaída: %2$s Hz\nLatência do último comando: %3$s ms\nAtraso máximo da saída: %4$s ms</string>
+    <string name="diagnostic_pointer_metrics">Entrada do ponteiro: %1$s Hz\nSaída do ponteiro: %2$s Hz\nRelatórios do ponteiro recusados: %3$d\nRelatórios do ponteiro pendentes: %4$d</string>
     <string name="diagnostics_technical_note">Os relatórios técnicos mantêm identificadores e registros de eventos para diagnóstico. Revise o relatório antes de compartilhá-lo.</string>
     <string name="state_idle">Sem conexão</string>
     <string name="state_ready">Pronto para conectar</string>

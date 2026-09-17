@@ -41,8 +41,12 @@ class NetworkGameplayController(
         }
         pointerJob = scope.launch {
             while (isActive) {
-                inputRouter.consumePointer()?.let(nextClient::sendPointer)
-                inputRouter.consumeKeyboard()?.let(nextClient::sendKeyboard)
+                inputRouter.peekPointer()?.let { pointer ->
+                    inputRouter.acknowledgePointer(nextClient.sendPointer(pointer))
+                }
+                inputRouter.peekKeyboard()?.let { keyboard ->
+                    inputRouter.acknowledgeKeyboard(nextClient.sendKeyboard(keyboard))
+                }
                 delay(POINTER_POLL_MILLIS)
             }
         }
