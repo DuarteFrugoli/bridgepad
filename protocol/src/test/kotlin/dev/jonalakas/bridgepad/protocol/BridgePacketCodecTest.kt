@@ -4,6 +4,8 @@ import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
+import dev.jonalakas.bridgepad.core.ports.KeyboardKey
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -66,6 +68,8 @@ class BridgePacketCodecTest {
             BridgeMessage.SessionReady(capabilities),
             BridgeMessage.SessionStop(BridgeStopReason.USER_REQUEST),
             BridgeMessage.PointerFrame(PointerReport(buttons = 3, deltaX = -250, deltaY = 500)),
+            BridgeMessage.KeyboardFrame(KeyboardInput.Text("Olá, BridgePad!")),
+            BridgeMessage.KeyboardFrame(KeyboardInput.Key(KeyboardKey.BACKSPACE)),
             BridgeMessage.Ping(1234),
             BridgeMessage.Pong(1234),
             BridgeMessage.Status(BridgeStatusCode.ACTIVE, "ready"),

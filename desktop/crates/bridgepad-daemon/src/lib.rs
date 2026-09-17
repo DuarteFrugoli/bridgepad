@@ -10,15 +10,17 @@ use auth::{
     SALT_SIZE,
 };
 use bridgepad_protocol::{
-    decode_auth_proof, decode_auth_request, decode_gamepad_snapshot, decode_packet,
-    decode_pair_request, decode_pointer, decode_session_start, encode_packet, MessageType,
-    PacketHeader, CAPABILITY_GAMEPAD, CAPABILITY_POINTER, HEADER_SIZE, MAX_PAYLOAD_SIZE,
-    MAX_PEER_NAME_SIZE,
+    decode_auth_proof, decode_auth_request, decode_gamepad_snapshot, decode_keyboard,
+    decode_packet, decode_pair_request, decode_pointer, decode_session_start, encode_packet,
+    KeyboardInput as ProtocolKeyboardInput, KeyboardKey as ProtocolKeyboardKey, MessageType,
+    PacketHeader, CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, HEADER_SIZE,
+    MAX_PAYLOAD_SIZE, MAX_PEER_NAME_SIZE,
 };
 use bridgepad_virtual_device::{
-    DpadDirection, GamepadReport, PointerReport, VirtualGamepadDevice, VirtualPointerDevice,
+    DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, PointerReport,
+    VirtualGamepadDevice, VirtualKeyboardDevice, VirtualPointerDevice,
 };
-use bridgepad_windows_pointer::WindowsPointer;
+use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
 use bridgepad_windows_vigem::VigemGamepad;
 use rcgen::{generate_simple_self_signed, CertifiedKey};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
@@ -340,6 +342,7 @@ fn serve(
     println!("TLS client authenticated from {peer}");
     let mut gamepad: Option<GamepadLease> = None;
     let mut pointer: Option<PointerLease> = None;
+    let mut keyboard: Option<KeyboardLease> = None;
     let mut active_session_id = None;
     let mut latest_gamepad_sequence = None;
     let mut _session_lease: Option<SessionLease> = None;
@@ -530,6 +533,7 @@ fn serve(
                 }
                 gamepad = Some(GamepadLease::new(Box::new(VigemGamepad::connect()?))?);
                 pointer = Some(PointerLease::new(Box::new(WindowsPointer::connect()))?);
+                keyboard = Some(KeyboardLease::new(Box::new(WindowsKeyboard::connect())));
                 active_session_id = Some(packet.header.session_id);
                 _session_lease = Some(SessionLease::new(&state));
                 latest_gamepad_sequence = None;
@@ -537,7 +541,7 @@ fn serve(
                     &mut stream,
                     packet.header,
                     MessageType::SessionReady,
-                    &(CAPABILITY_GAMEPAD | CAPABILITY_POINTER).to_be_bytes(),
+                    &(CAPABILITY_GAMEPAD | CAPABILITY_POINTER | CAPABILITY_KEYBOARD).to_be_bytes(),
                 )?;
                 stream.sock.set_read_timeout(Some(Duration::from_secs(3)))?;
                 println!("Playable gamepad session started for {peer}");
@@ -569,10 +573,29 @@ fn serve(
                         delta_y: report.delta_y,
                     })?;
             }
+            MessageType::Keyboard => {
+                if active_session_id != Some(packet.header.session_id) {
+                    return Err("keyboard input does not belong to the active session".into());
+                }
+                let input = match decode_keyboard(packet)? {
+                    ProtocolKeyboardInput::Text(text) => KeyboardInput::Text(text),
+                    ProtocolKeyboardInput::Key(key) => KeyboardInput::Key(match key {
+                        ProtocolKeyboardKey::Backspace => KeyboardKey::Backspace,
+                        ProtocolKeyboardKey::Enter => KeyboardKey::Enter,
+                        ProtocolKeyboardKey::Tab => KeyboardKey::Tab,
+                        ProtocolKeyboardKey::Escape => KeyboardKey::Escape,
+                    }),
+                };
+                keyboard
+                    .as_mut()
+                    .ok_or("keyboard session is not active")?
+                    .send(input)?;
+            }
             MessageType::SessionStop => {
                 if active_session_id == Some(packet.header.session_id) {
                     gamepad = None;
                     pointer = None;
+                    keyboard = None;
                     active_session_id = None;
                     _session_lease = None;
                     latest_gamepad_sequence = None;
@@ -738,6 +761,21 @@ impl Drop for GamepadLease {
 
 struct PointerLease {
     device: Box<dyn VirtualPointerDevice>,
+}
+
+struct KeyboardLease {
+    device: Box<dyn VirtualKeyboardDevice>,
+}
+
+impl KeyboardLease {
+    fn new(device: Box<dyn VirtualKeyboardDevice>) -> Self {
+        Self { device }
+    }
+
+    fn send(&mut self, input: KeyboardInput) -> Result<(), AnyError> {
+        self.device.send(input)?;
+        Ok(())
+    }
 }
 
 impl PointerLease {

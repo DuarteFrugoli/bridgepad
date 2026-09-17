@@ -27,6 +27,7 @@ pub enum MessageType {
     AuthResult = 0x0d,
     GamepadSnapshot = 0x10,
     Pointer = 0x11,
+    Keyboard = 0x12,
     Ping = 0x20,
     Pong = 0x21,
     Status = 0x30,
@@ -54,6 +55,7 @@ impl TryFrom<u8> for MessageType {
             0x0d => Ok(Self::AuthResult),
             0x10 => Ok(Self::GamepadSnapshot),
             0x11 => Ok(Self::Pointer),
+            0x12 => Ok(Self::Keyboard),
             0x20 => Ok(Self::Ping),
             0x21 => Ok(Self::Pong),
             0x30 => Ok(Self::Status),
@@ -90,6 +92,8 @@ pub enum ProtocolError {
     PayloadLengthMismatch { declared: usize, actual: usize },
     InvalidPayloadLength { expected: usize, actual: usize },
     InvalidDpad(u8),
+    UnknownKeyboardInput(u8),
+    UnknownKeyboardKey(u8),
     InvalidUtf8,
     InvalidPeerId,
     InvalidPeerName,
@@ -174,6 +178,7 @@ pub fn decode_ping(packet: Packet<'_>) -> Result<u64, ProtocolError> {
 
 pub const CAPABILITY_GAMEPAD: u32 = 1;
 pub const CAPABILITY_POINTER: u32 = 1 << 1;
+pub const CAPABILITY_KEYBOARD: u32 = 1 << 5;
 pub const AUTH_NONCE_SIZE: usize = 32;
 pub const AUTH_PROOF_SIZE: usize = 32;
 
@@ -235,6 +240,62 @@ pub fn decode_pointer(packet: Packet<'_>) -> Result<PointerReport, ProtocolError
         delta_x: read_i32(packet.payload, 1),
         delta_y: read_i32(packet.payload, 5),
     })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum KeyboardKey {
+    Backspace,
+    Enter,
+    Tab,
+    Escape,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum KeyboardInput {
+    Text(String),
+    Key(KeyboardKey),
+}
+
+pub fn decode_keyboard(packet: Packet<'_>) -> Result<KeyboardInput, ProtocolError> {
+    let kind = *packet.payload.first().ok_or(ProtocolError::InvalidPayloadLength {
+        expected: 1,
+        actual: 0,
+    })?;
+    match kind {
+        0 => {
+            if packet.payload.len() < 3 {
+                return Err(ProtocolError::InvalidPayloadLength {
+                    expected: 3,
+                    actual: packet.payload.len(),
+                });
+            }
+            let length = usize::from(read_u16(packet.payload, 1));
+            let expected = 3 + length;
+            require_payload_length(packet.payload, expected)?;
+            let text = std::str::from_utf8(&packet.payload[3..])
+                .map_err(|_| ProtocolError::InvalidUtf8)?
+                .to_owned();
+            if text.is_empty() {
+                return Err(ProtocolError::InvalidPayloadLength {
+                    expected: 4,
+                    actual: packet.payload.len(),
+                });
+            }
+            Ok(KeyboardInput::Text(text))
+        }
+        1 => {
+            require_payload_length(packet.payload, 2)?;
+            let key = match packet.payload[1] {
+                0 => KeyboardKey::Backspace,
+                1 => KeyboardKey::Enter,
+                2 => KeyboardKey::Tab,
+                3 => KeyboardKey::Escape,
+                value => return Err(ProtocolError::UnknownKeyboardKey(value)),
+            };
+            Ok(KeyboardInput::Key(key))
+        }
+        value => Err(ProtocolError::UnknownKeyboardInput(value)),
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -450,6 +511,41 @@ mod tests {
                 left_trigger: 0x8000,
                 right_trigger: u16::MAX,
             })
+        );
+    }
+
+    #[test]
+    fn keyboard_decodes_utf8_text_and_special_keys() {
+        let text_payload = [0, 0, 3, b'o', 0xc3, 0xa1];
+        let text_bytes = encode_packet(
+            PacketHeader {
+                session_id: 7,
+                sequence: 10,
+                timestamp_micros: 12,
+                message_type: MessageType::Keyboard,
+            },
+            &text_payload,
+        )
+        .expect("packet must encode");
+        assert_eq!(
+            decode_keyboard(decode_packet(&text_bytes).expect("packet must decode")),
+            Ok(KeyboardInput::Text("oá".to_owned()))
+        );
+
+        let key_payload = [1, 0];
+        let key_bytes = encode_packet(
+            PacketHeader {
+                session_id: 7,
+                sequence: 11,
+                timestamp_micros: 13,
+                message_type: MessageType::Keyboard,
+            },
+            &key_payload,
+        )
+        .expect("packet must encode");
+        assert_eq!(
+            decode_keyboard(decode_packet(&key_bytes).expect("packet must decode")),
+            Ok(KeyboardInput::Key(KeyboardKey::Backspace))
         );
     }
 

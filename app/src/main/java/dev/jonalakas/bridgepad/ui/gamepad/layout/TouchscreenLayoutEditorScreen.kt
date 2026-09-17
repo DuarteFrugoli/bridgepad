@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -65,6 +67,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.jonalakas.bridgepad.R
+import dev.jonalakas.bridgepad.ui.gamepad.DpadVisual
 import kotlin.math.roundToInt
 
 @Composable
@@ -75,9 +78,13 @@ fun TouchscreenLayoutEditorScreen(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var encodedDraft by rememberSaveable {
-        mutableStateOf(TouchscreenLayoutProfileCodec.encode(initialProfile))
+    val encodedInitialProfile = remember(initialProfile) {
+        TouchscreenLayoutProfileCodec.encode(initialProfile)
     }
+    var encodedDraft by rememberSaveable {
+        mutableStateOf(encodedInitialProfile)
+    }
+    var discardConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     var selectedName by rememberSaveable { mutableStateOf(TouchControlId.LEFT_STICK.name) }
     var toolbarExpanded by rememberSaveable { mutableStateOf(false) }
     var optionsVisible by rememberSaveable { mutableStateOf(true) }
@@ -111,7 +118,15 @@ fun TouchscreenLayoutEditorScreen(
         )
     }
 
-    BackHandler(onBack = onCancel)
+    fun requestCancel() {
+        if (encodedDraft == encodedInitialProfile) {
+            onCancel()
+        } else {
+            discardConfirmationVisible = true
+        }
+    }
+
+    BackHandler(onBack = { requestCancel() })
 
     BoxWithConstraints(
         modifier = modifier
@@ -215,7 +230,7 @@ fun TouchscreenLayoutEditorScreen(
                 optionsVisible = optionsVisible,
                 onCollapse = { toolbarExpanded = false },
                 onToggleOptions = { optionsVisible = !optionsVisible },
-                onCancel = onCancel,
+                onCancel = { requestCancel() },
                 onSave = { onSave(draftProfile) },
                 horizontal = landscapeEditor,
                 modifier = toolbarModifier,
@@ -313,6 +328,32 @@ fun TouchscreenLayoutEditorScreen(
             )
         }
     }
+
+    if (discardConfirmationVisible) {
+        AlertDialog(
+            onDismissRequest = { discardConfirmationVisible = false },
+            title = { Text(stringResource(R.string.discard_layout_title)) },
+            text = { Text(stringResource(R.string.discard_layout_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        discardConfirmationVisible = false
+                        onCancel()
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                ) {
+                    Text(stringResource(R.string.discard_changes))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { discardConfirmationVisible = false }) {
+                    Text(stringResource(R.string.keep_editing))
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -341,6 +382,7 @@ private fun EditorToolbar(
                 symbol = CANCEL_ACTION_SYMBOL,
                 contentDescription = cancelDescription,
                 onClick = onCancel,
+                destructive = true,
             )
             EditorActionButton(
                 symbol = OPTIONS_ACTION_SYMBOL,
@@ -388,13 +430,16 @@ private fun EditorActionButton(
     onClick: () -> Unit,
     selected: Boolean = false,
     emphasized: Boolean = false,
+    destructive: Boolean = false,
 ) {
     val containerColor = when {
+        destructive -> MaterialTheme.colorScheme.error
         emphasized -> MaterialTheme.colorScheme.primary
         selected -> MaterialTheme.colorScheme.secondaryContainer
         else -> Color.Transparent
     }
     val contentColor = when {
+        destructive -> MaterialTheme.colorScheme.onError
         emphasized -> MaterialTheme.colorScheme.onPrimary
         selected -> MaterialTheme.colorScheme.onSecondaryContainer
         else -> MaterialTheme.colorScheme.onSurface
@@ -524,6 +569,20 @@ private fun EditorOptionsPanel(
                 style = MaterialTheme.typography.titleMedium,
             )
             Text(stringResource(R.string.layout_orientation_auto_hint), style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider()
+            Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
+            TouchscreenLayoutPreset.entries.forEach { preset ->
+                val presetLayout = BuiltInTouchscreenLayouts.profile(preset)
+                    .layout(editingOrientation)
+                    .sanitized()
+                FilterChip(
+                    selected = draft == presetLayout,
+                    onClick = { onSelectPreset(presetLayout) },
+                    label = { Text(presetLabel(preset)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            Text(stringResource(R.string.layout_preset_hint), style = MaterialTheme.typography.bodySmall)
             if (selectedControl.adjustableDeadzone) {
                 val deadzone = draft.placement(selectedControl).deadzone
                 val selectedControlLabel = controlLabel(selectedControl)
@@ -573,20 +632,6 @@ private fun EditorOptionsPanel(
                 horizontal = false,
                 onDisplayOptionChange = onDisplayOptionChange,
             )
-            HorizontalDivider()
-            Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
-            TouchscreenLayoutPreset.entries.forEach { preset ->
-                val presetLayout = BuiltInTouchscreenLayouts.profile(preset)
-                    .layout(editingOrientation)
-                    .sanitized()
-                FilterChip(
-                    selected = draft == presetLayout,
-                    onClick = { onSelectPreset(presetLayout) },
-                    label = { Text(presetLabel(preset)) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            Text(stringResource(R.string.layout_preset_hint), style = MaterialTheme.typography.bodySmall)
             OutlinedButton(
                 onClick = onReset,
                 modifier = Modifier.fillMaxWidth(),
@@ -999,6 +1044,7 @@ private fun ControlPreview(
 ) {
     val label = controlLabel(control)
     when (control) {
+        TouchControlId.DPAD -> DpadVisual(modifier = modifier)
         TouchControlId.LEFT_STICK, TouchControlId.RIGHT_STICK -> Box(
             modifier = modifier,
             contentAlignment = Alignment.Center,
@@ -1075,6 +1121,7 @@ internal fun controlLabel(control: TouchControlId): String = when (control) {
     TouchControlId.RIGHT_STICK_BUTTON -> "R3"
     TouchControlId.GUIDE -> stringResource(R.string.guide_button)
     TouchControlId.CAPTURE -> stringResource(R.string.capture_button)
+    TouchControlId.KEYBOARD -> stringResource(R.string.keyboard_button)
     TouchControlId.SESSION_MENU -> stringResource(R.string.session_menu)
 }
 

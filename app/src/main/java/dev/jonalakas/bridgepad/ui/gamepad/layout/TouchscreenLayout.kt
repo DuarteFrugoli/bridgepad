@@ -14,7 +14,7 @@ enum class TouchControlId(
     val customizableShape: Boolean = true,
 ) {
     MOUSE_TOUCHPAD(210f, 92f, customizableShape = false),
-    DPAD(132f, 132f, customizableShape = false),
+    DPAD(132f, 132f, lockAspectRatio = true, customizableShape = false),
     LEFT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true, defaultShape = TouchControlShape.CIRCLE, customizableShape = false),
     RIGHT_STICK(132f, 132f, lockAspectRatio = true, adjustableDeadzone = true, defaultShape = TouchControlShape.CIRCLE, customizableShape = false),
     LEFT_TRIGGER(76f, 52f),
@@ -31,6 +31,7 @@ enum class TouchControlId(
     RIGHT_STICK_BUTTON(64f, 48f),
     GUIDE(64f, 48f),
     CAPTURE(64f, 48f),
+    KEYBOARD(64f, 48f),
     SESSION_MENU(116f, 48f),
 }
 
@@ -205,6 +206,7 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.56f, 0.60f, 0.75f),
             TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.70f, 0.65f),
             TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.53f, 0.65f),
+            TouchControlId.KEYBOARD to TouchControlPlacement(0.50f, 0.08f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.87f, 0.70f),
         ),
     )
@@ -229,6 +231,7 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.56f, 0.62f, 0.75f),
             TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.72f, 0.65f),
             TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.54f, 0.65f),
+            TouchControlId.KEYBOARD to TouchControlPlacement(0.50f, 0.08f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.84f, 0.70f),
         ),
     )
@@ -253,6 +256,7 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.57f, 0.72f),
             TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.81f, 0.65f),
             TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.64f, 0.65f),
+            TouchControlId.KEYBOARD to TouchControlPlacement(0.50f, 0.08f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.90f),
         ),
     ).withMobileShapes()
@@ -277,6 +281,7 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.82f, 0.70f),
             TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.82f, 0.65f),
             TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.68f, 0.65f),
+            TouchControlId.KEYBOARD to TouchControlPlacement(0.50f, 0.06f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.92f, 0.72f),
         ),
     )
@@ -301,6 +306,7 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.82f, 0.70f),
             TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.82f, 0.65f),
             TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.68f, 0.65f),
+            TouchControlId.KEYBOARD to TouchControlPlacement(0.50f, 0.06f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.92f, 0.72f),
         ),
     )
@@ -325,6 +331,7 @@ object BuiltInTouchscreenLayouts {
             TouchControlId.RIGHT_STICK_BUTTON to TouchControlPlacement(0.66f, 0.84f, 0.70f),
             TouchControlId.GUIDE to TouchControlPlacement(0.50f, 0.83f, 0.65f),
             TouchControlId.CAPTURE to TouchControlPlacement(0.50f, 0.70f, 0.65f),
+            TouchControlId.KEYBOARD to TouchControlPlacement(0.50f, 0.06f, 0.65f),
             TouchControlId.SESSION_MENU to TouchControlPlacement(0.50f, 0.93f, 0.72f),
         ),
     ).withMobileShapes()
@@ -341,6 +348,7 @@ private fun TouchscreenLayout.withMobileShapes(): TouchscreenLayout = copy(
         placement.copy(
             shape = when (control) {
                 TouchControlId.MOUSE_TOUCHPAD,
+                TouchControlId.DPAD,
                 TouchControlId.SESSION_MENU -> TouchControlShape.ROUNDED_RECTANGLE
                 else -> TouchControlShape.CIRCLE
             },
@@ -357,7 +365,7 @@ object DefaultTouchscreenLayoutProfile {
 }
 
 internal object TouchscreenLayoutProfileCodec {
-    private const val VERSION = "3"
+    private const val VERSION = "4"
 
     fun encode(profile: TouchscreenLayoutProfile): String = buildString {
         appendLine(VERSION)

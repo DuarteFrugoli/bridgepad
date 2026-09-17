@@ -4,6 +4,8 @@ import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
+import dev.jonalakas.bridgepad.core.ports.KeyboardKey
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -143,6 +145,7 @@ object BridgePacketCodec {
                     }
                     is BridgeMessage.GamepadSnapshot -> output.writeGamepad(message.state)
                     is BridgeMessage.PointerFrame -> output.writePointer(message.report)
+                    is BridgeMessage.KeyboardFrame -> output.writeKeyboard(message.input)
                     is BridgeMessage.Ping -> output.writeLong(message.nonce)
                     is BridgeMessage.Pong -> output.writeLong(message.nonce)
                     is BridgeMessage.Status -> {
@@ -221,6 +224,7 @@ object BridgePacketCodec {
                     BridgeMessageType.GAMEPAD_SNAPSHOT ->
                         BridgeMessage.GamepadSnapshot(input.readGamepad())
                     BridgeMessageType.POINTER -> BridgeMessage.PointerFrame(input.readPointer())
+                    BridgeMessageType.KEYBOARD -> BridgeMessage.KeyboardFrame(input.readKeyboard())
                     BridgeMessageType.PING -> BridgeMessage.Ping(input.readLong())
                     BridgeMessageType.PONG -> BridgeMessage.Pong(input.readLong())
                     BridgeMessageType.STATUS -> BridgeMessage.Status(
@@ -339,6 +343,41 @@ object BridgePacketCodec {
         deltaX = readInt(),
         deltaY = readInt(),
     )
+
+    private fun DataOutputStream.writeKeyboard(input: KeyboardInput) {
+        when (input) {
+            is KeyboardInput.Text -> {
+                writeByte(0)
+                writeUtf8U16(input.value)
+            }
+            is KeyboardInput.Key -> {
+                writeByte(1)
+                writeByte(input.key.wireCode)
+            }
+        }
+    }
+
+    private fun DataInputStream.readKeyboard(): KeyboardInput = when (readUnsignedByte()) {
+        0 -> KeyboardInput.Text(readUtf8U16())
+        1 -> KeyboardInput.Key(keyboardKeyFromWireCode(readUnsignedByte()))
+        else -> throw BridgeProtocolException("Unknown keyboard input type")
+    }
+
+    private val KeyboardKey.wireCode: Int
+        get() = when (this) {
+            KeyboardKey.BACKSPACE -> 0
+            KeyboardKey.ENTER -> 1
+            KeyboardKey.TAB -> 2
+            KeyboardKey.ESCAPE -> 3
+        }
+
+    private fun keyboardKeyFromWireCode(code: Int): KeyboardKey = when (code) {
+        0 -> KeyboardKey.BACKSPACE
+        1 -> KeyboardKey.ENTER
+        2 -> KeyboardKey.TAB
+        3 -> KeyboardKey.ESCAPE
+        else -> throw BridgeProtocolException("Unknown keyboard key: $code")
+    }
 
     private fun DataOutputStream.writeUtf8U8(value: String, maxBytes: Int, field: String) {
         val encoded = value.toByteArray(Charsets.UTF_8)

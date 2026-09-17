@@ -29,4 +29,20 @@ class TouchscreenGamepadScreenTest {
         assertEquals(DpadDirection.SOUTH_WEST, directionForPosition(Offset(0f, 100f), 100f, 100f))
         assertEquals(DpadDirection.NORTH_WEST, directionForPosition(Offset(0f, 0f), 100f, 100f))
     }
+
+    @Test
+    fun dpadConnectorTrianglesRemainClickableNearTheCenter() {
+        assertEquals(DpadDirection.NORTH, directionForPosition(Offset(50f, 46f), 100f, 100f))
+        assertEquals(DpadDirection.EAST, directionForPosition(Offset(54f, 50f), 100f, 100f))
+        assertEquals(DpadDirection.SOUTH, directionForPosition(Offset(50f, 54f), 100f, 100f))
+        assertEquals(DpadDirection.WEST, directionForPosition(Offset(46f, 50f), 100f, 100f))
+    }
+
+    @Test
+    fun dpadSpacesBetweenConnectorTrianglesStillProduceDiagonals() {
+        assertEquals(DpadDirection.NORTH_EAST, directionForPosition(Offset(54f, 46f), 100f, 100f))
+        assertEquals(DpadDirection.SOUTH_EAST, directionForPosition(Offset(54f, 54f), 100f, 100f))
+        assertEquals(DpadDirection.SOUTH_WEST, directionForPosition(Offset(46f, 54f), 100f, 100f))
+        assertEquals(DpadDirection.NORTH_WEST, directionForPosition(Offset(46f, 46f), 100f, 100f))
+    }
 }

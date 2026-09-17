@@ -91,6 +91,7 @@ class BluetoothHidService : Service() {
             recordOutputDelay()
             sendScheduledReport()
             sendMouseReport()
+            sendKeyboardReport()
             if (!shuttingDown && outputRunning.get()) {
                 outputHandler.postDelayed(this, OUTPUT_INTERVAL_MS)
             }
@@ -647,12 +648,22 @@ class BluetoothHidService : Service() {
         }
     }
 
+    private fun sendKeyboardReport() {
+        if (connectedDevice == null) return
+        val input = inputRouter.consumeKeyboard() ?: return
+        val sent = synchronized(transportLock) { outputTransport.sendKeyboard(input) }
+        if (!sent) {
+            SessionLog.record("KEYBOARD", "A keyboard report could not be sent")
+        }
+    }
+
     private fun stopOutputPipeline() {
         outputRunning.set(false)
         outputHandler.removeCallbacks(outputTick)
         outputScheduler.stop()
         pendingInputTimestampNanos.set(NO_INPUT_TIMESTAMP)
         inputRouter.clearPointer()
+        inputRouter.clearKeyboard()
     }
 
     private fun recordOutputDelay() {

@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothHidDevice
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.GamepadOutputTransport
 import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.ports.TransportCapabilities
 import dev.jonalakas.bridgepad.core.session.DestinationType
 
@@ -22,6 +23,7 @@ class BluetoothHidOutputTransport(
     override val capabilities = TransportCapabilities(
         gamepad = true,
         pointer = true,
+        keyboard = true,
         worksInBackground = true,
     )
 
@@ -41,6 +43,14 @@ class BluetoothHidOutputTransport(
         val device = connectedHost() ?: return false
         val encoded = profile().encodePointer(report) ?: return false
         return hidDevice()?.sendReport(device, encoded.id, encoded.payload) == true
+    }
+
+    override fun sendKeyboard(input: KeyboardInput): Boolean {
+        val device = connectedHost() ?: return false
+        val bluetoothHid = hidDevice() ?: return false
+        return profile().encodeKeyboard(input).all { report ->
+            bluetoothHid.sendReport(device, report.id, report.payload)
+        }
     }
 
     override fun disconnect() {

@@ -5,6 +5,7 @@ import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 object GamepadHidDescriptor {
     const val REPORT_ID = 1
     const val MOUSE_REPORT_ID = 2
+    const val KEYBOARD_REPORT_ID = 3
 
     val bytes = byteArrayOf(
         0x05, 0x01,       // Usage Page (Generic Desktop)
@@ -83,6 +84,30 @@ object GamepadHidDescriptor {
         0x95.toByte(), 0x02,
         0x81.toByte(), 0x06, // Data, Variable, Relative
         0xC0.toByte(),
+        0xC0.toByte(),
+
+        0x05, 0x01,       // Usage Page (Generic Desktop)
+        0x09, 0x06,       // Usage (Keyboard)
+        0xA1.toByte(), 0x01, // Collection (Application)
+        0x85.toByte(), KEYBOARD_REPORT_ID.toByte(),
+        0x05, 0x07,       // Usage Page (Keyboard/Keypad)
+        0x19, 0xE0.toByte(),
+        0x29, 0xE7.toByte(),
+        0x15, 0x00,
+        0x25, 0x01,
+        0x75, 0x01,
+        0x95.toByte(), 0x08,
+        0x81.toByte(), 0x02, // Modifier keys
+        0x95.toByte(), 0x01,
+        0x75, 0x08,
+        0x81.toByte(), 0x03, // Reserved byte
+        0x95.toByte(), 0x06,
+        0x75, 0x08,
+        0x15, 0x00,
+        0x25, 0x65,
+        0x19, 0x00,
+        0x29, 0x65,
+        0x81.toByte(), 0x00, // Six key usages
         0xC0.toByte(),
     )
 

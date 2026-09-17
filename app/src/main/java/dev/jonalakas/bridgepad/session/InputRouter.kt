@@ -6,12 +6,14 @@ import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.mapping.InputMerger
 import dev.jonalakas.bridgepad.core.mapping.AdaptiveInputOwnership
 import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
 import dev.jonalakas.bridgepad.input.android.PhysicalGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadSnapshot
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
+import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
 import dev.jonalakas.bridgepad.input.usb.DirectUsbGamepadStore
 import dev.jonalakas.bridgepad.input.usb.DirectUsbState
 import dev.jonalakas.bridgepad.localization.LocalizedMessage
@@ -120,7 +122,11 @@ class InputRouter(scope: CoroutineScope) {
 
     fun consumePointer(): PointerReport? = TouchMouseStore.consume()
 
+    fun consumeKeyboard(): KeyboardInput? = TouchKeyboardStore.consume()
+
     fun clearPointer() = TouchMouseStore.clear()
+
+    fun clearKeyboard() = TouchKeyboardStore.clear()
 
     /** Called with [stateLock] held so inputs from independent adapters remain ordered. */
     private fun publishLocked() {

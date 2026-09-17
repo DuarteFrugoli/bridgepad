@@ -92,6 +92,29 @@ pub trait VirtualPointerDevice: Send {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum KeyboardKey {
+    Backspace,
+    Enter,
+    Tab,
+    Escape,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum KeyboardInput {
+    Text(String),
+    Key(KeyboardKey),
+}
+
+pub trait VirtualKeyboardDevice: Send {
+    /// Sends text or a special key to the operating system's active window.
+    ///
+    /// # Errors
+    ///
+    /// Returns an adapter-specific error if the operating system rejects the input.
+    fn send(&mut self, input: KeyboardInput) -> Result<(), VirtualDeviceError>;
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VirtualDeviceErrorKind {
     UnsupportedPlatform,

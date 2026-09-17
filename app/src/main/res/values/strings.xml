@@ -108,6 +108,10 @@
     <string name="save_layout">Save layout</string>
     <string name="expand_layout_editor_actions">Open layout editor actions</string>
     <string name="collapse_layout_editor_actions">Collapse layout editor actions</string>
+    <string name="discard_layout_title">Discard layout changes?</string>
+    <string name="discard_layout_message">All changes made since opening the editor will be lost.</string>
+    <string name="discard_changes">Discard changes</string>
+    <string name="keep_editing">Keep editing</string>
     <string name="move_layout_options_horizontal">Drag horizontally to move layout options</string>
     <string name="move_layout_options_vertical">Drag vertically to move layout options</string>
     <string name="stick_deadzone">Deadzone</string>
@@ -304,6 +308,7 @@
     <string name="control_hidden">Hidden</string>
     <string name="guide_button">Guide</string>
     <string name="capture_button">Capture</string>
+    <string name="keyboard_button">Keyboard</string>
     <string name="network_session_notification_channel">Wi-Fi gameplay session</string>
     <string name="notification_wifi_session_active">Wi-Fi session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
     <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>

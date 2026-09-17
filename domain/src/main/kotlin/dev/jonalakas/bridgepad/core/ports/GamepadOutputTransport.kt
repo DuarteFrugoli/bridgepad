@@ -10,9 +10,27 @@ data class PointerReport(
     val deltaY: Int = 0,
 )
 
+enum class KeyboardKey {
+    BACKSPACE,
+    ENTER,
+    TAB,
+    ESCAPE,
+}
+
+sealed interface KeyboardInput {
+    data class Text(val value: String) : KeyboardInput {
+        init {
+            require(value.isNotEmpty()) { "Keyboard text must not be empty." }
+        }
+    }
+
+    data class Key(val key: KeyboardKey) : KeyboardInput
+}
+
 data class TransportCapabilities(
     val gamepad: Boolean = true,
     val pointer: Boolean = false,
+    val keyboard: Boolean = false,
     val worksInBackground: Boolean = false,
 )
 
@@ -23,5 +41,6 @@ interface GamepadOutputTransport {
     fun connect(destination: DestinationType, destinationId: String): Boolean
     fun sendGamepad(state: VirtualGamepadState): Boolean
     fun sendPointer(report: PointerReport): Boolean
+    fun sendKeyboard(input: KeyboardInput): Boolean
     fun disconnect()
 }

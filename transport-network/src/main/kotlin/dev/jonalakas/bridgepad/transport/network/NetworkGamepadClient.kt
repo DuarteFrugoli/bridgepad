@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad.transport.network
 
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.protocol.BridgeCapabilities
 import dev.jonalakas.bridgepad.protocol.BridgeCapability
 import dev.jonalakas.bridgepad.protocol.BridgeInputKind
@@ -69,6 +70,7 @@ class NetworkGamepadClient(
     private val latestState = AtomicReference(VirtualGamepadState())
     private val pendingState = AtomicReference<VirtualGamepadState?>(VirtualGamepadState())
     private val pendingPointers = ArrayBlockingQueue<PointerReport>(POINTER_QUEUE_CAPACITY)
+    private val pendingKeyboard = ArrayBlockingQueue<KeyboardInput>(KEYBOARD_QUEUE_CAPACITY)
     @Volatile
     private var socket: SSLSocket? = null
     @Volatile
@@ -96,6 +98,14 @@ class NetworkGamepadClient(
         if (!pendingPointers.offer(report)) {
             pendingPointers.poll()
             pendingPointers.offer(report)
+        }
+    }
+
+    fun sendKeyboard(input: KeyboardInput) {
+        if (stopping.get()) return
+        if (!pendingKeyboard.offer(input)) {
+            pendingKeyboard.poll()
+            pendingKeyboard.offer(input)
         }
     }
 
@@ -143,6 +153,7 @@ class NetworkGamepadClient(
                 )
                 pendingState.set(latestState.get())
                 pendingPointers.clear()
+                pendingKeyboard.clear()
                 Thread.sleep(RECONNECT_DELAYS_MILLIS[(reconnectAttempt - 1).coerceAtMost(2)])
             }
         }
@@ -180,7 +191,11 @@ class NetworkGamepadClient(
                 sequence,
                 BridgeMessage.SessionStart(
                     request.inputKind,
-                    BridgeCapabilities.of(BridgeCapability.GAMEPAD, BridgeCapability.POINTER),
+                    BridgeCapabilities.of(
+                        BridgeCapability.GAMEPAD,
+                        BridgeCapability.POINTER,
+                        BridgeCapability.KEYBOARD,
+                    ),
                 ),
             )
             val ready = readBridgePacket(input).message as? BridgeMessage.SessionReady
@@ -210,6 +225,14 @@ class NetworkGamepadClient(
                         sessionId,
                         sequence,
                         BridgeMessage.PointerFrame(pointer),
+                    )
+                }
+                pendingKeyboard.poll()?.let { keyboard ->
+                    sequence = writeBridgePacket(
+                        connected,
+                        sessionId,
+                        sequence,
+                        BridgeMessage.KeyboardFrame(keyboard),
                     )
                 }
                 val now = System.nanoTime()
@@ -276,6 +299,7 @@ class NetworkGamepadClient(
         const val HEARTBEAT_INTERVAL_NANOS = 500_000_000L
         const val IDLE_POLL_MILLIS = 4L
         const val POINTER_QUEUE_CAPACITY = 64
+        const val KEYBOARD_QUEUE_CAPACITY = 128
         val RECONNECT_DELAYS_MILLIS = longArrayOf(500, 1_000, 2_000)
     }
 }

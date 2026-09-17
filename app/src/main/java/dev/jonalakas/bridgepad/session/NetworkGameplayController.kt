@@ -42,6 +42,7 @@ class NetworkGameplayController(
         pointerJob = scope.launch {
             while (isActive) {
                 inputRouter.consumePointer()?.let(nextClient::sendPointer)
+                inputRouter.consumeKeyboard()?.let(nextClient::sendKeyboard)
                 delay(POINTER_POLL_MILLIS)
             }
         }
@@ -89,6 +90,7 @@ class NetworkGameplayController(
         pointerJob?.cancel()
         pointerJob = null
         inputRouter.clearPointer()
+        inputRouter.clearKeyboard()
     }
 
     private companion object {

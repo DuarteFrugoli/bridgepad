@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,13 +31,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -44,12 +50,16 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.TextFieldValue
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.mapping.AxisMath
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
+import dev.jonalakas.bridgepad.core.ports.KeyboardKey
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
+import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlId
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlPlacement
@@ -125,7 +135,6 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
                 shape = shape,
             )
             TouchControlId.DPAD -> DpadPad(
-                shape = shape,
                 modifier = Modifier.fillMaxSize(),
             )
             TouchControlId.LEFT_STICK -> VirtualStick(
@@ -226,6 +235,10 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
                 shape,
                 Modifier.fillMaxSize(),
             )
+            TouchControlId.KEYBOARD -> AndroidKeyboardButton(
+                shape = shape,
+                modifier = Modifier.fillMaxSize(),
+            )
             TouchControlId.SESSION_MENU -> TouchButton(
                 label = stringResource(R.string.session_menu),
                 onPressedChange = { pressed -> if (pressed) onExit() },
@@ -234,6 +247,73 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
             )
         }
     }
+}
+
+@Composable
+private fun AndroidKeyboardButton(
+    shape: Shape,
+    modifier: Modifier = Modifier,
+) {
+    var value by remember { mutableStateOf(TextFieldValue()) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val description = stringResource(R.string.keyboard_button)
+
+    Box(modifier = modifier.semantics { contentDescription = description }) {
+        BasicTextField(
+            value = value,
+            onValueChange = { next ->
+                submitKeyboardDifference(value.text, next.text)
+                value = next
+            },
+            modifier = Modifier
+                .size(1.dp)
+                .alpha(0f)
+                .focusRequester(focusRequester),
+        )
+        TouchButton(
+            label = KEYBOARD_SYMBOL,
+            onPressedChange = { pressed ->
+                if (pressed) {
+                    focusRequester.requestFocus()
+                    keyboardController?.show()
+                }
+            },
+            shape = shape,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+private fun submitKeyboardDifference(previous: String, next: String) {
+    if (previous == next) return
+    val commonPrefix = previous.indices
+        .takeWhile { index -> index < next.length && previous[index] == next[index] }
+        .count()
+    repeat(previous.length - commonPrefix) {
+        TouchKeyboardStore.submit(KeyboardInput.Key(KeyboardKey.BACKSPACE))
+    }
+    val text = StringBuilder()
+    fun flushText() {
+        if (text.isNotEmpty()) {
+            TouchKeyboardStore.submit(KeyboardInput.Text(text.toString()))
+            text.clear()
+        }
+    }
+    next.substring(commonPrefix).forEach { character ->
+        val key = when (character) {
+            '\n', '\r' -> KeyboardKey.ENTER
+            '\t' -> KeyboardKey.TAB
+            else -> null
+        }
+        if (key == null) {
+            text.append(character)
+        } else {
+            flushText()
+            TouchKeyboardStore.submit(KeyboardInput.Key(key))
+        }
+    }
+    flushText()
 }
 
 @Composable
@@ -453,21 +533,13 @@ private fun VirtualStick(
 
 @Composable
 private fun DpadPad(
-    shape: Shape,
     modifier: Modifier = Modifier,
 ) {
     val dpadLabel = stringResource(R.string.dpad_name)
     var direction by remember { mutableStateOf(DpadDirection.NEUTRAL) }
-    val base = MaterialTheme.colorScheme.surfaceVariant
-    val active = MaterialTheme.colorScheme.primary
-    val content = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = modifier
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f),
-                shape = shape,
-            )
             .semantics {
                 contentDescription = dpadLabel
                 stateDescription = direction.name
@@ -496,6 +568,67 @@ private fun DpadPad(
                 }
             },
     ) {
+        DpadVisual(direction = direction, modifier = Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+internal fun DpadVisual(
+    direction: DpadDirection = DpadDirection.NEUTRAL,
+    modifier: Modifier = Modifier,
+) {
+    val base = MaterialTheme.colorScheme.surfaceVariant
+    val active = MaterialTheme.colorScheme.primary
+    val content = MaterialTheme.colorScheme.onSurfaceVariant
+    Box(modifier = modifier) {
+        Canvas(Modifier.fillMaxSize()) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val horizontalStart = size.width * (DPAD_CENTER_FRACTION - DPAD_CONNECTOR_HALF_BASE)
+            val horizontalEnd = size.width * (DPAD_CENTER_FRACTION + DPAD_CONNECTOR_HALF_BASE)
+            val verticalStart = size.height * (DPAD_CENTER_FRACTION - DPAD_CONNECTOR_HALF_BASE)
+            val verticalEnd = size.height * (DPAD_CENTER_FRACTION + DPAD_CONNECTOR_HALF_BASE)
+            val innerX = size.width * DPAD_INNER_EDGE
+            val innerY = size.height * DPAD_INNER_EDGE
+            val farInnerX = size.width * (1f - DPAD_INNER_EDGE)
+            val farInnerY = size.height * (1f - DPAD_INNER_EDGE)
+
+            fun connector(
+                first: Offset,
+                second: Offset,
+                selected: Boolean,
+            ) {
+                drawPath(
+                    path = Path().apply {
+                        moveTo(first.x, first.y)
+                        lineTo(second.x, second.y)
+                        lineTo(center.x, center.y)
+                        close()
+                    },
+                    color = if (selected) active else base,
+                )
+            }
+
+            connector(
+                Offset(horizontalStart, innerY),
+                Offset(horizontalEnd, innerY),
+                direction.hasNorth,
+            )
+            connector(
+                Offset(farInnerX, verticalStart),
+                Offset(farInnerX, verticalEnd),
+                direction.hasEast,
+            )
+            connector(
+                Offset(horizontalStart, farInnerY),
+                Offset(horizontalEnd, farInnerY),
+                direction.hasSouth,
+            )
+            connector(
+                Offset(innerX, verticalStart),
+                Offset(innerX, verticalEnd),
+                direction.hasWest,
+            )
+        }
         DpadCell("▲", direction in setOf(DpadDirection.NORTH, DpadDirection.NORTH_EAST, DpadDirection.NORTH_WEST), base, active, content, Modifier.align(Alignment.TopCenter))
         DpadCell("◀", direction in setOf(DpadDirection.WEST, DpadDirection.NORTH_WEST, DpadDirection.SOUTH_WEST), base, active, content, Modifier.align(Alignment.CenterStart))
         DpadCell("▶", direction in setOf(DpadDirection.EAST, DpadDirection.NORTH_EAST, DpadDirection.SOUTH_EAST), base, active, content, Modifier.align(Alignment.CenterEnd))
@@ -514,7 +647,7 @@ private fun DpadCell(
 ) {
     Box(
         modifier = modifier
-            .fillMaxSize(0.36f)
+            .fillMaxSize(DPAD_CELL_FRACTION)
             .aspectRatio(1f)
             .background(if (selected) active else base, RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center,
@@ -525,9 +658,13 @@ private fun DpadCell(
 
 internal fun directionForPosition(position: Offset, width: Float, height: Float): DpadDirection {
     if (width <= 0f || height <= 0f) return DpadDirection.NEUTRAL
+    val horizontal = position.x / width
+    val vertical = position.y / height
     val x = (position.x - width / 2f) / (width / 2f)
     val y = (position.y - height / 2f) / (height / 2f)
-    if (hypot(x, y) < 0.2f) return DpadDirection.NEUTRAL
+    if (hypot(x, y) < DPAD_CENTER_DEAD_ZONE) return DpadDirection.NEUTRAL
+    directionForDpadCell(horizontal, vertical)?.let { return it }
+    directionForDpadConnector(horizontal, vertical)?.let { return it }
     val degrees = (atan2(y, x) * 180f / PI.toFloat() + 360f) % 360f
     return when {
         degrees < 22.5f || degrees >= 337.5f -> DpadDirection.EAST
@@ -540,3 +677,51 @@ internal fun directionForPosition(position: Offset, width: Float, height: Float)
         else -> DpadDirection.NORTH_EAST
     }
 }
+
+private fun directionForDpadCell(x: Float, y: Float): DpadDirection? {
+    val start = (1f - DPAD_CELL_FRACTION) / 2f
+    val end = 1f - start
+    return when {
+        x in start..end && y <= DPAD_INNER_EDGE -> DpadDirection.NORTH
+        x >= 1f - DPAD_INNER_EDGE && y in start..end -> DpadDirection.EAST
+        x in start..end && y >= 1f - DPAD_INNER_EDGE -> DpadDirection.SOUTH
+        x <= DPAD_INNER_EDGE && y in start..end -> DpadDirection.WEST
+        else -> null
+    }
+}
+
+private fun directionForDpadConnector(x: Float, y: Float): DpadDirection? {
+    val horizontalDistance = kotlin.math.abs(x - DPAD_CENTER_FRACTION)
+    val verticalDistance = kotlin.math.abs(y - DPAD_CENTER_FRACTION)
+    val connectorSlope = DPAD_CONNECTOR_HALF_BASE / (DPAD_CENTER_FRACTION - DPAD_INNER_EDGE)
+    return when {
+        y in DPAD_INNER_EDGE..DPAD_CENTER_FRACTION &&
+            horizontalDistance <= (DPAD_CENTER_FRACTION - y) * connectorSlope -> DpadDirection.NORTH
+        x in DPAD_CENTER_FRACTION..(1f - DPAD_INNER_EDGE) &&
+            verticalDistance <= (x - DPAD_CENTER_FRACTION) * connectorSlope -> DpadDirection.EAST
+        y in DPAD_CENTER_FRACTION..(1f - DPAD_INNER_EDGE) &&
+            horizontalDistance <= (y - DPAD_CENTER_FRACTION) * connectorSlope -> DpadDirection.SOUTH
+        x in DPAD_INNER_EDGE..DPAD_CENTER_FRACTION &&
+            verticalDistance <= (DPAD_CENTER_FRACTION - x) * connectorSlope -> DpadDirection.WEST
+        else -> null
+    }
+}
+
+private val DpadDirection.hasNorth: Boolean
+    get() = this in setOf(DpadDirection.NORTH, DpadDirection.NORTH_EAST, DpadDirection.NORTH_WEST)
+
+private val DpadDirection.hasEast: Boolean
+    get() = this in setOf(DpadDirection.EAST, DpadDirection.NORTH_EAST, DpadDirection.SOUTH_EAST)
+
+private val DpadDirection.hasSouth: Boolean
+    get() = this in setOf(DpadDirection.SOUTH, DpadDirection.SOUTH_EAST, DpadDirection.SOUTH_WEST)
+
+private val DpadDirection.hasWest: Boolean
+    get() = this in setOf(DpadDirection.WEST, DpadDirection.NORTH_WEST, DpadDirection.SOUTH_WEST)
+
+private const val KEYBOARD_SYMBOL = "⌨"
+private const val DPAD_CELL_FRACTION = 0.36f
+private const val DPAD_INNER_EDGE = 0.36f
+private const val DPAD_CENTER_FRACTION = 0.5f
+private const val DPAD_CONNECTOR_HALF_BASE = 0.09f
+private const val DPAD_CENTER_DEAD_ZONE = 0.05f

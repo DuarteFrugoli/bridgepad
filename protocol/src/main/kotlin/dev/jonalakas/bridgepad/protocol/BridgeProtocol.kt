@@ -32,7 +32,7 @@ data class PeerId(val high: Long, val low: Long) {
 }
 
 enum class BridgeCapability(val bit: Int) {
-    GAMEPAD(0), POINTER(1), RUMBLE(2), VIDEO(3), AUDIO(4),
+    GAMEPAD(0), POINTER(1), RUMBLE(2), VIDEO(3), AUDIO(4), KEYBOARD(5),
 }
 
 @JvmInline
@@ -58,7 +58,8 @@ enum class BridgeMessageType(val code: Int) {
     HELLO(0x01), HELLO_ACK(0x02), SESSION_START(0x03), SESSION_READY(0x04), SESSION_STOP(0x05),
     PAIR_REQUEST(0x06), PAIR_CHALLENGE(0x07), PAIR_PROOF(0x08), PAIR_RESULT(0x09),
     AUTH_REQUEST(0x0a), AUTH_CHALLENGE(0x0b), AUTH_PROOF(0x0c), AUTH_RESULT(0x0d),
-    GAMEPAD_SNAPSHOT(0x10), POINTER(0x11), PING(0x20), PONG(0x21), STATUS(0x30), ERROR(0x31),
+    GAMEPAD_SNAPSHOT(0x10), POINTER(0x11), KEYBOARD(0x12),
+    PING(0x20), PONG(0x21), STATUS(0x30), ERROR(0x31),
     RUMBLE(0x40);
 
     companion object {

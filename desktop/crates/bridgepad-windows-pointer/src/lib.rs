@@ -3,11 +3,13 @@
 #[cfg(windows)]
 mod platform {
     use bridgepad_virtual_device::{
-        PointerReport, VirtualDeviceError, VirtualDeviceErrorKind, VirtualPointerDevice,
+        KeyboardInput, KeyboardKey, PointerReport, VirtualDeviceError, VirtualDeviceErrorKind,
+        VirtualKeyboardDevice, VirtualPointerDevice,
     };
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        INPUT, INPUT_0, INPUT_MOUSE, MOUSE_EVENT_FLAGS, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-        MOUSEEVENTF_MOVE, MOUSEINPUT, SendInput,
+        INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_KEYUP,
+        KEYEVENTF_UNICODE, MOUSE_EVENT_FLAGS, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
+        MOUSEEVENTF_MOVE, MOUSEINPUT, SendInput, VIRTUAL_KEY, VK_BACK, VK_ESCAPE, VK_RETURN, VK_TAB,
     };
 
     pub struct WindowsPointer {
@@ -61,6 +63,91 @@ mod platform {
         }
     }
 
+    pub struct WindowsKeyboard;
+
+    impl WindowsKeyboard {
+        #[must_use]
+        pub fn connect() -> Self {
+            Self
+        }
+    }
+
+    impl VirtualKeyboardDevice for WindowsKeyboard {
+        fn send(&mut self, input: KeyboardInput) -> Result<(), VirtualDeviceError> {
+            let inputs = match input {
+                KeyboardInput::Text(text) => text
+                    .encode_utf16()
+                    .flat_map(unicode_inputs)
+                    .collect::<Vec<_>>(),
+                KeyboardInput::Key(key) => virtual_key_inputs(match key {
+                    KeyboardKey::Backspace => VK_BACK,
+                    KeyboardKey::Enter => VK_RETURN,
+                    KeyboardKey::Tab => VK_TAB,
+                    KeyboardKey::Escape => VK_ESCAPE,
+                }),
+            };
+            send_keyboard_inputs(&inputs)
+        }
+    }
+
+    fn unicode_inputs(code_unit: u16) -> [INPUT; 2] {
+        [
+            keyboard_input(VIRTUAL_KEY(0), code_unit, KEYEVENTF_UNICODE),
+            keyboard_input(
+                VIRTUAL_KEY(0),
+                code_unit,
+                KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
+            ),
+        ]
+    }
+
+    fn virtual_key_inputs(key: VIRTUAL_KEY) -> Vec<INPUT> {
+        vec![
+            keyboard_input(key, 0, Default::default()),
+            keyboard_input(key, 0, KEYEVENTF_KEYUP),
+        ]
+    }
+
+    fn keyboard_input(
+        virtual_key: VIRTUAL_KEY,
+        scan_code: u16,
+        flags: windows::Win32::UI::Input::KeyboardAndMouse::KEYBD_EVENT_FLAGS,
+    ) -> INPUT {
+        INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: virtual_key,
+                    wScan: scan_code,
+                    dwFlags: flags,
+                    time: 0,
+                    dwExtraInfo: 0,
+                },
+            },
+        }
+    }
+
+    fn send_keyboard_inputs(inputs: &[INPUT]) -> Result<(), VirtualDeviceError> {
+        if inputs.is_empty() {
+            return Ok(());
+        }
+        // SAFETY: every element is a fully initialized keyboard INPUT and the
+        // slice remains valid for the duration of this synchronous call.
+        let sent = unsafe {
+            SendInput(
+                inputs,
+                i32::try_from(std::mem::size_of::<INPUT>()).expect("INPUT size fits i32"),
+            )
+        };
+        if sent as usize != inputs.len() {
+            return Err(VirtualDeviceError::new(
+                VirtualDeviceErrorKind::Update,
+                "Windows rejected a keyboard input report",
+            ));
+        }
+        Ok(())
+    }
+
     fn mouse_flags(previous_buttons: u8, report: PointerReport) -> MOUSE_EVENT_FLAGS {
         let mut flags = MOUSE_EVENT_FLAGS(0);
         if report.delta_x != 0 || report.delta_y != 0 {
@@ -105,7 +192,8 @@ mod platform {
 #[cfg(not(windows))]
 mod platform {
     use bridgepad_virtual_device::{
-        PointerReport, VirtualDeviceError, VirtualDeviceErrorKind, VirtualPointerDevice,
+        KeyboardInput, PointerReport, VirtualDeviceError, VirtualDeviceErrorKind,
+        VirtualKeyboardDevice, VirtualPointerDevice,
     };
 
     pub struct WindowsPointer;
@@ -125,6 +213,24 @@ mod platform {
             ))
         }
     }
+
+    pub struct WindowsKeyboard;
+
+    impl WindowsKeyboard {
+        #[must_use]
+        pub fn connect() -> Self {
+            Self
+        }
+    }
+
+    impl VirtualKeyboardDevice for WindowsKeyboard {
+        fn send(&mut self, _input: KeyboardInput) -> Result<(), VirtualDeviceError> {
+            Err(VirtualDeviceError::new(
+                VirtualDeviceErrorKind::UnsupportedPlatform,
+                "Windows keyboard output is unavailable on this platform",
+            ))
+        }
+    }
 }
 
-pub use platform::WindowsPointer;
+pub use platform::{WindowsKeyboard, WindowsPointer};

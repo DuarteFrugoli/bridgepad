@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad.output.hid
 
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.session.OutputAdapterDescriptor
 import dev.jonalakas.bridgepad.core.session.OutputAdapterId
 
@@ -21,6 +22,7 @@ interface BluetoothHidProfile {
 
     fun encodeGamepad(state: VirtualGamepadState): HidReport
     fun encodePointer(report: PointerReport): HidReport?
+    fun encodeKeyboard(input: KeyboardInput): List<HidReport>
 
     fun onGetReport(type: Byte, id: Byte, bufferSize: Int): HidHostRequestResult =
         HidHostRequestResult.Ignored

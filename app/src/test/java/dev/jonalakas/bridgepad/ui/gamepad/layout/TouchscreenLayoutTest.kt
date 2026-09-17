@@ -103,9 +103,10 @@ class TouchscreenLayoutTest {
     }
 
     @Test
-    fun mobilePresetUsesCircularControlsExceptForTouchpadAndSessionMenu() {
+    fun mobilePresetKeepsDpadAndSurfacesRounded() {
         val roundedControls = setOf(
             TouchControlId.MOUSE_TOUCHPAD,
+            TouchControlId.DPAD,
             TouchControlId.SESSION_MENU,
         )
 
@@ -140,9 +141,19 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun dpadAlwaysKeepsOneToOneAspectRatio() {
+        val placement = DefaultTouchscreenLayout.value
+            .resize(TouchControlId.DPAD, widthScale = 1.8f, heightScale = 0.7f)
+            .placement(TouchControlId.DPAD)
+
+        assertEquals(1.8f, placement.widthScale)
+        assertEquals(placement.widthScale, placement.heightScale)
+    }
+
+    @Test
     fun partialSavedLayoutUsesDefaultsForMissingControls() {
         val decoded = TouchscreenLayoutProfileCodec.decode(
-            "3\nLANDSCAPE,FACE_SOUTH,0.5,0.5,1.2,0.8,0.05,true,ROUNDED_RECTANGLE\n",
+            "4\nLANDSCAPE,FACE_SOUTH,0.5,0.5,1.2,0.8,0.05,true,ROUNDED_RECTANGLE\n",
         )?.landscape
 
         assertNotNull(decoded)
@@ -315,7 +326,7 @@ class TouchscreenLayoutTest {
     @Test
     fun invalidValuesAreSanitized() {
         val decoded = TouchscreenLayoutProfileCodec.decode(
-            "3\nLANDSCAPE,LEFT_STICK,NaN,4.0,99.0,99.0,NaN,true,CIRCLE\n",
+            "4\nLANDSCAPE,LEFT_STICK,NaN,4.0,99.0,99.0,NaN,true,CIRCLE\n",
         )
         val placement = decoded?.landscape?.placement(TouchControlId.LEFT_STICK)
 

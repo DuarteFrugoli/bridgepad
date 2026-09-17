@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad.protocol
 
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 
 /** Transport-independent messages exchanged by BridgePad peers. */
 sealed interface BridgeMessage {
@@ -141,6 +142,10 @@ sealed interface BridgeMessage {
         val report: PointerReport,
     ) : BridgeMessage {
         override val type = BridgeMessageType.POINTER
+    }
+
+    data class KeyboardFrame(val input: KeyboardInput) : BridgeMessage {
+        override val type = BridgeMessageType.KEYBOARD
     }
 
     data class Ping(val nonce: Long) : BridgeMessage {
