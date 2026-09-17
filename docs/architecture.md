@@ -58,6 +58,15 @@ The visible gameplay surface is presentation state, not input-routing state.
 Opening the virtual controller or the large mouse touchpad never disables a
 physical controller, stops touchscreen input, or restarts the output transport.
 
+`SessionUiViewModel` owns that presentation state as a small reducer with an
+explicit active transport and surface. Bluetooth and Wi-Fi publish connection
+events to it; they never set shared screen booleans or close another transport's
+surface directly. Automatic surface selection opens the virtual controller
+without a physical gamepad and the mouse touchpad with one. Once the user chooses
+a surface manually, input-device changes do not override that choice. The
+ViewModel also preserves the active surface across Activity recreation and
+orientation changes.
+
 `BridgePadApplication` is the process-level composition root and owns the shared
 input router. The Bluetooth foreground service is only an Android lifecycle host
 for the Bluetooth adapter; it neither creates nor destroys the input pipeline and

@@ -27,6 +27,15 @@ class DependencyRulesTest {
         assertTrue("MainActivity must use SessionCoordinator", !importsOutput)
     }
 
+    @Test
+    fun activityUsesUnifiedSessionUiState() {
+        val source = sourceRoot().resolve("MainActivity.kt").readText()
+        assertTrue("MainActivity must use SessionUiViewModel", "SessionUiViewModel" in source)
+        assertTrue("Legacy touch-controller flag must not return", "showTouchController" !in source)
+        assertTrue("Legacy mouse-touchpad flag must not return", "showMouseTouchpad" !in source)
+        assertTrue("Legacy connection timing flag must not return", "openAfterConnection" !in source)
+    }
+
     private fun assertNoImport(root: Path, forbiddenPackage: String) {
         val violations = Files.walk(root).use { files ->
             files.filter { it.extension == "kt" }

@@ -44,6 +44,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.jonalakas.bridgepad.diagnostics.AndroidDeviceInfoProvider
 import dev.jonalakas.bridgepad.diagnostics.DiagnosticReport
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
@@ -73,6 +74,9 @@ import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
 import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
+import dev.jonalakas.bridgepad.ui.session.SessionSurface
+import dev.jonalakas.bridgepad.ui.session.SessionUiEvent
+import dev.jonalakas.bridgepad.ui.session.SessionUiViewModel
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
 
 class MainActivity : ComponentActivity() {
@@ -94,8 +98,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             BridgePadTheme {
                 var bluetoothPermissionGranted by remember { mutableStateOf(hasBluetoothPermission()) }
-                var showTouchController by rememberSaveable { mutableStateOf(false) }
-                var showMouseTouchpad by rememberSaveable { mutableStateOf(false) }
+                val sessionUiViewModel: SessionUiViewModel = viewModel()
+                val sessionUiState by sessionUiViewModel.state.collectAsState()
                 var showGamepadMapping by rememberSaveable { mutableStateOf(false) }
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var showSettings by rememberSaveable { mutableStateOf(false) }
@@ -114,7 +118,6 @@ class MainActivity : ComponentActivity() {
                 var pairNewPcSelected by rememberSaveable { mutableStateOf(false) }
                 var pendingDestination by rememberSaveable { mutableStateOf<String?>(null) }
                 var connectionGate by rememberSaveable { mutableStateOf<String?>(null) }
-                var openAfterConnection by rememberSaveable { mutableStateOf(false) }
                 var pairedHosts by remember { mutableStateOf(readPairedHosts()) }
                 var bluetoothEnabled by remember { mutableStateOf(isBluetoothEnabled()) }
                 DisposableEffect(Unit) {
@@ -179,11 +182,15 @@ class MainActivity : ComponentActivity() {
                     ActivityResultContracts.StartActivityForResult(),
                 ) { result ->
                     if (!sessionCoordinator.state.value.sessionActive) {
-                        openAfterConnection = false
+                        sessionUiViewModel.dispatch(
+                            SessionUiEvent.TransportFailed(ConnectionMethod.BLUETOOTH),
+                        )
                     } else if (result.resultCode > 0) {
                         sessionCoordinator.pairingWindowStarted(result.resultCode)
                     } else {
-                        openAfterConnection = false
+                        sessionUiViewModel.dispatch(
+                            SessionUiEvent.TransportFailed(ConnectionMethod.BLUETOOTH),
+                        )
                         sessionCoordinator.updateState {
                             it.copy(
                                 message = LocalizedMessage(R.string.visibility_not_enabled),
@@ -201,6 +208,8 @@ class MainActivity : ComponentActivity() {
                 val touchscreenLayout by TouchscreenLayoutStore.layout.collectAsState()
                 val physicalGamepadState by PhysicalGamepadStore.state.collectAsState()
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
+                val physicalControllerConnected =
+                    physicalGamepadState.devices.isNotEmpty() || directUsbState.active
                 val effectiveCaptureMode = if (hidState.sessionActive) {
                     hidState.physicalCaptureMode
                 } else {
@@ -259,16 +268,6 @@ class MainActivity : ComponentActivity() {
                     if (showGamepadMapping && mappingInput == null) showGamepadMapping = false
                 }
 
-                LaunchedEffect(networkGameplayStatus, showNetworkDiagnostic) {
-                    if (showNetworkDiagnostic) {
-                        if (networkGameplayStatus is NetworkGamepadStatus.Active) {
-                            enterGamepadMode()
-                        } else {
-                            exitGamepadMode()
-                        }
-                    }
-                }
-
                 LaunchedEffect(networkPairingStatus) {
                     val success = networkPairingStatus as? dev.jonalakas.bridgepad.session.NetworkPairingStatus.Success
                     if (success != null) selectedNetworkDesktopId = success.peerIdHex
@@ -276,28 +275,45 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(
                     networkGameplayStatus,
-                    effectiveConnectionMethod,
-                    openAfterConnection,
-                    physicalGamepadState.devices,
-                    directUsbState.active,
+                    physicalControllerConnected,
                     showNetworkDiagnostic,
                 ) {
-                    if (showNetworkDiagnostic || effectiveConnectionMethod != ConnectionMethod.WIFI) {
-                        return@LaunchedEffect
-                    }
-                    if (networkGameplayStatus is NetworkGamepadStatus.Active && openAfterConnection) {
-                        openAfterConnection = false
-                        val physicalConnected = physicalGamepadState.devices.isNotEmpty() || directUsbState.active
-                        showTouchController = !physicalConnected
-                        showMouseTouchpad = physicalConnected
-                    }
-                    if (networkGameplayStatus is NetworkGamepadStatus.Failed) {
-                        openAfterConnection = false
-                        if (showTouchController || showMouseTouchpad) {
-                            showTouchController = false
-                            showMouseTouchpad = false
-                            exitGamepadMode()
+                    if (!showNetworkDiagnostic) {
+                        when (networkGameplayStatus) {
+                            NetworkGamepadStatus.Active -> sessionUiViewModel.dispatch(
+                                SessionUiEvent.TransportConnected(
+                                    ConnectionMethod.WIFI,
+                                    physicalControllerConnected,
+                                ),
+                            )
+                            is NetworkGamepadStatus.Failed -> sessionUiViewModel.dispatch(
+                                SessionUiEvent.TransportFailed(ConnectionMethod.WIFI),
+                            )
+                            NetworkGamepadStatus.Stopped -> sessionUiViewModel.dispatch(
+                                SessionUiEvent.TransportStopped(ConnectionMethod.WIFI),
+                            )
+                            else -> Unit
                         }
+                    }
+                }
+
+                LaunchedEffect(physicalControllerConnected) {
+                    sessionUiViewModel.dispatch(
+                        SessionUiEvent.PhysicalControllerChanged(physicalControllerConnected),
+                    )
+                }
+
+                LaunchedEffect(
+                    sessionUiState.surface,
+                    showNetworkDiagnostic,
+                    networkGameplayStatus,
+                ) {
+                    val diagnosticUsesGamepadMode =
+                        showNetworkDiagnostic && networkGameplayStatus is NetworkGamepadStatus.Active
+                    if (sessionUiState.surface != SessionSurface.NONE || diagnosticUsesGamepadMode) {
+                        enterGamepadMode()
+                    } else {
+                        exitGamepadMode()
                     }
                 }
 
@@ -372,7 +388,9 @@ class MainActivity : ComponentActivity() {
                         hidState.status == HidSessionStatus.READY -> {
                             pendingDestination = null
                             connectionGate = null
-                            openAfterConnection = true
+                            sessionUiViewModel.dispatch(
+                                SessionUiEvent.ConnectionRequested(ConnectionMethod.BLUETOOTH),
+                            )
                             if (destination == NEW_PC) {
                                 discoverableLauncher.launch(
                                     Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
@@ -400,27 +418,31 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(
                     hidState.status,
                     hidState.sessionActive,
-                    openAfterConnection,
-                    physicalGamepadState.devices,
-                    directUsbState.active,
+                    physicalControllerConnected,
+                    sessionUiState.activeTransport,
                 ) {
-                    if (hidState.status == HidSessionStatus.CONNECTED && openAfterConnection) {
-                        openAfterConnection = false
-                        val physicalConnected = physicalGamepadState.devices.isNotEmpty() || directUsbState.active
-                        showTouchController = !physicalConnected
-                        showMouseTouchpad = physicalConnected
-                        hidState.connectedHostAddress?.let { address ->
-                            selectedAddress = address
-                            pairNewPcSelected = false
+                    when {
+                        hidState.status == HidSessionStatus.CONNECTED -> {
+                            sessionUiViewModel.dispatch(
+                                SessionUiEvent.TransportConnected(
+                                    ConnectionMethod.BLUETOOTH,
+                                    physicalControllerConnected,
+                                ),
+                            )
+                            hidState.connectedHostAddress?.let { address ->
+                                selectedAddress = address
+                                pairNewPcSelected = false
+                            }
                         }
-                    }
-                    if (!hidState.sessionActive || hidState.status == HidSessionStatus.ERROR) {
-                        openAfterConnection = false
-                    }
-                    if (hidState.status != HidSessionStatus.CONNECTED && (showTouchController || showMouseTouchpad)) {
-                        showTouchController = false
-                        showMouseTouchpad = false
-                        exitGamepadMode()
+                        hidState.status == HidSessionStatus.ERROR -> sessionUiViewModel.dispatch(
+                            SessionUiEvent.TransportFailed(ConnectionMethod.BLUETOOTH),
+                        )
+                        !hidState.sessionActive ||
+                            sessionUiState.activeTransport == ConnectionMethod.BLUETOOTH -> {
+                            sessionUiViewModel.dispatch(
+                                SessionUiEvent.TransportStopped(ConnectionMethod.BLUETOOTH),
+                            )
+                        }
                     }
                 }
 
@@ -452,7 +474,7 @@ class MainActivity : ComponentActivity() {
                 } else if (showNetworkDiagnostic) {
                     NetworkDiagnosticScreen(
                         gameplayStatus = networkGameplayStatus,
-                        physicalControllerConnected = physicalGamepadState.devices.isNotEmpty() || directUsbState.active,
+                        physicalControllerConnected = physicalControllerConnected,
                         touchscreenLayout = touchscreenLayout,
                         onStartGameplay = { request ->
                             networkGameplayController.start(request, effectiveCaptureMode)
@@ -541,21 +563,17 @@ class MainActivity : ComponentActivity() {
                         },
                         onCancel = { showGamepadMapping = false },
                     )
-                } else if (showTouchController) {
-                    LaunchedEffect(Unit) { enterGamepadMode() }
+                } else if (sessionUiState.surface == SessionSurface.TOUCH_CONTROLLER) {
                     TouchscreenGamepadScreen(
                         layout = touchscreenLayout,
                         onExit = {
-                            showTouchController = false
-                            exitGamepadMode()
+                            sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
                         },
                     )
-                } else if (showMouseTouchpad) {
-                    LaunchedEffect(Unit) { enterGamepadMode() }
+                } else if (sessionUiState.surface == SessionSurface.MOUSE_TOUCHPAD) {
                     MouseTouchpadScreen(
                         onExit = {
-                            showMouseTouchpad = false
-                            exitGamepadMode()
+                            sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
                         },
                     )
                 } else HomeScreen(
@@ -640,7 +658,9 @@ class MainActivity : ComponentActivity() {
                     onPlay = {
                         if (effectiveConnectionMethod == ConnectionMethod.WIFI) {
                             selectedNetworkDesktopId?.let { peerId ->
-                                openAfterConnection = true
+                                sessionUiViewModel.dispatch(
+                                    SessionUiEvent.ConnectionRequested(ConnectionMethod.WIFI),
+                                )
                                 networkDesktopCoordinator.startGameplay(peerId, effectiveCaptureMode)
                             }
                             return@HomeScreen
@@ -673,10 +693,14 @@ class MainActivity : ComponentActivity() {
                         showTouchscreenLayoutEditor = true
                     },
                     onOpenTouchController = {
-                        showTouchController = true
+                        sessionUiViewModel.dispatch(
+                            SessionUiEvent.SurfaceSelected(SessionSurface.TOUCH_CONTROLLER),
+                        )
                     },
                     onOpenMouseTouchpad = {
-                        showMouseTouchpad = true
+                        sessionUiViewModel.dispatch(
+                            SessionUiEvent.SurfaceSelected(SessionSurface.MOUSE_TOUCHPAD),
+                        )
                     },
                     onStopHid = {
                         captureModeName = PhysicalCaptureMode.COMPATIBILITY.name
@@ -688,7 +712,7 @@ class MainActivity : ComponentActivity() {
                         pairNewPcSelected = false
                         pendingDestination = null
                         connectionGate = null
-                        openAfterConnection = false
+                        sessionUiViewModel.dispatch(SessionUiEvent.SessionEnded)
                         if (hidState.sessionActive) sessionCoordinator.stop()
                         if (
                             networkGameplayStatus !is NetworkGamepadStatus.Stopped &&
