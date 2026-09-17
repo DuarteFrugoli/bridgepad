@@ -68,6 +68,7 @@ pub struct TrustedDevice {
 pub struct DaemonSnapshot {
     pub desktop_name: String,
     pub desktop_id: String,
+    pub certificate_fingerprint: String,
     pub listen_address: String,
     pub pairing_code: String,
     pub pairing_expires_in_seconds: u16,
@@ -185,6 +186,7 @@ impl DesktopServer {
         Ok(DaemonSnapshot {
             desktop_name: self.state.desktop_name.clone(),
             desktop_id: encode_hex(&self.state.peer_id),
+            certificate_fingerprint: encode_fingerprint(&self.state.certificate_fingerprint),
             listen_address: self.state.listen_address.clone(),
             pairing_code,
             pairing_expires_in_seconds,
@@ -296,6 +298,7 @@ pub fn run_cli() -> Result<(), AnyError> {
     println!("Desktop name: {}", snapshot.desktop_name);
     println!("Desktop ID: {}", snapshot.desktop_id);
     println!("Listening on {}", snapshot.listen_address);
+    println!("Certificate SHA-256: {}", snapshot.certificate_fingerprint);
     println!(
         "Pairing code: {} (valid for 10 minutes)",
         snapshot.pairing_code
@@ -842,6 +845,14 @@ fn print_pairing_code(state: &ServerState) -> Result<(), AnyError> {
     let code = lock(&state.pairing)?.formatted_code()?;
     println!("Pairing code: {code} (valid for 10 minutes)");
     Ok(())
+}
+
+fn encode_fingerprint(bytes: &[u8]) -> String {
+    bytes
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(":")
 }
 
 pub fn default_desktop_name() -> String {
