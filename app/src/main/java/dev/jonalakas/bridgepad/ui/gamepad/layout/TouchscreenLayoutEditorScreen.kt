@@ -722,12 +722,8 @@ private fun HorizontalEditorOptions(
                 }
             }
         }
-        VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
-        ControlAppearanceOptions(
-            layout = draft,
-            horizontal = true,
-            onDisplayOptionChange = onDisplayOptionChange,
-        )
+        // Keep control-specific behavior immediately after presets in every
+        // orientation. General appearance and reset actions always follow it.
         if (selectedControl.adjustableDeadzone) {
             val deadzone = draft.placement(selectedControl).deadzone
             val selectedControlLabel = controlLabel(selectedControl)
@@ -765,6 +761,12 @@ private fun HorizontalEditorOptions(
                 onInteractionChange = onInteractionChange,
             )
         }
+        VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
+        ControlAppearanceOptions(
+            layout = draft,
+            horizontal = true,
+            onDisplayOptionChange = onDisplayOptionChange,
+        )
         VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
         OutlinedButton(onClick = onReset) {
             Text(stringResource(R.string.reset_layout))
