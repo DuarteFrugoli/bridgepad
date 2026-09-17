@@ -108,7 +108,8 @@
     <string name="save_layout">Save layout</string>
     <string name="expand_layout_editor_actions">Open layout editor actions</string>
     <string name="collapse_layout_editor_actions">Collapse layout editor actions</string>
-    <string name="move_layout_options">Drag horizontally to move layout options</string>
+    <string name="move_layout_options_horizontal">Drag horizontally to move layout options</string>
+    <string name="move_layout_options_vertical">Drag vertically to move layout options</string>
     <string name="stick_deadzone">Deadzone</string>
     <string name="stick_deadzone_value">%1$d%%</string>
     <string name="stick_deadzone_hint">Movement inside this central area is ignored. Adjusts only the selected stick.</string>
@@ -293,6 +294,8 @@
     <string name="orientation_reverse_landscape">Reverse landscape</string>
     <string name="layout_orientation">Layout being edited</string>
     <string name="layout_orientation_auto_hint">Rotate your device to edit the other orientation. Portrait and landscape are independent and saved together.</string>
+    <string name="layout_orientation_rotate_portrait">Rotate your device to edit portrait.</string>
+    <string name="layout_orientation_rotate_landscape">Rotate your device to edit landscape.</string>
     <string name="network_session_notification_channel">Wi-Fi gameplay session</string>
     <string name="notification_wifi_session_active">Wi-Fi session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
     <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>

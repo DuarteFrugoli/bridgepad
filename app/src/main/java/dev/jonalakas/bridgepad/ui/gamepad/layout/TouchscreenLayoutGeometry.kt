@@ -64,13 +64,13 @@ internal fun moveFloatingOverlayCenter(
 }
 
 internal fun optionsPanelCenterAfterControlMove(
-    controlCenterX: Float,
-    currentOptionsCenterX: Float,
+    controlCenter: Float,
+    currentOptionsCenter: Float,
 ): Float {
-    val controlIsOnRight = controlCenterX >= HORIZONTAL_MIDPOINT
-    val optionsAreOnRight = currentOptionsCenterX >= HORIZONTAL_MIDPOINT
-    if (controlIsOnRight != optionsAreOnRight) return currentOptionsCenterX
-    return if (controlIsOnRight) 0f else 1f
+    val controlIsOnFarHalf = controlCenter >= AXIS_MIDPOINT
+    val optionsAreOnFarHalf = currentOptionsCenter >= AXIS_MIDPOINT
+    if (controlIsOnFarHalf != optionsAreOnFarHalf) return currentOptionsCenter
+    return if (controlIsOnFarHalf) 0f else 1f
 }
 
 internal data class ControlResizeDelta(
@@ -80,7 +80,7 @@ internal data class ControlResizeDelta(
     val centerDeltaY: Float,
 )
 
-private const val HORIZONTAL_MIDPOINT = 0.5f
+private const val AXIS_MIDPOINT = 0.5f
 
 internal fun controlResizeDelta(
     currentWidthScale: Float,

@@ -6,9 +6,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -30,7 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +37,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -84,6 +84,7 @@ fun TouchscreenLayoutEditorScreen(
     var toolbarCenterX by rememberSaveable { mutableFloatStateOf(0.5f) }
     var toolbarCenterY by rememberSaveable { mutableFloatStateOf(0f) }
     var optionsCenterX by rememberSaveable { mutableFloatStateOf(1f) }
+    var optionsCenterY by rememberSaveable { mutableFloatStateOf(1f) }
     var collapsedToolbarSize by remember { mutableStateOf(IntSize.Zero) }
     var expandedToolbarSize by remember { mutableStateOf(IntSize.Zero) }
     var optionsPanelSize by remember { mutableStateOf(IntSize.Zero) }
@@ -121,6 +122,8 @@ fun TouchscreenLayoutEditorScreen(
     ) {
         val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val heightPixels = constraints.maxHeight.toFloat().coerceAtLeast(1f)
+        val portraitToolbarInsetPixels = with(LocalDensity.current) { 56.dp.toPx() }
+        val landscapeEditor = editingOrientation == TouchscreenLayoutOrientation.LANDSCAPE
         val toolbarLocked = toolbarExpanded && optionsVisible
         val currentToolbarSize = if (toolbarExpanded) expandedToolbarSize else collapsedToolbarSize
         val movableToolbarModifier = Modifier
@@ -153,7 +156,9 @@ fun TouchscreenLayoutEditorScreen(
                 }
             }
         val toolbarModifier = if (toolbarLocked) {
-            Modifier.align(Alignment.TopCenter)
+            Modifier.align(
+                if (landscapeEditor) Alignment.TopCenter else Alignment.CenterStart,
+            )
         } else {
             movableToolbarModifier
         }.onSizeChanged { size ->
@@ -178,10 +183,17 @@ fun TouchscreenLayoutEditorScreen(
                     val updated = currentProfile.layout(editingOrientation)
                         .move(control, deltaX, deltaY)
                     if (toolbarExpanded && optionsVisible) {
-                        optionsCenterX = optionsPanelCenterAfterControlMove(
-                            controlCenterX = updated.placement(control).centerX,
-                            currentOptionsCenterX = optionsCenterX,
-                        )
+                        if (landscapeEditor) {
+                            optionsCenterX = optionsPanelCenterAfterControlMove(
+                                controlCenter = updated.placement(control).centerX,
+                                currentOptionsCenter = optionsCenterX,
+                            )
+                        } else {
+                            optionsCenterY = optionsPanelCenterAfterControlMove(
+                                controlCenter = updated.placement(control).centerY,
+                                currentOptionsCenter = optionsCenterY,
+                            )
+                        }
                     }
                     replaceCurrentLayout(updated)
                 },
@@ -205,6 +217,7 @@ fun TouchscreenLayoutEditorScreen(
                 onToggleOptions = { optionsVisible = !optionsVisible },
                 onCancel = onCancel,
                 onSave = { onSave(draftProfile) },
+                horizontal = landscapeEditor,
                 modifier = toolbarModifier,
             )
         } else {
@@ -228,28 +241,54 @@ fun TouchscreenLayoutEditorScreen(
                         DefaultTouchscreenLayoutProfile.value.layout(editingOrientation),
                     )
                 },
-                onHorizontalDrag = { delta ->
-                    optionsCenterX = moveFloatingOverlayCenter(
-                        currentCenter = optionsCenterX,
-                        delta = delta,
-                        containerSize = widthPixels,
-                        overlaySize = optionsPanelSize.width.toFloat(),
-                    )
-                },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset {
-                        IntOffset(
-                            x = floatingOverlayAxisOffset(
-                                center = optionsCenterX,
-                                containerSize = widthPixels,
-                                overlaySize = optionsPanelSize.width.toFloat(),
-                            ),
-                            y = 60.dp.roundToPx(),
+                horizontal = !landscapeEditor,
+                onMove = { delta ->
+                    if (landscapeEditor) {
+                        optionsCenterX = moveFloatingOverlayCenter(
+                            currentCenter = optionsCenterX,
+                            delta = delta,
+                            containerSize = widthPixels,
+                            overlaySize = optionsPanelSize.width.toFloat(),
+                        )
+                    } else {
+                        optionsCenterY = moveFloatingOverlayCenter(
+                            currentCenter = optionsCenterY,
+                            delta = delta,
+                            containerSize = heightPixels,
+                            overlaySize = optionsPanelSize.height.toFloat(),
                         )
                     }
-                    .widthIn(max = 300.dp)
-                    .heightIn(max = (maxHeight - 68.dp).coerceAtLeast(120.dp))
+                },
+                modifier = (if (landscapeEditor) {
+                    Modifier
+                        .offset {
+                            IntOffset(
+                                x = floatingOverlayAxisOffset(
+                                    center = optionsCenterX,
+                                    containerSize = widthPixels,
+                                    overlaySize = optionsPanelSize.width.toFloat(),
+                                ),
+                                y = 60.dp.roundToPx(),
+                            )
+                        }
+                        .widthIn(max = 300.dp)
+                        .heightIn(max = (maxHeight - 68.dp).coerceAtLeast(120.dp))
+                } else {
+                    Modifier
+                        .fillMaxWidth(0.78f)
+                        .offset {
+                            IntOffset(
+                                x = portraitToolbarInsetPixels.roundToInt(),
+                                y = floatingOverlayAxisOffset(
+                                    center = optionsCenterY,
+                                    containerSize = heightPixels,
+                                    overlaySize = optionsPanelSize.height.toFloat(),
+                                ),
+                            )
+                        }
+                        .heightIn(max = 168.dp)
+                })
+                    .align(Alignment.TopStart)
                     .onSizeChanged { optionsPanelSize = it }
                     .zIndex(EDITOR_OVERLAY_Z_INDEX),
             )
@@ -264,41 +303,101 @@ private fun EditorToolbar(
     onToggleOptions: () -> Unit,
     onCancel: () -> Unit,
     onSave: () -> Unit,
+    horizontal: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val collapseDescription = stringResource(R.string.collapse_layout_editor_actions)
+    val cancelDescription = stringResource(R.string.cancel_action)
+    val optionsDescription = stringResource(
+        if (optionsVisible) R.string.hide_layout_options else R.string.show_layout_options,
+    )
+    val saveDescription = stringResource(R.string.save_layout)
+    val actions: @Composable () -> Unit = {
+            EditorActionButton(
+                symbol = COLLAPSE_ACTION_SYMBOL,
+                contentDescription = collapseDescription,
+                onClick = onCollapse,
+            )
+            EditorActionButton(
+                symbol = CANCEL_ACTION_SYMBOL,
+                contentDescription = cancelDescription,
+                onClick = onCancel,
+            )
+            EditorActionButton(
+                symbol = OPTIONS_ACTION_SYMBOL,
+                contentDescription = optionsDescription,
+                selected = optionsVisible,
+                onClick = onToggleOptions,
+            )
+            EditorActionButton(
+                symbol = SAVE_ACTION_SYMBOL,
+                contentDescription = saveDescription,
+                emphasized = true,
+                onClick = onSave,
+            )
+    }
     Surface(
-        modifier = modifier.widthIn(max = 620.dp),
+        modifier = modifier,
         shape = RoundedCornerShape(24.dp),
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(
-                onClick = onCollapse,
-                modifier = Modifier.semantics {
-                    contentDescription = collapseDescription
-                },
+        if (horizontal) {
+            Row(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(EDITOR_MENU_SYMBOL)
+                actions()
             }
-            TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.cancel_action))
+        } else {
+            Column(
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                actions()
             }
-            TextButton(onClick = onToggleOptions) {
-                Text(
-                    stringResource(
-                        if (optionsVisible) R.string.hide_layout_options else R.string.show_layout_options,
-                    ),
-                )
-            }
-            Button(onClick = onSave) {
-                Text(stringResource(R.string.save_layout))
-            }
+        }
+    }
+}
+
+@Composable
+private fun EditorActionButton(
+    symbol: String,
+    contentDescription: String,
+    onClick: () -> Unit,
+    selected: Boolean = false,
+    emphasized: Boolean = false,
+) {
+    val containerColor = when {
+        emphasized -> MaterialTheme.colorScheme.primary
+        selected -> MaterialTheme.colorScheme.secondaryContainer
+        else -> Color.Transparent
+    }
+    val contentColor = when {
+        emphasized -> MaterialTheme.colorScheme.onPrimary
+        selected -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onSurface
+    }
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .size(40.dp)
+            .semantics {
+                this.contentDescription = contentDescription
+                role = Role.Button
+            },
+        shape = CircleShape,
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = symbol,
+                color = contentColor,
+                style = MaterialTheme.typography.titleLarge,
+            )
         }
     }
 }
@@ -340,26 +439,43 @@ private fun EditorOptionsPanel(
     onSelectPreset: (TouchscreenLayout) -> Unit,
     onDeadzoneChange: (Float) -> Unit,
     onReset: () -> Unit,
-    onHorizontalDrag: (Float) -> Unit,
+    horizontal: Boolean,
+    onMove: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val draft = draftProfile.layout(editingOrientation)
-    val currentOnHorizontalDrag by rememberUpdatedState(onHorizontalDrag)
-    val moveDescription = stringResource(R.string.move_layout_options)
+    val currentOnMove by rememberUpdatedState(onMove)
+    val moveDescription = stringResource(
+        if (horizontal) {
+            R.string.move_layout_options_vertical
+        } else {
+            R.string.move_layout_options_horizontal
+        },
+    )
     Surface(
         modifier = modifier
             .semantics { contentDescription = moveDescription }
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures { change, dragAmount ->
+            .pointerInput(horizontal) {
+                detectDragGestures { change, dragAmount ->
                     change.consume()
-                    currentOnHorizontalDrag(dragAmount)
+                    currentOnMove(if (horizontal) dragAmount.y else dragAmount.x)
                 }
             },
         shape = RoundedCornerShape(20.dp),
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
     ) {
-        Column(
+        if (horizontal) {
+            HorizontalEditorOptions(
+                draft = draft,
+                editingOrientation = editingOrientation,
+                selectedControl = selectedControl,
+                onSelectPreset = onSelectPreset,
+                onDeadzoneChange = onDeadzoneChange,
+                onReset = onReset,
+            )
+        } else {
+            Column(
             modifier = Modifier
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState()),
@@ -371,7 +487,7 @@ private fun EditorOptionsPanel(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(R.string.layout_editor_title), style = MaterialTheme.typography.titleLarge)
-                Text(OPTIONS_DRAG_SYMBOL, style = MaterialTheme.typography.titleLarge)
+                Text(OPTIONS_HORIZONTAL_DRAG_SYMBOL, style = MaterialTheme.typography.titleLarge)
             }
             Text(stringResource(R.string.layout_editor_instructions), style = MaterialTheme.typography.bodySmall)
             HorizontalDivider()
@@ -448,6 +564,107 @@ private fun EditorOptionsPanel(
             ) {
                 Text(stringResource(R.string.reset_layout))
             }
+        }
+        }
+    }
+}
+
+@Composable
+private fun HorizontalEditorOptions(
+    draft: TouchscreenLayout,
+    editingOrientation: TouchscreenLayoutOrientation,
+    selectedControl: TouchControlId,
+    onSelectPreset: (TouchscreenLayout) -> Unit,
+    onDeadzoneChange: (Float) -> Unit,
+    onReset: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            modifier = Modifier.widthIn(max = 180.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.layout_editor_title), style = MaterialTheme.typography.titleMedium)
+                Text(OPTIONS_VERTICAL_DRAG_SYMBOL, style = MaterialTheme.typography.titleLarge)
+            }
+            Text(stringResource(R.string.layout_orientation), style = MaterialTheme.typography.labelMedium)
+            Text(
+                stringResource(
+                    if (editingOrientation == TouchscreenLayoutOrientation.PORTRAIT) {
+                        R.string.orientation_portrait
+                    } else {
+                        R.string.orientation_landscape
+                    },
+                ),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                stringResource(
+                    if (editingOrientation == TouchscreenLayoutOrientation.PORTRAIT) {
+                        R.string.layout_orientation_rotate_landscape
+                    } else {
+                        R.string.layout_orientation_rotate_portrait
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(stringResource(R.string.layout_presets), style = MaterialTheme.typography.titleSmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TouchscreenLayoutPreset.entries.forEach { preset ->
+                    val presetLayout = BuiltInTouchscreenLayouts.profile(preset).layout(editingOrientation)
+                    FilterChip(
+                        selected = draft == presetLayout,
+                        onClick = { onSelectPreset(presetLayout) },
+                        label = { Text(presetLabel(preset)) },
+                    )
+                }
+            }
+        }
+        if (selectedControl.adjustableDeadzone) {
+            val deadzone = draft.placement(selectedControl).deadzone
+            val selectedControlLabel = controlLabel(selectedControl)
+            val decreaseDescription = "$selectedControlLabel: ${stringResource(R.string.decrease_deadzone)}"
+            val increaseDescription = "$selectedControlLabel: ${stringResource(R.string.increase_deadzone)}"
+            VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.stick_deadzone), style = MaterialTheme.typography.titleSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = { onDeadzoneChange(deadzone - STICK_DEADZONE_STEP) },
+                        enabled = deadzone > MIN_STICK_DEADZONE,
+                        modifier = Modifier.semantics { contentDescription = decreaseDescription },
+                    ) {
+                        Text(DECREASE_ACTION_SYMBOL)
+                    }
+                    Text(
+                        stringResource(R.string.stick_deadzone_value, (deadzone * 100f).roundToInt()),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    TextButton(
+                        onClick = { onDeadzoneChange(deadzone + STICK_DEADZONE_STEP) },
+                        enabled = deadzone < MAX_STICK_DEADZONE,
+                        modifier = Modifier.semantics { contentDescription = increaseDescription },
+                    ) {
+                        Text("+")
+                    }
+                }
+            }
+        }
+        VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
+        OutlinedButton(onClick = onReset) {
+            Text(stringResource(R.string.reset_layout))
         }
     }
 }
@@ -733,5 +950,11 @@ private enum class ResizeAnchor(
 private const val HANDLE_SIZE_DP = 20f
 private const val HANDLE_RADIUS_DP = HANDLE_SIZE_DP / 2f
 private const val EDITOR_OVERLAY_Z_INDEX = 100f
-private const val EDITOR_MENU_SYMBOL = "⋮"
-private const val OPTIONS_DRAG_SYMBOL = "↔"
+private const val EDITOR_MENU_SYMBOL = "\u22EE"
+private const val OPTIONS_HORIZONTAL_DRAG_SYMBOL = "\u2194"
+private const val OPTIONS_VERTICAL_DRAG_SYMBOL = "\u2195"
+private const val COLLAPSE_ACTION_SYMBOL = "\u2212"
+private const val CANCEL_ACTION_SYMBOL = "\u2715"
+private const val OPTIONS_ACTION_SYMBOL = "\u2699"
+private const val SAVE_ACTION_SYMBOL = "\u2713"
+private const val DECREASE_ACTION_SYMBOL = "\u2212"
