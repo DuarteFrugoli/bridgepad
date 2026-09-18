@@ -7,6 +7,19 @@ import org.junit.Test
 
 class TouchscreenGamepadScreenTest {
     @Test
+    fun touchpadDeadzoneIsConsumedInsteadOfBecomingAnInitialJump() {
+        val movement = movementAfterDeadzone(Offset(10f, 0f), deadzone = 4f)
+
+        assertEquals(6f, movement.x, 0.0001f)
+        assertEquals(0f, movement.y, 0.0001f)
+    }
+
+    @Test
+    fun touchpadMovementInsideTapToleranceDoesNotMoveThePointer() {
+        assertEquals(Offset.Zero, movementAfterDeadzone(Offset(1f, 1f), deadzone = 2f))
+    }
+
+    @Test
     fun dpadCenterIsNeutral() {
         assertEquals(
             DpadDirection.NEUTRAL,

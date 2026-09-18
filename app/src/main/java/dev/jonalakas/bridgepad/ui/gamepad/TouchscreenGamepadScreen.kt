@@ -414,7 +414,10 @@ private fun MouseTouchpad(
                 stateDescription = touchpadHint
             }
             .pointerInput(Unit) {
-                val motionThreshold = viewConfiguration.touchSlop
+                val motionThreshold = minOf(
+                    viewConfiguration.touchSlop,
+                    TOUCHPAD_TAP_SLOP_DP.dp.toPx(),
+                )
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     var maximumPointerCount = 1
@@ -448,10 +451,14 @@ private fun MouseTouchpad(
                                 if (hypot(bufferedDelta.x, bufferedDelta.y) >= motionThreshold) {
                                     motionAccepted = true
                                     producedMotion = true
+                                    val initialMotion = movementAfterDeadzone(
+                                        bufferedDelta,
+                                        motionThreshold,
+                                    )
                                     if (activePointerMode >= 2) {
-                                        TouchMouseStore.scroll(bufferedDelta.y)
+                                        TouchMouseStore.scroll(initialMotion.y)
                                     } else {
-                                        TouchMouseStore.move(bufferedDelta.x, bufferedDelta.y)
+                                        TouchMouseStore.move(initialMotion.x, initialMotion.y)
                                     }
                                     bufferedDelta = Offset.Zero
                                 }
@@ -800,6 +807,13 @@ internal fun directionForPosition(position: Offset, width: Float, height: Float)
     }
 }
 
+internal fun movementAfterDeadzone(movement: Offset, deadzone: Float): Offset {
+    val distance = hypot(movement.x, movement.y)
+    val safeDeadzone = deadzone.coerceAtLeast(0f)
+    if (distance <= safeDeadzone || distance == 0f) return Offset.Zero
+    return movement * ((distance - safeDeadzone) / distance)
+}
+
 private fun directionForDpadCell(x: Float, y: Float): DpadDirection? {
     val start = (1f - DPAD_CELL_FRACTION) / 2f
     val end = 1f - start
@@ -842,6 +856,7 @@ private val DpadDirection.hasWest: Boolean
     get() = this in setOf(DpadDirection.WEST, DpadDirection.NORTH_WEST, DpadDirection.SOUTH_WEST)
 
 private const val KEYBOARD_SYMBOL = "⌨"
+private const val TOUCHPAD_TAP_SLOP_DP = 2f
 private const val DPAD_CELL_FRACTION = 0.36f
 private const val DPAD_INNER_EDGE = 0.36f
 private const val DPAD_CENTER_FRACTION = 0.5f
