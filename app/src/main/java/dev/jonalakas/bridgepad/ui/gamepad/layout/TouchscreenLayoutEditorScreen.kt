@@ -274,9 +274,18 @@ fun TouchscreenLayoutEditorScreen(
                     }
                 },
                 onReset = {
-                    replaceCurrentLayout(
-                        DefaultTouchscreenLayoutProfile.value.layout(editingOrientation),
-                    )
+                    val referenceLayout = DefaultTouchscreenLayoutProfile.value
+                        .layout(editingOrientation)
+                    updateDraft { current ->
+                        current.restoreControl(selected, referenceLayout)
+                    }
+                    if (!referenceLayout.isVisible(selected)) {
+                        TouchControlId.entries
+                            .firstOrNull { candidate ->
+                                candidate != selected && draft.isVisible(candidate)
+                            }
+                            ?.let { selectedName = it.name }
+                    }
                 },
                 horizontal = !landscapeEditor,
                 onMove = { delta ->
@@ -403,6 +412,7 @@ private fun EditorToolbar(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
     ) {
@@ -485,6 +495,7 @@ private fun CollapsedEditorToolbar(
             },
         shape = CircleShape,
         color = MaterialTheme.colorScheme.primaryContainer,
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
     ) {
@@ -529,8 +540,9 @@ private fun EditorOptionsPanel(
                     change.consume()
                     currentOnMove(if (horizontal) dragAmount.y else dragAmount.x)
                 }
-            },
+        },
         shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
     ) {
@@ -648,7 +660,7 @@ private fun EditorOptionsPanel(
                 onClick = onReset,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(R.string.reset_layout))
+                Text(stringResource(R.string.reset_selected_control))
             }
         }
         }
@@ -769,7 +781,7 @@ private fun HorizontalEditorOptions(
         )
         VerticalDivider(modifier = Modifier.heightIn(min = 88.dp))
         OutlinedButton(onClick = onReset) {
-            Text(stringResource(R.string.reset_layout))
+            Text(stringResource(R.string.reset_selected_control))
         }
     }
 }

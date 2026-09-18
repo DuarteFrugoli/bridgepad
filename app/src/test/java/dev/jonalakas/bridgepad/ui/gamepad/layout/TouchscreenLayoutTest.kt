@@ -253,6 +253,27 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun restoringAControlDoesNotChangeTheRestOfTheLayout() {
+        val reference = BuiltInTouchscreenLayouts.mobile
+        val customized = reference
+            .move(TouchControlId.LEFT_STICK, 0.25f, -0.2f)
+            .resize(TouchControlId.LEFT_STICK, 1.8f)
+            .setDeadzone(TouchControlId.LEFT_STICK, 0.2f)
+            .move(TouchControlId.RIGHT_STICK, -0.1f, 0.1f)
+
+        val restored = customized.restoreControl(TouchControlId.LEFT_STICK, reference)
+
+        assertEquals(
+            reference.placement(TouchControlId.LEFT_STICK),
+            restored.placement(TouchControlId.LEFT_STICK),
+        )
+        assertEquals(
+            customized.placement(TouchControlId.RIGHT_STICK),
+            restored.placement(TouchControlId.RIGHT_STICK),
+        )
+    }
+
+    @Test
     fun movementIsBoundedButSizeOnlyHasAMinimum() {
         val layout = DefaultTouchscreenLayout.value
             .move(TouchControlId.SESSION_MENU, -5f, 8f)

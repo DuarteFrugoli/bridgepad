@@ -109,7 +109,7 @@
     <string name="layout_preset_mobile">Mobile</string>
     <string name="layout_preset_hint">Choose a ready-made layout, then customize it if you want. Changes are only applied when saved.</string>
     <string name="resize_control">Resize %1$s</string>
-    <string name="reset_layout">Reset to standard</string>
+    <string name="reset_selected_control">Reset selected control</string>
     <string name="save_layout">Save layout</string>
     <string name="expand_layout_editor_actions">Open layout editor actions</string>
     <string name="collapse_layout_editor_actions">Collapse layout editor actions</string>

@@ -163,6 +163,14 @@ data class TouchscreenLayout(
         return update(control) { it.copy(interaction = interaction) }
     }
 
+    /** Restores one control without changing any other placement in this layout. */
+    fun restoreControl(
+        control: TouchControlId,
+        referenceLayout: TouchscreenLayout,
+    ): TouchscreenLayout = copy(
+        placements = placements + (control to referenceLayout.placement(control)),
+    )
+
     fun sanitized(
         fallbackLayout: TouchscreenLayout = DefaultTouchscreenLayout.value,
     ): TouchscreenLayout = TouchscreenLayout(
