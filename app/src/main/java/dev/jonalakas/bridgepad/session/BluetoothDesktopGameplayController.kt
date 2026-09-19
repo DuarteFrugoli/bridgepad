@@ -19,6 +19,7 @@ class BluetoothDesktopGameplayController(
     val status: StateFlow<BluetoothDesktopGamepadStatus> = mutableStatus.asStateFlow()
     private var client: BluetoothDesktopGamepadClient? = null
     private var inputSubscription: InputSubscription? = null
+    private var captureMode: PhysicalCaptureMode? = null
     private var generation = 0L
 
     @Synchronized
@@ -30,10 +31,17 @@ class BluetoothDesktopGameplayController(
             BluetoothDesktopGamepadRequest(deviceAddress),
         ) { update -> handleStatus(currentGeneration, update) }
         client = nextClient
-        inputSubscription = inputRouter.observe(physicalCaptureMode) { routed ->
-            nextClient.send(routed.gamepad)
-        }
+        captureMode = physicalCaptureMode
+        subscribeToInput(nextClient, physicalCaptureMode)
         nextClient.start()
+    }
+
+    @Synchronized
+    fun updatePhysicalCapture(physicalCaptureMode: PhysicalCaptureMode) {
+        val activeClient = client ?: return
+        if (captureMode == physicalCaptureMode) return
+        captureMode = physicalCaptureMode
+        subscribeToInput(activeClient, physicalCaptureMode)
     }
 
     @Synchronized
@@ -49,6 +57,7 @@ class BluetoothDesktopGameplayController(
     private fun stopCurrent(immediate: Boolean) {
         inputSubscription?.cancel()
         inputSubscription = null
+        captureMode = null
         client?.let { active ->
             if (immediate) active.closeImmediately() else active.stop()
         }
@@ -66,6 +75,17 @@ class BluetoothDesktopGameplayController(
             inputSubscription?.cancel()
             inputSubscription = null
             client = null
+            captureMode = null
+        }
+    }
+
+    private fun subscribeToInput(
+        activeClient: BluetoothDesktopGamepadClient,
+        physicalCaptureMode: PhysicalCaptureMode,
+    ) {
+        inputSubscription?.cancel()
+        inputSubscription = inputRouter.observe(physicalCaptureMode) { routed ->
+            activeClient.send(routed.gamepad)
         }
     }
 }

@@ -15,6 +15,7 @@ value class OutputAdapterId(val value: String) {
 
 object OutputAdapterIds {
     val GENERIC_BLUETOOTH_HID = OutputAdapterId("bluetooth-hid.generic-composite")
+    val DESKTOP_BLUETOOTH = OutputAdapterId("desktop-bridge.bluetooth-rfcomm")
     val DESKTOP_WIFI = OutputAdapterId("desktop-bridge.wifi")
     val DESKTOP_USB = OutputAdapterId("desktop-bridge.usb")
 }

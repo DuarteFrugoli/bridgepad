@@ -22,6 +22,7 @@ import dev.jonalakas.bridgepad.session.FeedbackLevel as HidFeedbackLevel
 import dev.jonalakas.bridgepad.session.SessionState as HidSessionState
 import dev.jonalakas.bridgepad.transport.network.NetworkFailureReason
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
+import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
 import dev.jonalakas.bridgepad.ui.components.NoticeCard
 import dev.jonalakas.bridgepad.ui.components.NoticeTone
 import dev.jonalakas.bridgepad.ui.components.SessionOrientationSelector
@@ -55,6 +56,7 @@ fun HomeScreen(
     selectedNetworkDesktopId: String?,
     networkPairingStatus: NetworkPairingStatus,
     networkGameplayStatus: NetworkGamepadStatus,
+    bluetoothDesktopGameplayStatus: BluetoothDesktopGamepadStatus,
     networkDiscoveryError: String?,
     onSelectNetworkDesktop: (String?) -> Unit,
     onPairNetworkDesktop: (String, String) -> Unit,
@@ -63,6 +65,7 @@ fun HomeScreen(
     onDismissNetworkPairingStatus: () -> Unit,
     onPhysicalCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
     onPrepareBluetooth: () -> Unit,
+    onUseDirectBluetooth: () -> Unit,
     onPlay: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
     onEditTouchscreenLayout: () -> Unit,
@@ -80,7 +83,10 @@ fun HomeScreen(
     val bluetoothSelected = connectionMethod == ConnectionMethod.BLUETOOTH
     val wifiSelected = connectionMethod == ConnectionMethod.WIFI
     val networkConnected = networkGameplayStatus is NetworkGamepadStatus.Active
-    val connected = hidState.status == HidSessionStatus.CONNECTED || networkConnected
+    val bluetoothDesktopConnected =
+        bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Active
+    val connected = hidState.status == HidSessionStatus.CONNECTED ||
+        networkConnected || bluetoothDesktopConnected
     val visibleHidState = hidState.reconcileBluetoothAvailability(
         enabled = bluetoothEnabled && bluetoothPermissionGranted,
         permissionGranted = bluetoothPermissionGranted,
@@ -111,6 +117,8 @@ fun HomeScreen(
     ) || hidState.pairingModeActive ||
         networkGameplayStatus is NetworkGamepadStatus.Connecting ||
         networkGameplayStatus is NetworkGamepadStatus.Reconnecting ||
+        bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Connecting ||
+        bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Reconnecting ||
         networkPairingStatus is NetworkPairingStatus.Pairing
 
     PairingDialog(
@@ -189,11 +197,14 @@ fun HomeScreen(
                         if (bluetoothSelected) {
                             BluetoothDestinations(
                                 connected,
+                                if (bluetoothDesktopConnected) {
+                                    pairedHosts.firstOrNull { it.address == selectedAddress }?.name
+                                } else {
+                                    hidState.connectedHost
+                                },
                                 bluetoothPermissionGranted,
                                 bluetoothEnabled,
                                 busy,
-                                hidCompatible,
-                                hidState,
                                 pairedHosts,
                                 selectedAddress,
                                 pairNewPcSelected,
@@ -233,10 +244,10 @@ fun HomeScreen(
                     )
                 }
             }
-            if (bluetoothSelected && !hidCompatible) {
+            if (bluetoothSelected && !hidCompatible && pairNewPcSelected) {
                 item { NoticeCard(stringResource(R.string.hid_unavailable), NoticeTone.ERROR) }
             }
-            if (bluetoothSelected && visibleHidState.message != null) {
+            if (bluetoothSelected && hidState.sessionActive && visibleHidState.message != null) {
                 item {
                     NoticeCard(
                         stringResource(
@@ -249,6 +260,43 @@ fun HomeScreen(
                             HidFeedbackLevel.INFO -> NoticeTone.SUCCESS
                         },
                     )
+                }
+            }
+            if (bluetoothSelected) {
+                when (val status = bluetoothDesktopGameplayStatus) {
+                    BluetoothDesktopGamepadStatus.Connecting -> item {
+                        NoticeCard(
+                            stringResource(R.string.bluetooth_desktop_connecting),
+                            NoticeTone.WARNING,
+                        )
+                    }
+                    is BluetoothDesktopGamepadStatus.Reconnecting -> item {
+                        NoticeCard(
+                            stringResource(
+                                R.string.bluetooth_desktop_reconnecting,
+                                status.attempt,
+                                status.maximumAttempts,
+                            ),
+                            NoticeTone.WARNING,
+                        )
+                    }
+                    BluetoothDesktopGamepadStatus.Active -> item {
+                        NoticeCard(
+                            stringResource(R.string.bluetooth_desktop_connected),
+                            NoticeTone.SUCCESS,
+                        )
+                    }
+                    is BluetoothDesktopGamepadStatus.Failed -> item {
+                        NoticeCard(
+                            message = stringResource(R.string.bluetooth_desktop_unavailable),
+                            tone = NoticeTone.WARNING,
+                            actionLabel = if (hidCompatible) {
+                                stringResource(R.string.bluetooth_use_direct_hid)
+                            } else null,
+                            onAction = if (hidCompatible) onUseDirectBluetooth else null,
+                        )
+                    }
+                    BluetoothDesktopGamepadStatus.Stopped -> Unit
                 }
             }
             if (wifiSelected) {
@@ -310,7 +358,8 @@ fun HomeScreen(
                     }
                     Button(
                         onClick = onPlay,
-                        enabled = (!bluetoothSelected || hidCompatible) && !busy && setupComplete,
+                        enabled = (!bluetoothSelected || selectedAddress != null || hidCompatible) &&
+                            !busy && setupComplete,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
@@ -343,7 +392,10 @@ fun HomeScreen(
             }
             if (
                 hidState.sessionActive || networkConnected ||
-                networkGameplayStatus is NetworkGamepadStatus.Reconnecting
+                networkGameplayStatus is NetworkGamepadStatus.Reconnecting ||
+                bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Connecting ||
+                bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Reconnecting ||
+                bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Active
             ) {
                 item {
                     OutlinedButton(onClick = onStopHid, modifier = Modifier.fillMaxWidth()) {
@@ -358,11 +410,10 @@ fun HomeScreen(
 @Composable
 private fun BluetoothDestinations(
     connected: Boolean,
+    connectedHostName: String?,
     permissionGranted: Boolean,
     enabled: Boolean,
     busy: Boolean,
-    compatible: Boolean,
-    state: HidSessionState,
     hosts: List<PairedHost>,
     selectedAddress: String?,
     pairNewPcSelected: Boolean,
@@ -373,18 +424,18 @@ private fun BluetoothDestinations(
     Text(stringResource(R.string.choose_destination_title), style = MaterialTheme.typography.titleSmall)
     when {
         connected -> {
-            Text(stringResource(R.string.connected_to, state.connectedHost.orEmpty()))
+            Text(stringResource(R.string.connected_to, connectedHostName.orEmpty()))
             Text(stringResource(R.string.change_destination_hint), style = MaterialTheme.typography.bodySmall)
         }
         !permissionGranted -> {
             Text(stringResource(R.string.bluetooth_destination_permission))
-            OutlinedButton(onClick = onPrepare, enabled = !busy && compatible) {
+            OutlinedButton(onClick = onPrepare, enabled = !busy) {
                 Text(stringResource(R.string.grant_permissions))
             }
         }
         !enabled -> {
             Text(stringResource(R.string.bluetooth_destination_off))
-            OutlinedButton(onClick = onPrepare, enabled = !busy && compatible) {
+            OutlinedButton(onClick = onPrepare, enabled = !busy) {
                 Text(stringResource(R.string.enable_bluetooth))
             }
         }

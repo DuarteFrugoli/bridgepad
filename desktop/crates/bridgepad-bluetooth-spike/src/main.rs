@@ -22,14 +22,14 @@ mod windows_spike {
         Central, CentralEvent, Characteristic, Manager as _, Peripheral as _, ScanFilter, WriteType,
     };
     use btleplug::platform::{Manager, Peripheral};
-    use futures_util::StreamExt;
     use futures_executor::block_on;
+    use futures_util::StreamExt;
     use std::collections::HashSet;
     use std::future::IntoFuture;
     use std::io;
-    use std::sync::mpsc::{SyncSender, sync_channel};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::{SyncSender, sync_channel};
     use std::thread;
     use std::time::{Duration, Instant};
     use tokio::sync::mpsc;
@@ -100,7 +100,9 @@ mod windows_spike {
         let server = RfcommProbeServer::start(mode)?;
         if matches!(mode, RfcommMode::Playable) {
             println!("RFCOMM playable receiver: advertising and ready");
-            println!("WARNING: this spike trusts the paired Bluetooth device without app authentication.");
+            println!(
+                "WARNING: this spike trusts the paired Bluetooth device without app authentication."
+            );
             println!("Use Settings > Bluetooth Desktop test > Start playable RFCOMM session.");
         } else {
             println!("RFCOMM: advertising and ready");
@@ -369,10 +371,7 @@ mod windows_spike {
                         Some(PACKET_PING) => {
                             let mut pong = packet;
                             pong[5] = PACKET_PONG;
-                            queue_packet(
-                                &outbound,
-                                pong.try_into().expect("fixed packet size"),
-                            )?;
+                            queue_packet(&outbound, pong.try_into().expect("fixed packet size"))?;
                         }
                         Some(PACKET_SUMMARY_REQUEST) => {
                             let summary = stats.summary_packet();
@@ -445,12 +444,15 @@ mod windows_spike {
                         break;
                     }
                     let bytes: Vec<_> = buffered.drain(..frame_length).collect();
-                    let packet = decode_packet(&bytes)
-                        .map_err(|error| spike_error(&format!("invalid BridgePad packet: {error}")))?;
+                    let packet = decode_packet(&bytes).map_err(|error| {
+                        spike_error(&format!("invalid BridgePad packet: {error}"))
+                    })?;
                     match packet.header.message_type {
                         MessageType::SessionStart => {
                             if gamepad.is_some() {
-                                return Err(spike_error("a Bluetooth gamepad session is already active"));
+                                return Err(spike_error(
+                                    "a Bluetooth gamepad session is already active",
+                                ));
                             }
                             let request = decode_session_start(packet).map_err(|error| {
                                 spike_error(&format!("invalid SessionStart: {error}"))
@@ -473,12 +475,15 @@ mod windows_spike {
                         }
                         MessageType::GamepadSnapshot => {
                             if active_session_id != Some(packet.header.session_id) {
-                                return Err(spike_error("gamepad snapshot belongs to another session"));
+                                return Err(spike_error(
+                                    "gamepad snapshot belongs to another session",
+                                ));
                             }
                             if is_newer_sequence(latest_sequence, packet.header.sequence) {
-                                let snapshot = decode_gamepad_snapshot(packet).map_err(|error| {
-                                    spike_error(&format!("invalid gamepad snapshot: {error}"))
-                                })?;
+                                let snapshot =
+                                    decode_gamepad_snapshot(packet).map_err(|error| {
+                                        spike_error(&format!("invalid gamepad snapshot: {error}"))
+                                    })?;
                                 gamepad
                                     .as_mut()
                                     .ok_or_else(|| spike_error("gamepad session is not active"))?
@@ -502,7 +507,11 @@ mod windows_spike {
                                 return Ok(());
                             }
                         }
-                        _ => return Err(spike_error("message is not supported by the playable spike")),
+                        _ => {
+                            return Err(spike_error(
+                                "message is not supported by the playable spike",
+                            ));
+                        }
                     }
                 }
             }
@@ -593,18 +602,15 @@ mod windows_spike {
 
     impl PlayableGamepad {
         fn connect() -> Result<Self> {
-            let mut device = VigemGamepad::connect()
-                .map_err(|error| spike_error(&error.to_string()))?;
+            let mut device =
+                VigemGamepad::connect().map_err(|error| spike_error(&error.to_string()))?;
             device
                 .neutralize()
                 .map_err(|error| spike_error(&error.to_string()))?;
             Ok(Self { device })
         }
 
-        fn update(
-            &mut self,
-            report: GamepadReport,
-        ) -> std::result::Result<(), VirtualDeviceError> {
+        fn update(&mut self, report: GamepadReport) -> std::result::Result<(), VirtualDeviceError> {
             self.device.update(report)
         }
     }

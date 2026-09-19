@@ -10,8 +10,8 @@ físico como entrada, normalizar os comandos em um único estado lógico de game
 e enviá-los para um computador.
 
 O projeto está em desenvolvimento ativo. Os caminhos atuais entre Android e PC
-funcionam por Bluetooth HID direto ou por Wi-Fi com o BridgePad Desktop no
-Windows. Ainda não é uma versão pública finalizada.
+funcionam por Bluetooth HID direto, Wi-Fi autenticado e Bluetooth RFCOMM/XInput
+com o BridgePad Desktop no Windows. Ainda não é uma versão pública finalizada.
 
 ## Estado atual
 
@@ -27,6 +27,7 @@ Disponível na build atual:
 - captura USB HID direta, inclusive em segundo plano ou com a tela apagada;
 - mapeamento opcional e salvo para os dois modos de controle físico;
 - saída Bluetooth HID de gamepad e mouse relativo;
+- saída Bluetooth pelo Desktop reconhecida como XInput no Windows;
 - touchpad de mouse integrado e touchpad grande para controle físico;
 - uso simultâneo das entradas virtual e física durante uma sessão;
 - descoberta Wi-Fi automática e sessão autenticada pelo BridgePad Desktop no Windows;
@@ -63,9 +64,14 @@ assinatura de release e evidências em mais equipamentos.
 
 ## Como funciona hoje
 
-Atualmente, o BridgePad apresenta o Android ao computador como um dispositivo
-Bluetooth HID composto, contendo um gamepad genérico e um mouse. Esse modo não
-precisa do BridgePad Desktop instalado no computador.
+Para um PC já pareado, o BridgePad procura primeiro o BridgePad Desktop por
+Bluetooth. Quando ele está disponível, o Desktop cria um único controle XInput
+compatível com Xbox 360, reconhecido automaticamente pela Steam e por jogos
+XInput. Se o Desktop não estiver disponível, a Home oferece o Bluetooth HID
+direto como fallback. As duas saídas nunca ficam ativas ao mesmo tempo.
+
+O modo HID direto apresenta o Android como gamepad e mouse Bluetooth genéricos
+e não precisa do BridgePad Desktop:
 
 ```text
 Touchscreen / controle físico
@@ -82,7 +88,7 @@ Touchscreen / controle físico
        Steam Input / jogo
 ```
 
-O controle atual é HID genérico, não um dispositivo XInput nativo. Por isso, a
+O fallback direto é HID genérico, não um dispositivo XInput nativo. Por isso, a
 Steam Input é a principal camada de compatibilidade. A Steam reconhece o
 BridgePad como controle genérico, mas pode exigir uma configuração inicial dos
 botões. Jogos que aceitam somente XInput podem não detectar diretamente o
@@ -188,13 +194,13 @@ transporte, e uma saída deve consumir apenas estados normalizados. Consulte
 
 ## Próxima direção
 
-O trabalho principal agora é transformar o primeiro caminho jogável do
-BridgePad Desktop em um produto, primeiro para Windows e depois Linux.
+O trabalho principal agora é endurecer e distribuir o BridgePad Desktop,
+primeiro para Windows e depois Linux.
 
 ```text
 BridgePad Android
        |
-  Wi-Fi ou USB
+ Wi-Fi, Bluetooth ou USB
        |
        v
 BridgePad Desktop
@@ -216,9 +222,12 @@ A ordem pretendida é:
 7. adicionar streaming opcional e de baixa latência do PC para o celular,
    começando por vídeo e depois áudio.
 
-Wi-Fi e USB precisarão do BridgePad Desktop porque o computador deverá receber o
-estado normalizado e criar um controle virtual nativo. Bluetooth HID continuará
-como caminho direto, sem exigir o aplicativo complementar.
+Wi-Fi, Bluetooth XInput e USB precisam do BridgePad Desktop porque o computador
+deve receber o estado normalizado e criar um controle virtual nativo. Bluetooth
+HID continua como fallback direto, sem exigir o aplicativo complementar. O
+incremento atual de Bluetooth via Desktop confia no pareamento Bluetooth do
+sistema operacional; a autenticação no protocolo do BridgePad ainda é exigida
+antes de uma versão pública.
 
 ## Ainda não implementado
 

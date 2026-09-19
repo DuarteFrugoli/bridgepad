@@ -313,6 +313,11 @@
     <string name="bluetooth_desktop_test_latency_result">RTT p50 %1$s ms · p95 %2$s ms · p99 %3$s ms</string>
     <string name="bluetooth_desktop_gameplay_action">Start playable RFCOMM session</string>
     <string name="bluetooth_desktop_gameplay_failed">Bluetooth gameplay session failed</string>
+    <string name="bluetooth_desktop_connecting">Looking for BridgePad Desktop over Bluetooth…</string>
+    <string name="bluetooth_desktop_reconnecting">Bluetooth Desktop connection interrupted. Reconnecting… (%1$d/%2$d)</string>
+    <string name="bluetooth_desktop_connected">Connected through BridgePad Desktop. Windows is receiving one XInput controller.</string>
+    <string name="bluetooth_desktop_unavailable">BridgePad Desktop was not found over Bluetooth. Open it on this PC or use direct HID.</string>
+    <string name="bluetooth_use_direct_hid">Use direct Bluetooth</string>
     <string name="session_orientation">Session orientation</string>
     <string name="session_orientation_description">Choose how the virtual controller, mouse touchpad and physical-controller session screens rotate.</string>
     <string name="orientation_auto">Automatic</string>

@@ -100,6 +100,27 @@ and ending then restarting the session left no stuck state. Windows still
 listed the phone's previously paired direct-HID controller, but it remained
 inactive and did not duplicate any command.
 
+### Normal Bluetooth Desktop flow
+
+BridgePad Desktop now starts the RFCOMM gamepad receiver automatically together
+with its Wi-Fi receiver. Run `cargo run -p bridgepad-desktop`, then use the
+normal Home flow on Android:
+
+1. Choose PC, Bluetooth and an already paired computer.
+2. Tap **Connect and play**. Confirm Home reports a Desktop/XInput connection
+   and does not start or register direct HID.
+3. Validate the virtual and physical controls in `joy.cpl`, Steam and a game.
+4. End and restart the session. Confirm the virtual controller is neutralized
+   and no second active controller receives the same input.
+5. Close BridgePad Desktop and try again. After the Desktop attempt fails, tap
+   **Use direct Bluetooth** and confirm the existing HID flow still connects.
+6. While RFCOMM is active, switch between Compatibility and Background USB and
+   confirm the same XInput controller continues receiving the selected source.
+
+The RFCOMM path currently trusts the Windows/Android Bluetooth bond. Do not
+treat this as the final release security model until application-level peer
+authentication is implemented and tested.
+
 ## Windows virtual gamepad spike
 
 This test validates the virtual-device boundary independently from Android and

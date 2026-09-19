@@ -192,6 +192,11 @@ cargo run -p bridgepad-bluetooth-spike -- play
 
 On Android, open **Settings > Bluetooth Desktop test**, select the paired PC and
 tap **Start playable RFCOMM session**. This remains a diagnostic path: Bluetooth
-pairing is required, but application-level BridgePad authentication and the
-normal Home selection/fallback flow have not been connected yet. Never run this
-path and direct HID at the same time.
+pairing is required, but application-level BridgePad authentication is not yet
+implemented.
+
+The normal `bridgepad-desktop` application now advertises the same playable
+RFCOMM service automatically. In the Android Home flow, selecting an already
+paired Bluetooth PC tries Desktop/XInput first. If the Desktop service is not
+available, Android offers direct HID as an explicit fallback; it never keeps
+both output paths active for the same session.

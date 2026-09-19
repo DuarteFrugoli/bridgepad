@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
                 var selectedAddress by rememberSaveable { mutableStateOf<String?>(null) }
                 var selectedNetworkDesktopId by rememberSaveable { mutableStateOf<String?>(null) }
                 var pairNewPcSelected by rememberSaveable { mutableStateOf(false) }
+                var useDirectBluetooth by rememberSaveable { mutableStateOf(false) }
                 var pendingDestination by rememberSaveable { mutableStateOf<String?>(null) }
                 var connectionGate by rememberSaveable { mutableStateOf<String?>(null) }
                 var pairedHosts by remember { mutableStateOf(readPairedHosts()) }
@@ -263,7 +264,11 @@ class MainActivity : ComponentActivity() {
                         effectiveDestinationType == DestinationType.PC &&
                         effectiveConnectionMethod == ConnectionMethod.BLUETOOTH
                     ) {
-                        OutputAdapterIds.GENERIC_BLUETOOTH_HID
+                        if (selectedAddress != null && !useDirectBluetooth) {
+                            OutputAdapterIds.DESKTOP_BLUETOOTH
+                        } else {
+                            OutputAdapterIds.GENERIC_BLUETOOTH_HID
+                        }
                     } else null,
                     destinationTarget = when {
                         selectedAddress != null -> DestinationTarget(
@@ -327,6 +332,34 @@ class MainActivity : ComponentActivity() {
                             NetworkGamepadStatus.Stopped -> sessionUiViewModel.dispatch(
                                 SessionUiEvent.TransportStopped(ConnectionMethod.WIFI),
                             )
+                            else -> Unit
+                        }
+                    }
+                }
+
+                LaunchedEffect(
+                    bluetoothDesktopGameplayStatus,
+                    physicalControllerConnected,
+                    showBluetoothDesktopDiagnostic,
+                ) {
+                    if (!showBluetoothDesktopDiagnostic) {
+                        when (bluetoothDesktopGameplayStatus) {
+                            BluetoothDesktopGamepadStatus.Active -> sessionUiViewModel.dispatch(
+                                SessionUiEvent.TransportConnected(
+                                    ConnectionMethod.BLUETOOTH,
+                                    physicalControllerConnected,
+                                ),
+                            )
+                            is BluetoothDesktopGamepadStatus.Failed -> sessionUiViewModel.dispatch(
+                                SessionUiEvent.TransportFailed(ConnectionMethod.BLUETOOTH),
+                            )
+                            BluetoothDesktopGamepadStatus.Stopped -> {
+                                if (!hidState.sessionActive) {
+                                    sessionUiViewModel.dispatch(
+                                        SessionUiEvent.TransportStopped(ConnectionMethod.BLUETOOTH),
+                                    )
+                                }
+                            }
                             else -> Unit
                         }
                     }
@@ -485,6 +518,7 @@ class MainActivity : ComponentActivity() {
                     hidState.sessionActive,
                     physicalControllerConnected,
                     sessionUiState.activeTransport,
+                    bluetoothDesktopGameplayStatus,
                 ) {
                     when {
                         hidState.status == HidSessionStatus.CONNECTED -> {
@@ -502,8 +536,8 @@ class MainActivity : ComponentActivity() {
                         hidState.status == HidSessionStatus.ERROR -> sessionUiViewModel.dispatch(
                             SessionUiEvent.TransportFailed(ConnectionMethod.BLUETOOTH),
                         )
-                        !hidState.sessionActive ||
-                            sessionUiState.activeTransport == ConnectionMethod.BLUETOOTH -> {
+                        !hidState.sessionActive &&
+                            bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Stopped -> {
                             sessionUiViewModel.dispatch(
                                 SessionUiEvent.TransportStopped(ConnectionMethod.BLUETOOTH),
                             )
@@ -701,6 +735,7 @@ class MainActivity : ComponentActivity() {
                             selectedAddress = null
                             selectedNetworkDesktopId = null
                             pairNewPcSelected = false
+                            useDirectBluetooth = false
                         }
                     },
                     onSelectBluetooth = {
@@ -709,6 +744,7 @@ class MainActivity : ComponentActivity() {
                             selectedAddress = null
                             selectedNetworkDesktopId = null
                             pairNewPcSelected = false
+                            useDirectBluetooth = false
                             networkDesktopCoordinator.clearPairingStatus()
                         }
                     },
@@ -717,6 +753,7 @@ class MainActivity : ComponentActivity() {
                             connectionMethodName = ConnectionMethod.WIFI.name
                             selectedAddress = null
                             pairNewPcSelected = false
+                            useDirectBluetooth = false
                             networkDesktopCoordinator.clearPairingStatus()
                         }
                     },
@@ -729,6 +766,7 @@ class MainActivity : ComponentActivity() {
                         if (selectedAddress != address || pairNewPcSelected != selectingNewPc) {
                             selectedAddress = address
                             pairNewPcSelected = selectingNewPc
+                            useDirectBluetooth = false
                         }
                     },
                     discoveredDesktops = discoveredDesktops,
@@ -736,6 +774,7 @@ class MainActivity : ComponentActivity() {
                     selectedNetworkDesktopId = selectedNetworkDesktopId,
                     networkPairingStatus = networkPairingStatus,
                     networkGameplayStatus = networkGameplayStatus,
+                    bluetoothDesktopGameplayStatus = bluetoothDesktopGameplayStatus,
                     networkDiscoveryError = networkDiscoveryError,
                     onSelectNetworkDesktop = { selectedNetworkDesktopId = it },
                     onPairNetworkDesktop = { peerId, code ->
@@ -759,6 +798,17 @@ class MainActivity : ComponentActivity() {
                         selectedAddress = null
                         connectionGate = null
                         pendingDestination = DestinationSelection.CHOOSE_PC
+                    },
+                    onUseDirectBluetooth = {
+                        val address = selectedAddress ?: return@HomeScreen
+                        useDirectBluetooth = true
+                        sessionCoordinator.stop()
+                        connectionGate = null
+                        pendingDestination = DestinationSelection.requestFor(
+                            selectedAddress = address,
+                            pairNewPcSelected = false,
+                            bluetoothReady = bluetoothEnabled,
+                        )
                     },
                     onPlay = {
                         if (effectiveConnectionMethod == ConnectionMethod.WIFI) {
@@ -789,7 +839,26 @@ class MainActivity : ComponentActivity() {
                                 availableTargetIds = currentHosts.map { it.address },
                             )) {
                             connectionGate = null
-                            pendingDestination = DestinationSelection.requestFor(selectedAddress, pairNewPcSelected, bluetoothReady)
+                            val address = selectedAddress
+                            if (address != null && !useDirectBluetooth) {
+                                pendingDestination = null
+                                if (hidState.sessionActive) sessionCoordinator.stop()
+                                sessionUiViewModel.dispatch(
+                                    SessionUiEvent.ConnectionRequested(ConnectionMethod.BLUETOOTH),
+                                )
+                                sessionCoordinator.start(
+                                    adapterId = OutputAdapterIds.DESKTOP_BLUETOOTH,
+                                    destination = requireNotNull(effectiveDestinationType),
+                                    physicalCaptureMode = effectiveCaptureMode,
+                                )
+                                sessionCoordinator.connect(address)
+                            } else {
+                                pendingDestination = DestinationSelection.requestFor(
+                                    address,
+                                    pairNewPcSelected,
+                                    bluetoothReady,
+                                )
+                            }
                         }
                     },
                     onConfigureGamepadMapping = {
@@ -822,10 +891,11 @@ class MainActivity : ComponentActivity() {
                         selectedAddress = null
                         selectedNetworkDesktopId = null
                         pairNewPcSelected = false
+                        useDirectBluetooth = false
                         pendingDestination = null
                         connectionGate = null
                         sessionUiViewModel.dispatch(SessionUiEvent.SessionEnded)
-                        if (hidState.sessionActive) sessionCoordinator.stop()
+                        sessionCoordinator.stop()
                         if (
                             networkGameplayStatus !is NetworkGamepadStatus.Stopped &&
                             !showNetworkDiagnostic

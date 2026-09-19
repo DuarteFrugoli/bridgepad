@@ -268,10 +268,13 @@ pub enum KeyboardInput {
 }
 
 pub fn decode_keyboard(packet: Packet<'_>) -> Result<KeyboardInput, ProtocolError> {
-    let kind = *packet.payload.first().ok_or(ProtocolError::InvalidPayloadLength {
-        expected: 1,
-        actual: 0,
-    })?;
+    let kind = *packet
+        .payload
+        .first()
+        .ok_or(ProtocolError::InvalidPayloadLength {
+            expected: 1,
+            actual: 0,
+        })?;
     match kind {
         0 => {
             if packet.payload.len() < 3 {

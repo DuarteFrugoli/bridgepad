@@ -70,4 +70,26 @@ class SessionPlannerTest {
             result,
         )
     }
+
+    @Test
+    fun explicitDesktopBluetoothAdapterWinsWithoutActivatingHid() {
+        val desktopBluetooth = pcBluetooth.copy(id = OutputAdapterIds.DESKTOP_BLUETOOTH)
+        val result = SessionPlanner.plan(
+            draft = SessionDraft(
+                destinationType = DestinationType.PC,
+                connectionMethod = ConnectionMethod.BLUETOOTH,
+                outputAdapterId = OutputAdapterIds.DESKTOP_BLUETOOTH,
+                destinationTarget = DestinationTarget(DestinationTargetKind.EXISTING, "pc"),
+            ),
+            adapters = OutputAdapterCatalog(listOf(pcBluetooth, desktopBluetooth)),
+            connectionAvailable = true,
+            availableTargetIds = listOf("pc"),
+        )
+
+        assertTrue(result is SessionPlanResult.Ready)
+        assertEquals(
+            OutputAdapterIds.DESKTOP_BLUETOOTH,
+            (result as SessionPlanResult.Ready).configuration.outputAdapterId,
+        )
+    }
 }

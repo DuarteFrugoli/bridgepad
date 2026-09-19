@@ -19,5 +19,14 @@ ring = "0.17.14"
 rustls = { version = "0.23.44", default-features = false, features = ["ring", "std", "tls12"] }
 sha2 = "0.10.9"
 
+[target.'cfg(windows)'.dependencies]
+futures-executor = "0.3.31"
+windows = { version = "0.62.2", features = [
+    "Devices_Bluetooth_Rfcomm",
+    "Foundation",
+    "Networking_Sockets",
+    "Storage_Streams",
+] }
+
 [lints]
 workspace = true

@@ -10,6 +10,7 @@ import dev.jonalakas.bridgepad.session.SessionCoordinator
 import dev.jonalakas.bridgepad.session.NetworkGameplayController
 import dev.jonalakas.bridgepad.session.NetworkDesktopCoordinator
 import dev.jonalakas.bridgepad.session.BluetoothDesktopGameplayController
+import dev.jonalakas.bridgepad.session.BluetoothDesktopSessionAdapter
 import dev.jonalakas.bridgepad.output.hid.BluetoothHidSessionAdapter
 import dev.jonalakas.bridgepad.output.hid.GenericCompositeHidProfile
 import kotlinx.coroutines.CoroutineScope
@@ -47,7 +48,10 @@ class BridgePadApplication : Application() {
         )
         sessionCoordinator = SessionCoordinator(
             context = this,
-            adapters = listOf(BluetoothHidSessionAdapter(this, GenericCompositeHidProfile)),
+            adapters = listOf(
+                BluetoothDesktopSessionAdapter(bluetoothDesktopGameplayController),
+                BluetoothHidSessionAdapter(this, GenericCompositeHidProfile),
+            ),
         )
     }
 

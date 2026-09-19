@@ -89,3 +89,10 @@ Desktop-backed XInput path the preferred Bluetooth option. Direct HID remains
 an explicit fallback when a compatible trusted Desktop is unavailable. The
 normal flow must not present the inactive legacy HID device as a second active
 BridgePad controller.
+
+The first Home integration implements this policy by starting the RFCOMM
+receiver with BridgePad Desktop, trying it before HID for an existing paired PC,
+and exposing direct HID only as an explicit fallback after the Desktop attempt
+fails. The paths are mutually exclusive. This increment still relies on the OS
+Bluetooth bond; application-level peer authentication is required before a
+release can treat Bluetooth Desktop as a trusted transport.

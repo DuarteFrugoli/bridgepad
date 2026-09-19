@@ -2,7 +2,9 @@
 
 use rcgen::{CertifiedKey, generate_simple_self_signed};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer, ServerName};
-use rustls::{ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection, StreamOwned};
+use rustls::{
+    ClientConfig, ClientConnection, RootCertStore, ServerConfig, ServerConnection, StreamOwned,
+};
 use std::io::{self, Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::Arc;
@@ -62,19 +64,14 @@ fn measure_plain(iterations: usize, payload_size: usize) -> io::Result<Measureme
     Ok(measurement)
 }
 
-fn measure_tls(
-    iterations: usize,
-    payload_size: usize,
-) -> Result<Measurement, AnyError> {
+fn measure_tls(iterations: usize, payload_size: usize) -> Result<Measurement, AnyError> {
     let (server_config, client_config) = tls_configs()?;
     let (address, server) = spawn_tls_echo(server_config, iterations, payload_size)?;
     let connected_at = Instant::now();
     let socket = TcpStream::connect(address)?;
     socket.set_nodelay(true)?;
-    let connection = ClientConnection::new(
-        client_config,
-        ServerName::try_from("localhost")?.to_owned(),
-    )?;
+    let connection =
+        ClientConnection::new(client_config, ServerName::try_from("localhost")?.to_owned())?;
     let stream = StreamOwned::new(connection, socket);
     let measurement = measure_round_trips(stream, iterations, payload_size, connected_at)?;
     server.join().expect("TLS echo server panicked")?;
@@ -86,10 +83,8 @@ async fn measure_quic(iterations: usize, payload_size: usize) -> Result<Measurem
         generate_simple_self_signed(vec!["localhost".to_owned()])?;
     let certificate: CertificateDer<'static> = cert.der().clone();
     let private_key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(signing_key.serialize_der()));
-    let server_config = quinn::ServerConfig::with_single_cert(
-        vec![certificate.clone()],
-        private_key,
-    )?;
+    let server_config =
+        quinn::ServerConfig::with_single_cert(vec![certificate.clone()], private_key)?;
     let server_endpoint = quinn::Endpoint::server(server_config, "127.0.0.1:0".parse()?)?;
     let address = server_endpoint.local_addr()?;
 
@@ -166,7 +161,11 @@ fn spawn_tls_echo(
         let (socket, _) = listener.accept()?;
         socket.set_nodelay(true)?;
         let connection = ServerConnection::new(config).map_err(io::Error::other)?;
-        echo(StreamOwned::new(connection, socket), iterations, payload_size)
+        echo(
+            StreamOwned::new(connection, socket),
+            iterations,
+            payload_size,
+        )
     });
     Ok((address, server))
 }
@@ -198,7 +197,10 @@ fn measure_round_trips(
         stream.flush()?;
         stream.read_exact(&mut incoming)?;
         if incoming != outgoing {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "echo payload changed"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "echo payload changed",
+            ));
         }
         if index == 0 {
             first_round_trip = connected_at.elapsed();

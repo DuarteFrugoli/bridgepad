@@ -1,28 +1,29 @@
 //! Encrypted BridgePad receiver with local discovery and paired client authentication.
 
 mod auth;
+pub mod bluetooth;
 mod discovery;
 mod trust;
 
 use auth::{
-    authentication_transcript, create_proof, derive_pairing_key, pairing_transcript,
-    role_transcript, secure_array, verify_proof, PairingWindow, NONCE_SIZE, PBKDF2_ITERATIONS,
-    SALT_SIZE,
+    NONCE_SIZE, PBKDF2_ITERATIONS, PairingWindow, SALT_SIZE, authentication_transcript,
+    create_proof, derive_pairing_key, pairing_transcript, role_transcript, secure_array,
+    verify_proof,
 };
 use bridgepad_protocol::{
-    decode_auth_proof, decode_auth_request, decode_gamepad_snapshot, decode_keyboard,
-    decode_packet, decode_pair_request, decode_pointer, decode_session_start, encode_packet,
-    KeyboardInput as ProtocolKeyboardInput, KeyboardKey as ProtocolKeyboardKey, MessageType,
-    PacketHeader, CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, HEADER_SIZE,
-    MAX_PAYLOAD_SIZE, MAX_PEER_NAME_SIZE,
+    CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, HEADER_SIZE,
+    KeyboardInput as ProtocolKeyboardInput, KeyboardKey as ProtocolKeyboardKey, MAX_PAYLOAD_SIZE,
+    MAX_PEER_NAME_SIZE, MessageType, PacketHeader, decode_auth_proof, decode_auth_request,
+    decode_gamepad_snapshot, decode_keyboard, decode_packet, decode_pair_request, decode_pointer,
+    decode_session_start, encode_packet,
 };
 use bridgepad_virtual_device::{
-    DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, PointerReport,
-    VirtualGamepadDevice, VirtualKeyboardDevice, VirtualPointerDevice,
+    DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, PointerReport, VirtualGamepadDevice,
+    VirtualKeyboardDevice, VirtualPointerDevice,
 };
 use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
 use bridgepad_windows_vigem::VigemGamepad;
-use rcgen::{generate_simple_self_signed, CertifiedKey};
+use rcgen::{CertifiedKey, generate_simple_self_signed};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 use sha2::{Digest, Sha256};
@@ -34,7 +35,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
-use trust::{decode_array, encode_hex, TrustStore, TrustedPeer, PEER_ID_SIZE, SHARED_SECRET_SIZE};
+use trust::{PEER_ID_SIZE, SHARED_SECRET_SIZE, TrustStore, TrustedPeer, decode_array, encode_hex};
 
 pub const DEFAULT_ADDRESS: &str = "0.0.0.0:39393";
 pub const DEFAULT_IDENTITY_DIRECTORY: &str = ".bridgepad-dev";

@@ -268,11 +268,13 @@ dependencies = [
  "bridgepad-virtual-device",
  "bridgepad-windows-pointer",
  "bridgepad-windows-vigem",
+ "futures-executor",
  "mdns-sd",
  "rcgen",
  "ring",
  "rustls",
  "sha2",
+ "windows 0.62.2",
 ]
 
 [[package]]

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use bridgepad_daemon::bluetooth::BluetoothDesktopServer;
 use bridgepad_daemon::{DaemonOptions, DesktopServer};
 use serde::Serialize;
 use std::sync::Mutex;
@@ -11,6 +12,7 @@ const APP_ICON: tauri::image::Image<'_> = tauri::include_image!("icons/32x32.png
 
 struct DesktopState {
     server: Mutex<Option<DesktopServer>>,
+    bluetooth_server: Mutex<Option<BluetoothDesktopServer>>,
     startup_error: Mutex<Option<String>>,
 }
 
@@ -59,9 +61,18 @@ fn desktop_status(state: State<'_, DesktopState>) -> Result<DesktopStatusDto, St
         });
     };
     let snapshot = server.snapshot().map_err(|error| error.to_string())?;
-    let phase = if snapshot.active_sessions > 0 {
+    let bluetooth = state
+        .bluetooth_server
+        .lock()
+        .map_err(|_| "Bluetooth desktop state lock failed")?
+        .as_ref()
+        .map(BluetoothDesktopServer::snapshot)
+        .unwrap_or_default();
+    let active_sessions = snapshot.active_sessions + bluetooth.active_sessions;
+    let connected_clients = snapshot.connected_clients + bluetooth.connected_clients;
+    let phase = if active_sessions > 0 {
         "playing"
-    } else if snapshot.connected_clients > 0 {
+    } else if connected_clients > 0 {
         "connected"
     } else {
         "ready"
@@ -79,8 +90,8 @@ fn desktop_status(state: State<'_, DesktopState>) -> Result<DesktopStatusDto, St
                 name: device.name,
             })
             .collect(),
-        connected_clients: snapshot.connected_clients,
-        active_sessions: snapshot.active_sessions,
+        connected_clients,
+        active_sessions,
         error: snapshot.last_error,
     })
 }
@@ -130,8 +141,16 @@ fn main() {
                 Ok(server) => (Some(server), None),
                 Err(error) => (None, Some(error.to_string())),
             };
+            let bluetooth_server = match BluetoothDesktopServer::start() {
+                Ok(server) => Some(server),
+                Err(error) => {
+                    eprintln!("Bluetooth Desktop receiver unavailable: {error}");
+                    None
+                }
+            };
             app.manage(DesktopState {
                 server: Mutex::new(server),
+                bluetooth_server: Mutex::new(bluetooth_server),
                 startup_error: Mutex::new(startup_error),
             });
 

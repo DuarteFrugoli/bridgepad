@@ -173,7 +173,7 @@ setting that becomes relevant only when compatible hardware is detected.
   acceptance gate.
 - Bluetooth HID remains an Android-only adapter and does not use the desktop
   protocol.
-- Bluetooth via BridgePad Desktop is a different future adapter, not a mode of
+- Bluetooth via BridgePad Desktop is a separate adapter, not a mode of
   Bluetooth HID. The two must be mutually exclusive: direct HID creates the
   controller on the host, while Desktop Bluetooth sends BridgePad data to the
   receiver that creates XInput. Running both would expose duplicate controllers.
@@ -185,12 +185,18 @@ setting that becomes relevant only when compatible hardware is detected.
   peripheral/server and Windows as the central/client because the central role
   is the broadly supported Windows path. This role difference belongs inside
   the adapters and does not change the domain or wire protocol direction.
-- The first playable RFCOMM path sends v1 `SessionStart`, complete
+- The RFCOMM gamepad path sends v1 `SessionStart`, complete
   `GamepadSnapshot` messages and `SessionStop` through a latest-state scheduler.
-  The Windows spike owns only RFCOMM framing and delegates decoded state to the
-  existing ViGEm virtual-device boundary. It always neutralizes the device when
-  a session stops or the connection disappears. This validates gameplay but is
-  not yet the authenticated product receiver.
+  BridgePad Desktop advertises the private RFCOMM service while its normal
+  network receiver is running, and delegates decoded state to the existing
+  ViGEm virtual-device boundary. It always neutralizes the device when a session
+  stops or the connection disappears.
+- For an already paired Bluetooth PC, Home tries the Desktop RFCOMM path first.
+  Direct HID is never started during that attempt. If Desktop is unavailable,
+  the user can explicitly choose the direct-HID fallback. Pairing a new PC still
+  uses the direct Bluetooth flow. The current RFCOMM product increment relies on
+  the operating-system Bluetooth bond; BridgePad application-level
+  authentication remains a release gate.
 - The existing `GenericCompositeHidProfile` contains the Windows/Linux Bluetooth
   descriptor and report encoding. Additional PC profiles can implement the same
   contract without modifying input routing or the generic profile.
