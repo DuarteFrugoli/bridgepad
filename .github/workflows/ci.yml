@@ -27,7 +27,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run unit tests and lint
-        run: ./gradlew :domain:test :protocol:test :transport-network:test :transport-bluetooth-hid:testDebugUnitTest :transport-bluetooth-hid:lintDebug :app:testDebugUnitTest :app:lintDebug
+        run: ./gradlew :domain:test :protocol:test :transport-network:test :transport-bluetooth-hid:testDebugUnitTest :transport-bluetooth-hid:lintDebug :transport-bluetooth-desktop:testDebugUnitTest :transport-bluetooth-desktop:lintDebug :app:testDebugUnitTest :app:lintDebug
 
   build:
     name: Build debug APK
@@ -52,7 +52,7 @@ jobs:
         run: ./gradlew assembleDebug
 
   desktop-tests:
-    name: Desktop protocol tests (${{ matrix.os }})
+    name: Desktop workspace tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -78,11 +78,12 @@ jobs:
           - name: Windows
             os: windows-latest
             artifact: bridgepad-desktop-windows
-            packages: -p bridgepad-desktop -p bridgepad-daemon -p bridgepad-gamepad-spike
+            packages: -p bridgepad-desktop -p bridgepad-daemon -p bridgepad-gamepad-spike -p bridgepad-bluetooth-spike
             binary: |
               desktop/target/release/bridgepad-desktop.exe
               desktop/target/release/bridgepad-daemon.exe
               desktop/target/release/bridgepad-gamepad-spike.exe
+              desktop/target/release/bridgepad-bluetooth-spike.exe
           - name: Linux
             os: ubuntu-latest
             artifact: bridgepad-desktop-linux

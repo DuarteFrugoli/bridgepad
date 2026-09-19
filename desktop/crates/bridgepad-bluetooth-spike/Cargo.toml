@@ -1,0 +1,26 @@
+[package]
+name = "bridgepad-bluetooth-spike"
+description = "BridgePad Desktop BLE GATT and RFCOMM transport benchmark"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+btleplug = "0.11.8"
+futures-util = "0.3.34"
+futures-executor = "0.3.31"
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+uuid = "1.18.1"
+windows = { version = "0.62.2", features = [
+    "Devices_Bluetooth",
+    "Devices_Bluetooth_Rfcomm",
+    "Foundation",
+    "Networking_Sockets",
+    "Storage_Streams",
+] }
+
+[lints]
+workspace = true

@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":domain"))
     implementation(project(":protocol"))
     implementation(project(":transport-bluetooth-hid"))
+    implementation(project(":transport-bluetooth-desktop"))
     implementation(project(":transport-network"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

@@ -10,6 +10,8 @@ new connection methods and destinations do not change existing input adapters.
   |                                                       ^
   +----------------> :transport-network -----------------+
   |                                                       ^
+  +--------> :transport-bluetooth-desktop ----------------+
+  |                                                       ^
   +----------------> :transport-bluetooth-hid ------------+
   |                                                       ^
   +-------------------------------------------------------+
@@ -26,6 +28,9 @@ new connection methods and destinations do not change existing input adapters.
   Discovery and persistence remain above it and never enter input code.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
+- `:transport-bluetooth-desktop` owns the isolated Android-side RFCOMM/BLE
+  transport benchmark. It does not depend on HID and cannot create a virtual
+  controller; the production adapter will be defined only after the spike.
 - `:app` is the Android composition root. It owns Compose UI, permissions,
   lifecycle, hardware input adapters, DNS-SD discovery, Android Keystore-backed
   trusted-desktop persistence and adapter registration. The
@@ -167,6 +172,18 @@ setting that becomes relevant only when compatible hardware is detected.
   acceptance gate.
 - Bluetooth HID remains an Android-only adapter and does not use the desktop
   protocol.
+- Bluetooth via BridgePad Desktop is a different future adapter, not a mode of
+  Bluetooth HID. The two must be mutually exclusive: direct HID creates the
+  controller on the host, while Desktop Bluetooth sends BridgePad data to the
+  receiver that creates XInput. Running both would expose duplicate controllers.
+- The transport spike compares identical 125 Hz one-way report traffic over two
+  role arrangements. Desktop measures delivery and cadence and returns an
+  aggregate summary; lightweight periodic Ping/Pong samples measure RTT and
+  keep the duplex link active without introducing per-report echo backpressure.
+  RFCOMM uses Windows as the service provider and Android as the client. BLE GATT uses Android as the
+  peripheral/server and Windows as the central/client because the central role
+  is the broadly supported Windows path. This role difference belongs inside
+  the adapters and does not change the domain or wire protocol direction.
 - The existing `GenericCompositeHidProfile` contains the Windows/Linux Bluetooth
   descriptor and report encoding. Additional PC profiles can implement the same
   contract without modifying input routing or the generic profile.

@@ -79,6 +79,8 @@ import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
 import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
+import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
+import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbe
 import dev.jonalakas.bridgepad.ui.session.SessionSurface
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationStore
@@ -112,6 +114,7 @@ class MainActivity : ComponentActivity() {
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var showSettings by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
+                var showBluetoothDesktopDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
@@ -209,6 +212,10 @@ class MainActivity : ComponentActivity() {
                 }
                 val hidState by sessionCoordinator.state.collectAsState()
                 val networkGameplayStatus by networkGameplayController.status.collectAsState()
+                val gameplaySessionActive = hidState.sessionActive ||
+                    networkGameplayStatus is NetworkGamepadStatus.Connecting ||
+                    networkGameplayStatus is NetworkGamepadStatus.Reconnecting ||
+                    networkGameplayStatus is NetworkGamepadStatus.Active
                 val discoveredDesktops by networkDesktopCoordinator.discoveredDesktops.collectAsState()
                 val trustedDesktops by networkDesktopCoordinator.trustedDesktops.collectAsState()
                 val networkPairingStatus by networkDesktopCoordinator.pairingStatus.collectAsState()
@@ -518,6 +525,16 @@ class MainActivity : ComponentActivity() {
                             returnToSettingsAfterLayoutEditor = false
                         },
                     )
+                } else if (showBluetoothDesktopDiagnostic) {
+                    BluetoothDesktopDiagnosticScreen(
+                        pairedHosts = pairedHosts,
+                        gameplaySessionActive = gameplaySessionActive,
+                        probe = remember { BluetoothDesktopProbe(this@MainActivity) },
+                        onBack = {
+                            showBluetoothDesktopDiagnostic = false
+                            showSettings = true
+                        },
+                    )
                 } else if (showNetworkDiagnostic) {
                     NetworkDiagnosticScreen(
                         gameplayStatus = networkGameplayStatus,
@@ -563,6 +580,10 @@ class MainActivity : ComponentActivity() {
                         onOpenNetworkDiagnostic = {
                             showSettings = false
                             showNetworkDiagnostic = true
+                        },
+                        onOpenBluetoothDesktopDiagnostic = {
+                            showSettings = false
+                            showBluetoothDesktopDiagnostic = true
                         },
                         onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
                             runCatching {

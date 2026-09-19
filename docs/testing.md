@@ -8,8 +8,8 @@ phase is complete only when its automated and hardware evidence is recorded.
 Run from the repository root on Windows:
 
 ```powershell
-.\gradlew.bat :domain:test :protocol:test :transport-network:test :transport-bluetooth-hid:testDebugUnitTest :app:testDebugUnitTest
-.\gradlew.bat :transport-bluetooth-hid:lintDebug :app:lintDebug
+.\gradlew.bat :domain:test :protocol:test :transport-network:test :transport-bluetooth-hid:testDebugUnitTest :transport-bluetooth-desktop:testDebugUnitTest :app:testDebugUnitTest
+.\gradlew.bat :transport-bluetooth-hid:lintDebug :transport-bluetooth-desktop:lintDebug :app:lintDebug
 .\gradlew.bat :app:assembleDebug
 ```
 
@@ -20,6 +20,49 @@ app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The same checks run as independent jobs in GitHub Actions after every push.
+
+## Bluetooth via Desktop transport spike
+
+This diagnostic compares RFCOMM and BLE GATT without starting direct HID or a
+virtual XInput controller. End any active BridgePad session before opening it.
+The phone and PC must already be paired.
+
+### RFCOMM
+
+1. From `desktop/`, run
+   `cargo run -p bridgepad-bluetooth-spike -- rfcomm`.
+2. Install/open the Android app, then open **Settings > Bluetooth Desktop test**.
+3. Select the paired PC and tap **Test RFCOMM**.
+4. Keep the desktop process running until Android reports 1,000 streamed
+   reports and the Desktop aggregate.
+5. Record connection time, Desktop received/Android accepted count, rejected
+   writes, loss, report rate, maximum receive gap, and RTT
+   p50/p95/p99. Delivery and cadence come from the Desktop aggregate; RTT comes
+   from lightweight periodic Ping/Pong samples during the report stream.
+6. Tap **Test RFCOMM** again without restarting the Desktop process. Treat that
+   second independent run as the reconnection test; it must complete without a
+   raw socket error or stale state from the first run.
+
+### BLE GATT
+
+1. Stop the RFCOMM process cleanly with Enter.
+2. From `desktop/`, run `cargo run -p bridgepad-bluetooth-spike -- ble`.
+   The Windows process scans as a BLE central; it does not advertise a service.
+3. On the same Android diagnostic screen, tap **Test BLE GATT**. Android now
+   advertises the private GATT service and waits for Desktop to subscribe.
+4. Keep the process running through the automatic disconnect/reconnect cycle.
+5. Record the same metrics as RFCOMM.
+
+Repeat each test at least three times with the devices in the same positions.
+Also repeat after toggling Bluetooth off/on and after restarting Desktop. Do not
+compare a run made during phone hotspot use with one made without it, because
+2.4 GHz radio coexistence can alter Bluetooth performance.
+
+The provisional winner shown by Android uses loss first and p95 RTT second. It
+is a convenience, not the architecture decision: reconnect reliability,
+maximum gaps and repeated runs must also be considered. This spike does not
+prove authentication or XInput integration; those belong to the production
+phase after a transport is selected.
 
 ## Windows virtual gamepad spike
 

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/bridgepad-daemon",
+    "crates/bridgepad-bluetooth-spike",
     "crates/bridgepad-desktop",
     "crates/bridgepad-gamepad-spike",
     "crates/bridgepad-protocol",
@@ -11,6 +12,7 @@ members = [
 ]
 default-members = [
     "crates/bridgepad-daemon",
+    "crates/bridgepad-bluetooth-spike",
     "crates/bridgepad-gamepad-spike",
     "crates/bridgepad-protocol",
     "crates/bridgepad-transport-spike",

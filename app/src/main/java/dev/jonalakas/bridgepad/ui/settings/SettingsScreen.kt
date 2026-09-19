@@ -52,6 +52,7 @@ fun SettingsScreen(
     onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
     onInvertedTouchpadScrollChanged: (Boolean) -> Unit,
     onOpenNetworkDiagnostic: () -> Unit,
+    onOpenBluetoothDesktopDiagnostic: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
@@ -142,6 +143,17 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.open_network_diagnostic))
+                    }
+                }
+            }
+            item {
+                SettingsCard(title = stringResource(R.string.bluetooth_desktop_test_title)) {
+                    Text(stringResource(R.string.bluetooth_desktop_test_settings_description))
+                    OutlinedButton(
+                        onClick = onOpenBluetoothDesktopDiagnostic,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.bluetooth_desktop_test_open))
                     }
                 }
             }

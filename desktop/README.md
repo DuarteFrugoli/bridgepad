@@ -123,7 +123,7 @@ The bypass trusts any client that can reach the receiver and is diagnostic only.
 Never use `--allow-unpaired` as the normal Home flow or on an untrusted network.
 
 GitHub Actions publishes a `bridgepad-desktop-windows` artifact containing the
-graphical app, terminal daemon and gamepad spike. The
+graphical app, terminal daemon, gamepad spike and Bluetooth transport spike. The
 `bridgepad-desktop-linux` artifact currently contains the terminal receiver.
 These raw development binaries can be tried without installing a Rust
 toolchain; installers remain a later product increment.
@@ -158,3 +158,27 @@ The adapter converts BridgePad's downward-positive Y axes to XInput's
 upward-positive convention and scales 16-bit trigger values to XInput's 8-bit
 range. BridgePad's first extra button maps to Guide; the remaining extra buttons
 have no Xbox 360 equivalent.
+
+## Bluetooth via Desktop transport spike
+
+Run one candidate at a time from `desktop/` while the phone and PC are already
+paired. RFCOMM makes Windows the service provider:
+
+```powershell
+cargo run -p bridgepad-bluetooth-spike -- rfcomm
+```
+
+BLE uses Windows in its normal central role and waits for the Android diagnostic
+to advertise its GATT service:
+
+```powershell
+cargo run -p bridgepad-bluetooth-spike -- ble
+```
+
+Then open **Settings > Bluetooth Desktop test** on Android, select the paired PC
+and run the matching candidate. The spike streams 1,000 reports at 125 Hz.
+Desktop returns aggregate delivery/cadence statistics, while lightweight
+periodic Ping/Pong samples measure RTT without echoing every report. It does not
+create XInput or start direct HID. Its purpose is to select a transport; the
+winning transport will be integrated with the authenticated BridgePad protocol
+and existing virtual-device backend in a later phase.
