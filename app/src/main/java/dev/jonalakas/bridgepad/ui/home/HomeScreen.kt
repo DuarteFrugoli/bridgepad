@@ -262,6 +262,18 @@ fun HomeScreen(
                     )
                 }
             }
+            if (
+                bluetoothSelected &&
+                hidState.status == HidSessionStatus.CONNECTED &&
+                !bluetoothDesktopConnected
+            ) {
+                item {
+                    NoticeCard(
+                        stringResource(R.string.bluetooth_direct_steam_mapping_notice),
+                        NoticeTone.WARNING,
+                    )
+                }
+            }
             if (bluetoothSelected) {
                 when (val status = bluetoothDesktopGameplayStatus) {
                     BluetoothDesktopGamepadStatus.Connecting -> item {

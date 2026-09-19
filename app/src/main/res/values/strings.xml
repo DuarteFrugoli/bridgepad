@@ -318,6 +318,7 @@
     <string name="bluetooth_desktop_connected">Connected through BridgePad Desktop. Windows is receiving one XInput controller.</string>
     <string name="bluetooth_desktop_unavailable">BridgePad Desktop was not found over Bluetooth. Open it on this PC or use direct HID.</string>
     <string name="bluetooth_use_direct_hid">Use direct Bluetooth</string>
+    <string name="bluetooth_direct_steam_mapping_notice">Direct Bluetooth uses a generic controller. If you play through Steam, open its controller settings and map BridgePad once before playing.</string>
     <string name="session_orientation">Session orientation</string>
     <string name="session_orientation_description">Choose how the virtual controller, mouse touchpad and physical-controller session screens rotate.</string>
     <string name="orientation_auto">Automatic</string>
