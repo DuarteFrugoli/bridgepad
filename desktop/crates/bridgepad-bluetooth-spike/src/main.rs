@@ -10,6 +10,14 @@ fn main() -> windows::core::Result<()> {
 
 #[cfg(windows)]
 mod windows_spike {
+    use bridgepad_protocol::{
+        CAPABILITY_GAMEPAD, HEADER_SIZE, MAX_PAYLOAD_SIZE, MessageType, PacketHeader,
+        decode_gamepad_snapshot, decode_packet, decode_session_start, encode_packet,
+    };
+    use bridgepad_virtual_device::{
+        DpadDirection, GamepadReport, VirtualDeviceError, VirtualGamepadDevice,
+    };
+    use bridgepad_windows_vigem::VigemGamepad;
     use btleplug::api::{
         Central, CentralEvent, Characteristic, Manager as _, Peripheral as _, ScanFilter, WriteType,
     };
@@ -47,13 +55,21 @@ mod windows_spike {
     const PACKET_SUMMARY_REQUEST: u8 = 4;
     const PACKET_SUMMARY_RESPONSE: u8 = 5;
 
+    #[derive(Clone, Copy)]
+    enum RfcommMode {
+        Benchmark,
+        Playable,
+    }
+
     pub fn run() -> Result<()> {
         let adapter = wait(BluetoothAdapter::GetDefaultAsync()?)?;
         let requested = std::env::args()
             .nth(1)
             .unwrap_or_else(|| "rfcomm".to_owned());
-        if requested != "rfcomm" && requested != "ble" {
-            return Err(spike_error("usage: bridgepad-bluetooth-spike [rfcomm|ble]"));
+        if requested != "rfcomm" && requested != "ble" && requested != "play" {
+            return Err(spike_error(
+                "usage: bridgepad-bluetooth-spike [rfcomm|ble|play]",
+            ));
         }
         println!("BridgePad Bluetooth Desktop transport spike");
         println!("Classic supported: {}", adapter.IsClassicSupported()?);
@@ -76,9 +92,20 @@ mod windows_spike {
             ));
         }
 
-        let server = RfcommProbeServer::start()?;
-        println!("RFCOMM: advertising and ready");
-        println!("Use Settings > Bluetooth Desktop test in the Android app.");
+        let mode = if requested == "play" {
+            RfcommMode::Playable
+        } else {
+            RfcommMode::Benchmark
+        };
+        let server = RfcommProbeServer::start(mode)?;
+        if matches!(mode, RfcommMode::Playable) {
+            println!("RFCOMM playable receiver: advertising and ready");
+            println!("WARNING: this spike trusts the paired Bluetooth device without app authentication.");
+            println!("Use Settings > Bluetooth Desktop test > Start playable RFCOMM session.");
+        } else {
+            println!("RFCOMM: advertising and ready");
+            println!("Use Settings > Bluetooth Desktop test in the Android app.");
+        }
         println!("The PC and phone must already be paired for this spike.");
         println!("Press Enter to stop cleanly.");
         let mut line = String::new();
@@ -257,7 +284,7 @@ mod windows_spike {
     }
 
     impl RfcommProbeServer {
-        fn start() -> Result<Self> {
+        fn start(mode: RfcommMode) -> Result<Self> {
             let service_id = RfcommServiceId::FromUuid(RFCOMM_SERVICE_UUID)?;
             let provider = wait(RfcommServiceProvider::CreateAsync(&service_id)?)?;
             let listener = StreamSocketListener::new()?;
@@ -265,11 +292,11 @@ mod windows_spike {
                 listener.ConnectionReceived(&TypedEventHandler::<
                     StreamSocketListener,
                     StreamSocketListenerConnectionReceivedEventArgs,
-                >::new(|_, event| {
+                >::new(move |_, event| {
                     let socket = event.ok()?.Socket()?;
                     thread::spawn(move || {
                         println!("RFCOMM client connected");
-                        if let Err(error) = serve_rfcomm(socket) {
+                        if let Err(error) = serve_rfcomm(socket, mode) {
                             eprintln!("RFCOMM connection ended: {error}");
                         } else {
                             println!("RFCOMM client disconnected");
@@ -297,7 +324,14 @@ mod windows_spike {
         }
     }
 
-    fn serve_rfcomm(socket: StreamSocket) -> Result<()> {
+    fn serve_rfcomm(socket: StreamSocket, mode: RfcommMode) -> Result<()> {
+        match mode {
+            RfcommMode::Benchmark => serve_rfcomm_benchmark(socket),
+            RfcommMode::Playable => serve_rfcomm_gamepad(socket),
+        }
+    }
+
+    fn serve_rfcomm_benchmark(socket: StreamSocket) -> Result<()> {
         let input = socket.InputStream()?;
         let reader = DataReader::CreateDataReader(&input)?;
         reader.SetInputStreamOptions(InputStreamOptions::Partial)?;
@@ -369,6 +403,218 @@ mod windows_spike {
         outbound
             .send(packet)
             .map_err(|_| spike_error("RFCOMM writer stopped before the response was sent"))
+    }
+
+    fn serve_rfcomm_gamepad(socket: StreamSocket) -> Result<()> {
+        let input = socket.InputStream()?;
+        let reader = DataReader::CreateDataReader(&input)?;
+        reader.SetInputStreamOptions(InputStreamOptions::Partial)?;
+        let (outbound, outbound_receiver) = sync_channel::<Vec<u8>>(32);
+        let writer_socket = socket.clone();
+        let writer_thread = thread::Builder::new()
+            .name("BridgePad-RFCOMM-gamepad-writer".to_owned())
+            .spawn(move || -> Result<()> {
+                let output = writer_socket.OutputStream()?;
+                let writer = DataWriter::CreateDataWriter(&output)?;
+                while let Ok(packet) = outbound_receiver.recv() {
+                    writer.WriteBytes(&packet)?;
+                    wait(writer.StoreAsync()?)?;
+                }
+                let _ = writer.DetachStream();
+                let _ = writer.Close();
+                Ok(())
+            })
+            .map_err(|error| spike_error(&format!("could not start RFCOMM writer: {error}")))?;
+
+        let mut buffered = Vec::with_capacity(HEADER_SIZE * 2);
+        let mut gamepad: Option<PlayableGamepad> = None;
+        let mut active_session_id = None;
+        let mut latest_sequence = None;
+        let read_result = (|| -> Result<()> {
+            loop {
+                let loaded = wait(reader.LoadAsync(512)?)?;
+                if loaded == 0 {
+                    break;
+                }
+                let mut chunk = vec![0_u8; loaded as usize];
+                reader.ReadBytes(&mut chunk)?;
+                buffered.extend_from_slice(&chunk);
+
+                while let Some(frame_length) = bridge_frame_length(&buffered)? {
+                    if buffered.len() < frame_length {
+                        break;
+                    }
+                    let bytes: Vec<_> = buffered.drain(..frame_length).collect();
+                    let packet = decode_packet(&bytes)
+                        .map_err(|error| spike_error(&format!("invalid BridgePad packet: {error}")))?;
+                    match packet.header.message_type {
+                        MessageType::SessionStart => {
+                            if gamepad.is_some() {
+                                return Err(spike_error("a Bluetooth gamepad session is already active"));
+                            }
+                            let request = decode_session_start(packet).map_err(|error| {
+                                spike_error(&format!("invalid SessionStart: {error}"))
+                            })?;
+                            if request.requested_capabilities & CAPABILITY_GAMEPAD == 0 {
+                                return Err(spike_error("Android did not request gamepad input"));
+                            }
+                            gamepad = Some(PlayableGamepad::connect()?);
+                            active_session_id = Some(packet.header.session_id);
+                            latest_sequence = None;
+                            queue_bytes(
+                                &outbound,
+                                response_packet(
+                                    packet.header,
+                                    MessageType::SessionReady,
+                                    &CAPABILITY_GAMEPAD.to_be_bytes(),
+                                )?,
+                            )?;
+                            println!("Playable RFCOMM gamepad session started");
+                        }
+                        MessageType::GamepadSnapshot => {
+                            if active_session_id != Some(packet.header.session_id) {
+                                return Err(spike_error("gamepad snapshot belongs to another session"));
+                            }
+                            if is_newer_sequence(latest_sequence, packet.header.sequence) {
+                                let snapshot = decode_gamepad_snapshot(packet).map_err(|error| {
+                                    spike_error(&format!("invalid gamepad snapshot: {error}"))
+                                })?;
+                                gamepad
+                                    .as_mut()
+                                    .ok_or_else(|| spike_error("gamepad session is not active"))?
+                                    .update(to_gamepad_report(snapshot))
+                                    .map_err(|error| spike_error(&error.to_string()))?;
+                                latest_sequence = Some(packet.header.sequence);
+                            }
+                        }
+                        MessageType::Ping => {
+                            queue_bytes(
+                                &outbound,
+                                response_packet(packet.header, MessageType::Pong, packet.payload)?,
+                            )?;
+                        }
+                        MessageType::SessionStop => {
+                            if active_session_id == Some(packet.header.session_id) {
+                                gamepad = None;
+                                active_session_id = None;
+                                latest_sequence = None;
+                                println!("Playable RFCOMM gamepad session stopped");
+                                return Ok(());
+                            }
+                        }
+                        _ => return Err(spike_error("message is not supported by the playable spike")),
+                    }
+                }
+            }
+            Ok(())
+        })();
+
+        drop(gamepad);
+        drop(outbound);
+        let writer_result = writer_thread
+            .join()
+            .map_err(|_| spike_error("RFCOMM gamepad writer thread panicked"))?;
+        let _ = reader.DetachStream();
+        let _ = reader.Close();
+        let _ = socket.Close();
+        read_result?;
+        writer_result
+    }
+
+    fn bridge_frame_length(buffered: &[u8]) -> Result<Option<usize>> {
+        if buffered.len() < HEADER_SIZE {
+            return Ok(None);
+        }
+        let payload_length = usize::from(u16::from_be_bytes([buffered[28], buffered[29]]));
+        if payload_length > MAX_PAYLOAD_SIZE {
+            return Err(spike_error("BridgePad payload exceeds the v1 limit"));
+        }
+        Ok(Some(HEADER_SIZE + payload_length))
+    }
+
+    fn queue_bytes(outbound: &SyncSender<Vec<u8>>, packet: Vec<u8>) -> Result<()> {
+        outbound
+            .send(packet)
+            .map_err(|_| spike_error("RFCOMM writer stopped before the response was sent"))
+    }
+
+    fn response_packet(
+        request: PacketHeader,
+        message_type: MessageType,
+        payload: &[u8],
+    ) -> Result<Vec<u8>> {
+        encode_packet(
+            PacketHeader {
+                session_id: request.session_id,
+                sequence: request.sequence,
+                timestamp_micros: 0,
+                message_type,
+            },
+            payload,
+        )
+        .map_err(|error| spike_error(&format!("could not encode response: {error}")))
+    }
+
+    fn is_newer_sequence(latest: Option<u32>, candidate: u32) -> bool {
+        latest.is_none_or(|previous| {
+            let distance = candidate.wrapping_sub(previous);
+            distance != 0 && distance < 0x8000_0000
+        })
+    }
+
+    fn to_gamepad_report(snapshot: bridgepad_protocol::GamepadSnapshot) -> GamepadReport {
+        let dpad = match snapshot.dpad {
+            0 => DpadDirection::Neutral,
+            1 => DpadDirection::North,
+            2 => DpadDirection::NorthEast,
+            3 => DpadDirection::East,
+            4 => DpadDirection::SouthEast,
+            5 => DpadDirection::South,
+            6 => DpadDirection::SouthWest,
+            7 => DpadDirection::West,
+            8 => DpadDirection::NorthWest,
+            _ => unreachable!("the protocol decoder validates d-pad values"),
+        };
+        GamepadReport {
+            buttons: snapshot.buttons,
+            dpad,
+            left_x: snapshot.left_x,
+            left_y: snapshot.left_y,
+            right_x: snapshot.right_x,
+            right_y: snapshot.right_y,
+            left_trigger: snapshot.left_trigger,
+            right_trigger: snapshot.right_trigger,
+        }
+    }
+
+    struct PlayableGamepad {
+        device: VigemGamepad,
+    }
+
+    impl PlayableGamepad {
+        fn connect() -> Result<Self> {
+            let mut device = VigemGamepad::connect()
+                .map_err(|error| spike_error(&error.to_string()))?;
+            device
+                .neutralize()
+                .map_err(|error| spike_error(&error.to_string()))?;
+            Ok(Self { device })
+        }
+
+        fn update(
+            &mut self,
+            report: GamepadReport,
+        ) -> std::result::Result<(), VirtualDeviceError> {
+            self.device.update(report)
+        }
+    }
+
+    impl Drop for PlayableGamepad {
+        fn drop(&mut self) {
+            if let Err(error) = self.device.neutralize() {
+                eprintln!("Could not neutralize RFCOMM gamepad: {error}");
+            }
+        }
     }
 
     #[derive(Default)]

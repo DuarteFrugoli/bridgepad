@@ -182,3 +182,16 @@ periodic Ping/Pong samples measure RTT without echoing every report. It does not
 create XInput or start direct HID. Its purpose is to select a transport; the
 winning transport will be integrated with the authenticated BridgePad protocol
 and existing virtual-device backend in a later phase.
+
+The first playable RFCOMM increment reuses the v1 gamepad snapshots and creates
+an Xbox 360 virtual controller through ViGEm:
+
+```powershell
+cargo run -p bridgepad-bluetooth-spike -- play
+```
+
+On Android, open **Settings > Bluetooth Desktop test**, select the paired PC and
+tap **Start playable RFCOMM session**. This remains a diagnostic path: Bluetooth
+pairing is required, but application-level BridgePad authentication and the
+normal Home selection/fallback flow have not been connected yet. Never run this
+path and direct HID at the same time.

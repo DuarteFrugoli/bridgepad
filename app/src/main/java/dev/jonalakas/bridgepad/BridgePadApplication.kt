@@ -9,6 +9,7 @@ import dev.jonalakas.bridgepad.session.InputRouter
 import dev.jonalakas.bridgepad.session.SessionCoordinator
 import dev.jonalakas.bridgepad.session.NetworkGameplayController
 import dev.jonalakas.bridgepad.session.NetworkDesktopCoordinator
+import dev.jonalakas.bridgepad.session.BluetoothDesktopGameplayController
 import dev.jonalakas.bridgepad.output.hid.BluetoothHidSessionAdapter
 import dev.jonalakas.bridgepad.output.hid.GenericCompositeHidProfile
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +28,8 @@ class BridgePadApplication : Application() {
         private set
     lateinit var networkDesktopCoordinator: NetworkDesktopCoordinator
         private set
+    lateinit var bluetoothDesktopGameplayController: BluetoothDesktopGameplayController
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -35,6 +38,7 @@ class BridgePadApplication : Application() {
         TouchscreenLayoutStore.initialize(this)
         SessionOrientationStore.initialize(this)
         inputRouter = InputRouter(applicationScope)
+        bluetoothDesktopGameplayController = BluetoothDesktopGameplayController(this, inputRouter)
         networkGameplayController = NetworkGameplayController(inputRouter, applicationScope)
         networkDesktopCoordinator = NetworkDesktopCoordinator(
             context = this,
@@ -48,6 +52,7 @@ class BridgePadApplication : Application() {
     }
 
     override fun onTerminate() {
+        bluetoothDesktopGameplayController.shutdown()
         networkDesktopCoordinator.shutdown()
         applicationScope.cancel()
         super.onTerminate()

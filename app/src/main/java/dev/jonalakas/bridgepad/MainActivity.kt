@@ -81,6 +81,7 @@ import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbe
+import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
 import dev.jonalakas.bridgepad.ui.session.SessionSurface
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationStore
@@ -99,6 +100,7 @@ class MainActivity : ComponentActivity() {
         val bridgePadApplication = application as BridgePadApplication
         val sessionCoordinator = bridgePadApplication.sessionCoordinator
         val networkGameplayController = bridgePadApplication.networkGameplayController
+        val bluetoothDesktopGameplayController = bridgePadApplication.bluetoothDesktopGameplayController
         networkDesktopCoordinator = bridgePadApplication.networkDesktopCoordinator
 
         val deviceInfo = AndroidDeviceInfoProvider.get()
@@ -212,10 +214,15 @@ class MainActivity : ComponentActivity() {
                 }
                 val hidState by sessionCoordinator.state.collectAsState()
                 val networkGameplayStatus by networkGameplayController.status.collectAsState()
+                val bluetoothDesktopGameplayStatus by
+                    bluetoothDesktopGameplayController.status.collectAsState()
                 val gameplaySessionActive = hidState.sessionActive ||
                     networkGameplayStatus is NetworkGamepadStatus.Connecting ||
                     networkGameplayStatus is NetworkGamepadStatus.Reconnecting ||
-                    networkGameplayStatus is NetworkGamepadStatus.Active
+                    networkGameplayStatus is NetworkGamepadStatus.Active ||
+                    bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Connecting ||
+                    bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Reconnecting ||
+                    bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Active
                 val discoveredDesktops by networkDesktopCoordinator.discoveredDesktops.collectAsState()
                 val trustedDesktops by networkDesktopCoordinator.trustedDesktops.collectAsState()
                 val networkPairingStatus by networkDesktopCoordinator.pairingStatus.collectAsState()
@@ -332,7 +339,9 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val diagnosticUsesGamepadMode =
-                    showNetworkDiagnostic && networkGameplayStatus is NetworkGamepadStatus.Active
+                    showNetworkDiagnostic && networkGameplayStatus is NetworkGamepadStatus.Active ||
+                        showBluetoothDesktopDiagnostic &&
+                        bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Active
                 val compatibilityInputNeedsScreen =
                     sessionUiState.activeTransport != null &&
                         physicalControllerConnected &&
@@ -360,6 +369,7 @@ class MainActivity : ComponentActivity() {
                     sessionUiState.surface,
                     showNetworkDiagnostic,
                     networkGameplayStatus,
+                    bluetoothDesktopGameplayStatus,
                     showTouchscreenLayoutEditor,
                     sessionOrientationMode,
                 ) {
@@ -529,8 +539,16 @@ class MainActivity : ComponentActivity() {
                     BluetoothDesktopDiagnosticScreen(
                         pairedHosts = pairedHosts,
                         gameplaySessionActive = gameplaySessionActive,
+                        gameplayStatus = bluetoothDesktopGameplayStatus,
+                        physicalControllerConnected = physicalControllerConnected,
+                        touchscreenLayout = touchscreenLayout,
                         probe = remember { BluetoothDesktopProbe(this@MainActivity) },
+                        onStartGameplay = { address ->
+                            bluetoothDesktopGameplayController.start(address, effectiveCaptureMode)
+                        },
+                        onStopGameplay = bluetoothDesktopGameplayController::stop,
                         onBack = {
+                            bluetoothDesktopGameplayController.shutdown()
                             showBluetoothDesktopDiagnostic = false
                             showSettings = true
                         },
@@ -841,7 +859,14 @@ class MainActivity : ComponentActivity() {
         val networkSessionRunning = networkStatus is NetworkGamepadStatus.Connecting ||
             networkStatus is NetworkGamepadStatus.Reconnecting ||
             networkStatus is NetworkGamepadStatus.Active
-        if (isFinishing && !sessionCoordinator.state.value.sessionActive && !networkSessionRunning) {
+        val bluetoothDesktopStatus = bridgePadApplication.bluetoothDesktopGameplayController.status.value
+        val bluetoothDesktopSessionRunning =
+            bluetoothDesktopStatus is BluetoothDesktopGamepadStatus.Connecting ||
+                bluetoothDesktopStatus is BluetoothDesktopGamepadStatus.Reconnecting ||
+                bluetoothDesktopStatus is BluetoothDesktopGamepadStatus.Active
+        if (isFinishing && !sessionCoordinator.state.value.sessionActive &&
+            !networkSessionRunning && !bluetoothDesktopSessionRunning
+        ) {
             sessionCoordinator.preparePhysicalCapture(null)
         }
         super.onDestroy()

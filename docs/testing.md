@@ -64,6 +64,42 @@ maximum gaps and repeated runs must also be considered. This spike does not
 prove authentication or XInput integration; those belong to the production
 phase after a transport is selected.
 
+### First playable RFCOMM/XInput path
+
+1. Stop the benchmark with Enter and, from `desktop/`, run
+   `cargo run -p bridgepad-bluetooth-spike -- play`.
+2. Confirm ViGEmBus is installed and close any direct Bluetooth HID session so
+   Windows cannot expose duplicate controllers.
+3. On Android, open **Settings > Bluetooth Desktop test**, select the paired PC
+   and tap **Start playable RFCOMM session**.
+4. Confirm the virtual Xbox 360 controller appears in `joy.cpl`. Test every
+   button, both sticks, both triggers and every D-pad direction with the virtual
+   touchscreen controller.
+5. Open the session menu with Android Back, return to the virtual controller,
+   and confirm gamepad state remains neutral while no control is pressed.
+   Pointer transport is intentionally hidden because it is not part of this
+   increment.
+6. If a physical gamepad is available, repeat in Compatibility and Background
+   USB capture modes. The RFCOMM adapter must receive the same merged
+   `InputRouter` state without transport-specific mapping.
+7. End the session from its menu. Confirm the controller disappears or is
+   neutral in `joy.cpl` and the terminal prints a clean session stop.
+8. Start another session without restarting the Desktop process, then validate
+   Steam and one game. No Android socket error, duplicated controller, stuck
+   button or delayed command backlog is acceptable.
+
+This playable command is deliberately unauthenticated above the paired
+Bluetooth link and remains a spike. Product integration requires BridgePad
+trust/authentication, automatic Desktop preference with direct-HID fallback,
+and lifecycle/status integration in the normal Home flow.
+
+On 2026-09-19, the Samsung Galaxy A35 completed this playable gate against the
+Windows test PC. The RFCOMM path drove the XInput controller correctly in
+`joy.cpl`, Steam recognized it automatically, a native-controller game worked,
+and ending then restarting the session left no stuck state. Windows still
+listed the phone's previously paired direct-HID controller, but it remained
+inactive and did not duplicate any command.
+
 ## Windows virtual gamepad spike
 
 This test validates the virtual-device boundary independently from Android and

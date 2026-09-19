@@ -26,7 +26,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,8 +43,6 @@ import dev.jonalakas.bridgepad.transport.network.NetworkProbeResult
 import dev.jonalakas.bridgepad.transport.network.NetworkTlsProbe
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
-import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
-import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -69,41 +66,14 @@ fun NetworkDiagnosticScreen(
     var running by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<NetworkProbeResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var activeSurfaceName by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(gameplayStatus) {
-        if (gameplayStatus is NetworkGamepadStatus.Active && activeSurfaceName == null) {
-            activeSurfaceName = if (physicalControllerConnected) {
-                NetworkGameplaySurface.TOUCHPAD.name
-            } else {
-                NetworkGameplaySurface.GAMEPAD.name
-            }
-        } else if (gameplayStatus !is NetworkGamepadStatus.Active) {
-            activeSurfaceName = null
-        }
-    }
     if (gameplayStatus is NetworkGamepadStatus.Active) {
-        when (activeSurfaceName?.let(NetworkGameplaySurface::valueOf)) {
-            NetworkGameplaySurface.GAMEPAD -> TouchscreenGamepadScreen(
-                layout = touchscreenLayout,
-                onExit = { activeSurfaceName = NetworkGameplaySurface.MENU.name },
-                modifier = modifier,
-            )
-            NetworkGameplaySurface.TOUCHPAD -> MouseTouchpadScreen(
-                onExit = { activeSurfaceName = NetworkGameplaySurface.MENU.name },
-                modifier = modifier,
-            )
-            NetworkGameplaySurface.MENU -> NetworkSessionMenu(
-                physicalControllerConnected = physicalControllerConnected,
-                onOpenGamepad = { activeSurfaceName = NetworkGameplaySurface.GAMEPAD.name },
-                onOpenTouchpad = { activeSurfaceName = NetworkGameplaySurface.TOUCHPAD.name },
-                onEndSession = onStopGameplay,
-                modifier = modifier,
-            )
-            null -> Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        }
+        DiagnosticGameplaySession(
+            physicalControllerConnected = physicalControllerConnected,
+            touchscreenLayout = touchscreenLayout,
+            onEndSession = onStopGameplay,
+            modifier = modifier,
+        )
         return
     }
     BackHandler(onBack = onBack)
@@ -311,48 +281,5 @@ fun NetworkDiagnosticScreen(
         }
     }
 }
-
-@Composable
-private fun NetworkSessionMenu(
-    physicalControllerConnected: Boolean,
-    onOpenGamepad: () -> Unit,
-    onOpenTouchpad: () -> Unit,
-    onEndSession: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    BackHandler(onBack = onOpenGamepad)
-    Scaffold(modifier = modifier.fillMaxSize()) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text(stringResource(R.string.session_screens), style = MaterialTheme.typography.headlineMedium)
-            Text(
-                stringResource(
-                    if (physicalControllerConnected) {
-                        R.string.network_physical_controller_active
-                    } else {
-                        R.string.automatic_input_virtual_ready
-                    },
-                ),
-            )
-            Button(onClick = onOpenGamepad, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.open_virtual_controller))
-            }
-            OutlinedButton(onClick = onOpenTouchpad, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.open_mouse_touchpad))
-            }
-            Text(stringResource(R.string.session_screens_description), style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick = onEndSession, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.end_session))
-            }
-        }
-    }
-}
-
-private enum class NetworkGameplaySurface { GAMEPAD, TOUCHPAD, MENU }
 
 private fun format(value: Double): String = String.format(Locale.getDefault(), "%.3f", value)

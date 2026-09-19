@@ -39,6 +39,8 @@ import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbe
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbeRequest
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbeResult
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopTransport
+import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,7 +51,12 @@ import java.util.Locale
 fun BluetoothDesktopDiagnosticScreen(
     pairedHosts: List<PairedHost>,
     gameplaySessionActive: Boolean,
+    gameplayStatus: BluetoothDesktopGamepadStatus,
+    physicalControllerConnected: Boolean,
+    touchscreenLayout: TouchscreenLayout,
     probe: BluetoothDesktopProbe,
+    onStartGameplay: (String) -> Unit,
+    onStopGameplay: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -59,7 +66,19 @@ fun BluetoothDesktopDiagnosticScreen(
     var bleResult by remember { mutableStateOf<BluetoothDesktopProbeResult?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    if (gameplayStatus is BluetoothDesktopGamepadStatus.Active) {
+        DiagnosticGameplaySession(
+            physicalControllerConnected = physicalControllerConnected,
+            touchscreenLayout = touchscreenLayout,
+            onEndSession = onStopGameplay,
+            pointerSupported = false,
+            modifier = modifier,
+        )
+        return
+    }
     BackHandler(enabled = runningTransport == null, onBack = onBack)
+    val gameplayConnecting = gameplayStatus is BluetoothDesktopGamepadStatus.Connecting ||
+        gameplayStatus is BluetoothDesktopGamepadStatus.Reconnecting
 
     fun run(transport: BluetoothDesktopTransport) {
         val address = selectedAddress ?: return
@@ -156,6 +175,22 @@ fun BluetoothDesktopDiagnosticScreen(
             }
             item {
                 Button(
+                    onClick = { selectedAddress?.let(onStartGameplay) },
+                    enabled = selectedAddress != null && runningTransport == null &&
+                        !gameplaySessionActive && !gameplayConnecting,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    if (gameplayConnecting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(end = 12.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                    Text(stringResource(R.string.bluetooth_desktop_gameplay_action))
+                }
+            }
+            item {
+                Button(
                     onClick = { run(BluetoothDesktopTransport.BLE_GATT) },
                     enabled = selectedAddress != null && runningTransport == null && !gameplaySessionActive,
                     modifier = Modifier.fillMaxWidth(),
@@ -209,6 +244,23 @@ fun BluetoothDesktopDiagnosticScreen(
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(message)
+                        }
+                    }
+                }
+            }
+            (gameplayStatus as? BluetoothDesktopGamepadStatus.Failed)?.let { failure ->
+                item {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.bluetooth_desktop_gameplay_failed),
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(failure.detail)
                         }
                     }
                 }

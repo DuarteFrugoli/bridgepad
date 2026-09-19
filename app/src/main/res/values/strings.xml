@@ -311,6 +311,8 @@
     <string name="bluetooth_desktop_test_delivery_result">Desktop received %1$d/%2$d · loss %3$s%% · rejected writes %4$d</string>
     <string name="bluetooth_desktop_test_rate_result">Report rate %1$s Hz · maximum receive gap %2$s ms</string>
     <string name="bluetooth_desktop_test_latency_result">RTT p50 %1$s ms · p95 %2$s ms · p99 %3$s ms</string>
+    <string name="bluetooth_desktop_gameplay_action">Start playable RFCOMM session</string>
+    <string name="bluetooth_desktop_gameplay_failed">Bluetooth gameplay session failed</string>
     <string name="session_orientation">Session orientation</string>
     <string name="session_orientation_description">Choose how the virtual controller, mouse touchpad and physical-controller session screens rotate.</string>
     <string name="orientation_auto">Automatic</string>

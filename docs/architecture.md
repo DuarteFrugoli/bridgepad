@@ -28,9 +28,10 @@ new connection methods and destinations do not change existing input adapters.
   Discovery and persistence remain above it and never enter input code.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
-- `:transport-bluetooth-desktop` owns the isolated Android-side RFCOMM/BLE
-  transport benchmark. It does not depend on HID and cannot create a virtual
-  controller; the production adapter will be defined only after the spike.
+- `:transport-bluetooth-desktop` owns Android-side RFCOMM diagnostics and the
+  first playable gamepad client. It depends only on the domain scheduler and
+  transport-independent protocol, never on direct HID or presentation code.
+  Product trust and Home integration remain outside this initial adapter.
 - `:app` is the Android composition root. It owns Compose UI, permissions,
   lifecycle, hardware input adapters, DNS-SD discovery, Android Keystore-backed
   trusted-desktop persistence and adapter registration. The
@@ -184,6 +185,12 @@ setting that becomes relevant only when compatible hardware is detected.
   peripheral/server and Windows as the central/client because the central role
   is the broadly supported Windows path. This role difference belongs inside
   the adapters and does not change the domain or wire protocol direction.
+- The first playable RFCOMM path sends v1 `SessionStart`, complete
+  `GamepadSnapshot` messages and `SessionStop` through a latest-state scheduler.
+  The Windows spike owns only RFCOMM framing and delegates decoded state to the
+  existing ViGEm virtual-device boundary. It always neutralizes the device when
+  a session stops or the connection disappears. This validates gameplay but is
+  not yet the authenticated product receiver.
 - The existing `GenericCompositeHidProfile` contains the Windows/Linux Bluetooth
   descriptor and report encoding. Additional PC profiles can implement the same
   contract without modifying input routing or the generic profile.

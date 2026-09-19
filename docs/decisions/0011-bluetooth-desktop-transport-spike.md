@@ -76,8 +76,16 @@ neutralize the previous adapter before starting the next one.
 
 ## Follow-up acceptance gate
 
-The production RFCOMM adapter must still prove that it has no stuck or
-disordered transitions, never runs alongside direct HID, neutralizes XInput on
-disconnect, and remains responsive through the measured receive-gap spikes.
-Validate the first playable path in `joy.cpl`, Steam and a game before exposing
-Bluetooth via Desktop in the normal Home flow.
+The first playable RFCOMM adapter was validated on 2026-09-19. The virtual Xbox
+360 controller responded correctly in `joy.cpl`, Steam recognized it without
+manual controller setup, gameplay worked correctly, and ending then restarting
+the session produced no stuck input or reconnection failure. A previously
+paired direct-HID BridgePad device remained visible in Windows but received no
+input, so the two paths did not duplicate commands.
+
+The playable spike is therefore approved. Product integration must preserve
+that mutual exclusion, neutralize XInput on every disconnect and make the
+Desktop-backed XInput path the preferred Bluetooth option. Direct HID remains
+an explicit fallback when a compatible trusted Desktop is unavailable. The
+normal flow must not present the inactive legacy HID device as a second active
+BridgePad controller.
