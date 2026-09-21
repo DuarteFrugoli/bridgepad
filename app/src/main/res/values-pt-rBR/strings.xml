@@ -339,6 +339,10 @@
     <string name="guide_button">Guia</string>
     <string name="capture_button">Captura</string>
     <string name="keyboard_button">Teclado</string>
+    <string name="keyboard_text_placeholder">Texto enviado ao computador</string>
+    <string name="keyboard_text_description">Este campo mostra o que o BridgePad enviou durante esta sessão. Ele pode não corresponder ao texto exibido atualmente no computador.</string>
+    <string name="clear_action">Limpar</string>
+    <string name="close_action">Fechar</string>
     <string name="control_interaction">Comportamento do botão</string>
     <string name="control_interaction_hold">Segurar</string>
     <string name="control_interaction_toggle">Alternar</string>

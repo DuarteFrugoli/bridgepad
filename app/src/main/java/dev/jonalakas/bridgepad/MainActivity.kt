@@ -71,6 +71,8 @@ import dev.jonalakas.bridgepad.session.SessionSetup
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
+import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardState
+import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutEditorScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutOrientation
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
@@ -111,6 +113,7 @@ class MainActivity : ComponentActivity() {
                 var bluetoothPermissionGranted by remember { mutableStateOf(hasBluetoothPermission()) }
                 val sessionUiViewModel: SessionUiViewModel = viewModel()
                 val sessionUiState by sessionUiViewModel.state.collectAsState()
+                val gameplayKeyboardState = remember { GameplayKeyboardState() }
                 var showGamepadMapping by rememberSaveable { mutableStateOf(false) }
                 var returnToSettingsAfterGamepadMapping by rememberSaveable { mutableStateOf(false) }
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
@@ -369,6 +372,18 @@ class MainActivity : ComponentActivity() {
                     sessionUiViewModel.dispatch(
                         SessionUiEvent.PhysicalControllerChanged(physicalControllerConnected),
                     )
+                }
+
+                LaunchedEffect(
+                    sessionUiState.expectedTransport,
+                    sessionUiState.activeTransport,
+                ) {
+                    if (
+                        sessionUiState.expectedTransport == null &&
+                        sessionUiState.activeTransport == null
+                    ) {
+                        gameplayKeyboardState.reset()
+                    }
                 }
 
                 val diagnosticUsesGamepadMode =
@@ -705,14 +720,27 @@ class MainActivity : ComponentActivity() {
                 } else if (sessionUiState.surface == SessionSurface.TOUCH_CONTROLLER) {
                     TouchscreenGamepadScreen(
                         layout = touchscreenLayout,
+                        onOpenKeyboard = {
+                            sessionUiViewModel.dispatch(SessionUiEvent.KeyboardOpened)
+                        },
                         onExit = {
                             sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
                         },
                     )
                 } else if (sessionUiState.surface == SessionSurface.MOUSE_TOUCHPAD) {
                     MouseTouchpadScreen(
+                        onOpenKeyboard = {
+                            sessionUiViewModel.dispatch(SessionUiEvent.KeyboardOpened)
+                        },
                         onExit = {
                             sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
+                        },
+                    )
+                } else if (sessionUiState.surface == SessionSurface.KEYBOARD) {
+                    GameplayKeyboardScreen(
+                        state = gameplayKeyboardState,
+                        onClose = {
+                            sessionUiViewModel.dispatch(SessionUiEvent.KeyboardClosed)
                         },
                     )
                 } else HomeScreen(
@@ -884,6 +912,7 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onStopHid = {
+                        gameplayKeyboardState.reset()
                         captureModeName = PhysicalCaptureMode.COMPATIBILITY.name
                         sessionCoordinator.preparePhysicalCapture(null)
                         destinationTypeName = null

@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad.ui.session
 
 import dev.jonalakas.bridgepad.core.session.ConnectionMethod
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class SessionUiReducerTest {
@@ -96,6 +97,35 @@ class SessionUiReducerTest {
             SessionUiState(),
             reduce(wifi, SessionUiEvent.TransportFailed(ConnectionMethod.WIFI)),
         )
+    }
+
+    @Test
+    fun keyboardReturnsToTheSurfaceThatOpenedIt() {
+        val touchController = activeWifi(physicalControllerConnected = false)
+
+        val keyboard = reduce(touchController, SessionUiEvent.KeyboardOpened)
+        assertEquals(SessionSurface.KEYBOARD, keyboard.surface)
+        assertEquals(SessionSurface.TOUCH_CONTROLLER, keyboard.surfaceBeforeKeyboard)
+
+        val restored = reduce(keyboard, SessionUiEvent.KeyboardClosed)
+        assertEquals(SessionSurface.TOUCH_CONTROLLER, restored.surface)
+        assertNull(restored.surfaceBeforeKeyboard)
+    }
+
+    @Test
+    fun automaticSurfaceCanChangeWhileKeyboardIsOpen() {
+        val keyboard = reduce(
+            activeWifi(physicalControllerConnected = false),
+            SessionUiEvent.KeyboardOpened,
+        )
+
+        val controllerConnected = reduce(
+            keyboard,
+            SessionUiEvent.PhysicalControllerChanged(true),
+        )
+        val restored = reduce(controllerConnected, SessionUiEvent.KeyboardClosed)
+
+        assertEquals(SessionSurface.MOUSE_TOUCHPAD, restored.surface)
     }
 
     private fun activeWifi(physicalControllerConnected: Boolean): SessionUiState = reduce(

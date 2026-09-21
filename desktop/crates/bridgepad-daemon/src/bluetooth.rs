@@ -4,10 +4,16 @@
 mod platform {
     use crate::AnyError;
     use bridgepad_protocol::{
-        CAPABILITY_GAMEPAD, HEADER_SIZE, MAX_PAYLOAD_SIZE, MessageType, PacketHeader,
-        decode_gamepad_snapshot, decode_packet, decode_session_start, encode_packet,
+        CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, HEADER_SIZE,
+        KeyboardInput as ProtocolKeyboardInput, KeyboardKey as ProtocolKeyboardKey,
+        MAX_PAYLOAD_SIZE, MessageType, PacketHeader, decode_gamepad_snapshot, decode_keyboard,
+        decode_packet, decode_pointer, decode_session_start, encode_packet,
     };
-    use bridgepad_virtual_device::{DpadDirection, GamepadReport, VirtualGamepadDevice};
+    use bridgepad_virtual_device::{
+        DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, PointerReport,
+        VirtualGamepadDevice, VirtualKeyboardDevice, VirtualPointerDevice,
+    };
+    use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
     use bridgepad_windows_vigem::VigemGamepad;
     use futures_executor::block_on;
     use std::future::IntoFuture;
@@ -122,6 +128,8 @@ mod platform {
 
         let mut buffered = Vec::with_capacity(HEADER_SIZE * 2);
         let mut gamepad: Option<GamepadLease> = None;
+        let mut pointer: Option<PointerLease> = None;
+        let mut keyboard: Option<WindowsKeyboard> = None;
         let mut active_session_id = None;
         let mut latest_sequence = None;
         let read_result = (|| -> Result<(), AnyError> {
@@ -149,10 +157,18 @@ mod platform {
                             if request.requested_capabilities & CAPABILITY_GAMEPAD == 0 {
                                 return Err("Android did not request gamepad input".into());
                             }
+                            if request.requested_capabilities & CAPABILITY_KEYBOARD == 0 {
+                                return Err("Android did not request keyboard input".into());
+                            }
+                            if request.requested_capabilities & CAPABILITY_POINTER == 0 {
+                                return Err("Android did not request pointer input".into());
+                            }
                             gamepad = Some(GamepadLease::new(
                                 VigemGamepad::connect().map_err(|error| error.to_string())?,
                                 Arc::clone(&active_sessions),
                             )?);
+                            pointer = Some(PointerLease::new(WindowsPointer::connect())?);
+                            keyboard = Some(WindowsKeyboard::connect());
                             active_session_id = Some(packet.header.session_id);
                             latest_sequence = None;
                             queue(
@@ -160,7 +176,10 @@ mod platform {
                                 response_packet(
                                     packet.header,
                                     MessageType::SessionReady,
-                                    &CAPABILITY_GAMEPAD.to_be_bytes(),
+                                    &(CAPABILITY_GAMEPAD
+                                        | CAPABILITY_POINTER
+                                        | CAPABILITY_KEYBOARD)
+                                        .to_be_bytes(),
                                 )?,
                             )?;
                             println!("Bluetooth XInput session started");
@@ -178,6 +197,39 @@ mod platform {
                                 latest_sequence = Some(packet.header.sequence);
                             }
                         }
+                        MessageType::Keyboard => {
+                            if active_session_id != Some(packet.header.session_id) {
+                                return Err("keyboard input belongs to another session".into());
+                            }
+                            let input = match decode_keyboard(packet)? {
+                                ProtocolKeyboardInput::Text(text) => KeyboardInput::Text(text),
+                                ProtocolKeyboardInput::Key(key) => KeyboardInput::Key(match key {
+                                    ProtocolKeyboardKey::Backspace => KeyboardKey::Backspace,
+                                    ProtocolKeyboardKey::Enter => KeyboardKey::Enter,
+                                    ProtocolKeyboardKey::Tab => KeyboardKey::Tab,
+                                    ProtocolKeyboardKey::Escape => KeyboardKey::Escape,
+                                }),
+                            };
+                            keyboard
+                                .as_mut()
+                                .ok_or("Bluetooth keyboard session is not active")?
+                                .send(input)?;
+                        }
+                        MessageType::Pointer => {
+                            if active_session_id != Some(packet.header.session_id) {
+                                return Err("pointer input belongs to another session".into());
+                            }
+                            let report = decode_pointer(packet)?;
+                            pointer
+                                .as_mut()
+                                .ok_or("Bluetooth pointer session is not active")?
+                                .update(PointerReport {
+                                    buttons: report.buttons,
+                                    delta_x: report.delta_x,
+                                    delta_y: report.delta_y,
+                                    scroll_y: report.scroll_y,
+                                })?;
+                        }
                         MessageType::Ping => queue(
                             &outbound,
                             response_packet(packet.header, MessageType::Pong, packet.payload)?,
@@ -185,6 +237,8 @@ mod platform {
                         MessageType::SessionStop => {
                             if active_session_id == Some(packet.header.session_id) {
                                 gamepad = None;
+                                pointer = None;
+                                keyboard = None;
                                 println!("Bluetooth XInput session stopped");
                                 return Ok(());
                             }
@@ -197,6 +251,8 @@ mod platform {
         })();
 
         drop(gamepad);
+        drop(pointer);
+        drop(keyboard);
         drop(outbound);
         let writer_result = writer_thread
             .join()
@@ -304,6 +360,31 @@ mod platform {
                 eprintln!("Could not neutralize Bluetooth XInput gamepad: {error}");
             }
             self.active_sessions.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    struct PointerLease {
+        device: WindowsPointer,
+    }
+
+    impl PointerLease {
+        fn new(mut device: WindowsPointer) -> Result<Self, AnyError> {
+            device.neutralize().map_err(|error| error.to_string())?;
+            Ok(Self { device })
+        }
+
+        fn update(&mut self, report: PointerReport) -> Result<(), AnyError> {
+            self.device
+                .update(report)
+                .map_err(|error| error.to_string().into())
+        }
+    }
+
+    impl Drop for PointerLease {
+        fn drop(&mut self) {
+            if let Err(error) = self.device.neutralize() {
+                eprintln!("Could not neutralize Bluetooth pointer: {error}");
+            }
         }
     }
 

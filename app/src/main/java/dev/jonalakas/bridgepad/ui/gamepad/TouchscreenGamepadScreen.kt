@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -40,9 +39,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -52,7 +48,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -60,16 +55,12 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.TextFieldValue
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.mapping.AxisMath
-import dev.jonalakas.bridgepad.core.ports.KeyboardInput
-import dev.jonalakas.bridgepad.core.ports.KeyboardKey
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
-import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlId
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlInteraction
@@ -86,6 +77,7 @@ import kotlin.math.hypot
 @Composable
 fun TouchscreenGamepadScreen(
     layout: TouchscreenLayout,
+    onOpenKeyboard: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -115,6 +107,7 @@ fun TouchscreenGamepadScreen(
                 placement = layout.placement(control),
                 containerWidthPixels = widthPixels,
                 containerHeightPixels = heightPixels,
+                onKeyboardRequested = onOpenKeyboard,
                 onExit = onExit,
             )
         }
@@ -127,6 +120,7 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
     placement: TouchControlPlacement,
     containerWidthPixels: Float,
     containerHeightPixels: Float,
+    onKeyboardRequested: () -> Unit,
     onExit: () -> Unit,
 ) {
     val density = LocalDensity.current
@@ -267,6 +261,7 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
             )
             TouchControlId.KEYBOARD -> AndroidKeyboardButton(
                 shape = shape,
+                onOpenKeyboard = onKeyboardRequested,
                 modifier = Modifier.fillMaxSize(),
             )
             TouchControlId.SESSION_MENU -> TouchButton(
@@ -282,118 +277,71 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
 @Composable
 private fun AndroidKeyboardButton(
     shape: Shape,
+    onOpenKeyboard: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var value by remember { mutableStateOf(TextFieldValue()) }
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
     val description = stringResource(R.string.keyboard_button)
-
-    Box(modifier = modifier.semantics { contentDescription = description }) {
-        BasicTextField(
-            value = value,
-            onValueChange = { next ->
-                submitKeyboardDifference(value.text, next.text)
-                value = next
-            },
-            modifier = Modifier
-                .size(1.dp)
-                .alpha(0f)
-                .focusRequester(focusRequester),
-        )
-        TouchButton(
-            label = KEYBOARD_SYMBOL,
-            onPressedChange = { pressed ->
-                if (pressed) {
-                    focusRequester.requestFocus()
-                    keyboardController?.show()
-                }
-            },
-            shape = shape,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
-private fun submitKeyboardDifference(previous: String, next: String) {
-    if (previous == next) return
-    val commonPrefix = previous.indices
-        .takeWhile { index -> index < next.length && previous[index] == next[index] }
-        .count()
-    repeat(previous.length - commonPrefix) {
-        TouchKeyboardStore.submit(KeyboardInput.Key(KeyboardKey.BACKSPACE))
-    }
-    val text = StringBuilder()
-    fun flushText() {
-        if (text.isNotEmpty()) {
-            TouchKeyboardStore.submit(KeyboardInput.Text(text.toString()))
-            text.clear()
-        }
-    }
-    next.substring(commonPrefix).forEach { character ->
-        val key = when (character) {
-            '\n', '\r' -> KeyboardKey.ENTER
-            '\t' -> KeyboardKey.TAB
-            else -> null
-        }
-        if (key == null) {
-            text.append(character)
-        } else {
-            flushText()
-            TouchKeyboardStore.submit(KeyboardInput.Key(key))
-        }
-    }
-    flushText()
+    TouchButton(
+        label = KEYBOARD_SYMBOL,
+        onPressedChange = { pressed -> if (pressed) onOpenKeyboard() },
+        shape = shape,
+        modifier = modifier,
+        accessibilityLabel = description,
+    )
 }
 
 @Composable
 fun MouseTouchpadScreen(
+    onOpenKeyboard: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BackHandler(onBack = onExit)
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(12.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp),
-        ) {
-            AndroidKeyboardButton(
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.size(44.dp),
-            )
-            TouchButton(
-                label = stringResource(R.string.right_click_short),
-                onPressedChange = { pressed -> if (pressed) TouchMouseStore.rightClick() },
-                shape = RoundedCornerShape(12.dp),
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
                 modifier = Modifier
-                    .padding(start = 8.dp)
-                    .size(44.dp),
-                accessibilityLabel = stringResource(R.string.right_click),
-            )
-        }
-        Box(
-            modifier = Modifier
-                .padding(top = 8.dp)
-                .weight(1f)
-                .fillMaxWidth(),
-        ) {
-            MouseTouchpad(modifier = Modifier.fillMaxSize())
-            Text(
-                text = stringResource(R.string.mouse_touchpad_back_hint),
+                    .fillMaxWidth()
+                    .height(44.dp),
+            ) {
+                AndroidKeyboardButton(
+                    shape = RoundedCornerShape(12.dp),
+                    onOpenKeyboard = onOpenKeyboard,
+                    modifier = Modifier.size(44.dp),
+                )
+                TouchButton(
+                    label = stringResource(R.string.right_click_short),
+                    onPressedChange = { pressed -> if (pressed) TouchMouseStore.rightClick() },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .size(44.dp),
+                    accessibilityLabel = stringResource(R.string.right_click),
+                )
+            }
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall,
-            )
+                    .padding(top = 8.dp)
+                    .weight(1f)
+                    .fillMaxWidth(),
+            ) {
+                MouseTouchpad(modifier = Modifier.fillMaxSize())
+                Text(
+                    text = stringResource(R.string.mouse_touchpad_back_hint),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
         }
     }
 }
@@ -541,7 +489,7 @@ private fun TriggerButton(
     )
 }
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null

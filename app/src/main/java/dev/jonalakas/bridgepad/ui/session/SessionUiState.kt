@@ -6,6 +6,7 @@ enum class SessionSurface {
     NONE,
     TOUCH_CONTROLLER,
     MOUSE_TOUCHPAD,
+    KEYBOARD,
 }
 
 enum class SurfaceSelection {
@@ -18,6 +19,7 @@ data class SessionUiState(
     val activeTransport: ConnectionMethod? = null,
     val surface: SessionSurface = SessionSurface.NONE,
     val surfaceSelection: SurfaceSelection = SurfaceSelection.AUTOMATIC,
+    val surfaceBeforeKeyboard: SessionSurface? = null,
 )
 
 sealed interface SessionUiEvent {
@@ -32,6 +34,8 @@ sealed interface SessionUiEvent {
     data class TransportStopped(val transport: ConnectionMethod) : SessionUiEvent
     data class PhysicalControllerChanged(val connected: Boolean) : SessionUiEvent
     data class SurfaceSelected(val surface: SessionSurface) : SessionUiEvent
+    data object KeyboardOpened : SessionUiEvent
+    data object KeyboardClosed : SessionUiEvent
     data object SurfaceClosed : SessionUiEvent
     data object SessionEnded : SessionUiEvent
 }
@@ -59,6 +63,8 @@ object SessionUiReducer {
         is SessionUiEvent.PhysicalControllerChanged -> {
             if (state.activeTransport == null || state.surfaceSelection != SurfaceSelection.AUTOMATIC) {
                 state
+            } else if (state.surface == SessionSurface.KEYBOARD) {
+                state.copy(surfaceBeforeKeyboard = automaticSurface(event.connected))
             } else {
                 state.copy(surface = automaticSurface(event.connected))
             }
@@ -68,13 +74,41 @@ object SessionUiReducer {
             if (state.activeTransport == null) state else state.copy(
                 surface = event.surface,
                 surfaceSelection = SurfaceSelection.USER,
+                surfaceBeforeKeyboard = null,
             )
+        }
+
+        SessionUiEvent.KeyboardOpened -> {
+            if (
+                state.activeTransport == null ||
+                state.surface == SessionSurface.NONE ||
+                state.surface == SessionSurface.KEYBOARD
+            ) {
+                state
+            } else {
+                state.copy(
+                    surface = SessionSurface.KEYBOARD,
+                    surfaceBeforeKeyboard = state.surface,
+                )
+            }
+        }
+
+        SessionUiEvent.KeyboardClosed -> {
+            if (state.activeTransport == null || state.surface != SessionSurface.KEYBOARD) {
+                state
+            } else {
+                state.copy(
+                    surface = state.surfaceBeforeKeyboard ?: SessionSurface.TOUCH_CONTROLLER,
+                    surfaceBeforeKeyboard = null,
+                )
+            }
         }
 
         SessionUiEvent.SurfaceClosed -> {
             if (state.activeTransport == null) state else state.copy(
                 surface = SessionSurface.NONE,
                 surfaceSelection = SurfaceSelection.USER,
+                surfaceBeforeKeyboard = null,
             )
         }
 

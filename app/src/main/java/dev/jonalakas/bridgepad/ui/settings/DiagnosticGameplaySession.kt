@@ -12,8 +12,10 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -22,6 +24,8 @@ import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
+import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardState
+import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
 
 @Composable
@@ -32,6 +36,10 @@ internal fun DiagnosticGameplaySession(
     pointerSupported: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
+    val keyboardState = remember { GameplayKeyboardState() }
+    DisposableEffect(Unit) {
+        onDispose(keyboardState::reset)
+    }
     var surfaceName by rememberSaveable {
         mutableStateOf(
             if (physicalControllerConnected && pointerSupported) {
@@ -41,14 +49,30 @@ internal fun DiagnosticGameplaySession(
             },
         )
     }
+    var keyboardReturnSurfaceName by rememberSaveable {
+        mutableStateOf(DiagnosticGameplaySurface.GAMEPAD.name)
+    }
     when (DiagnosticGameplaySurface.valueOf(surfaceName)) {
         DiagnosticGameplaySurface.GAMEPAD -> TouchscreenGamepadScreen(
             layout = touchscreenLayout,
+            onOpenKeyboard = {
+                keyboardReturnSurfaceName = surfaceName
+                surfaceName = DiagnosticGameplaySurface.KEYBOARD.name
+            },
             onExit = { surfaceName = DiagnosticGameplaySurface.MENU.name },
             modifier = modifier,
         )
         DiagnosticGameplaySurface.TOUCHPAD -> MouseTouchpadScreen(
+            onOpenKeyboard = {
+                keyboardReturnSurfaceName = surfaceName
+                surfaceName = DiagnosticGameplaySurface.KEYBOARD.name
+            },
             onExit = { surfaceName = DiagnosticGameplaySurface.MENU.name },
+            modifier = modifier,
+        )
+        DiagnosticGameplaySurface.KEYBOARD -> GameplayKeyboardScreen(
+            state = keyboardState,
+            onClose = { surfaceName = keyboardReturnSurfaceName },
             modifier = modifier,
         )
         DiagnosticGameplaySurface.MENU -> DiagnosticSessionMenu(
@@ -106,4 +130,4 @@ private fun DiagnosticSessionMenu(
     }
 }
 
-private enum class DiagnosticGameplaySurface { GAMEPAD, TOUCHPAD, MENU }
+private enum class DiagnosticGameplaySurface { GAMEPAD, TOUCHPAD, KEYBOARD, MENU }

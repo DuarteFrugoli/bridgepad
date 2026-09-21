@@ -39,7 +39,11 @@ class BridgePadApplication : Application() {
         TouchscreenLayoutStore.initialize(this)
         SessionOrientationStore.initialize(this)
         inputRouter = InputRouter(applicationScope)
-        bluetoothDesktopGameplayController = BluetoothDesktopGameplayController(this, inputRouter)
+        bluetoothDesktopGameplayController = BluetoothDesktopGameplayController(
+            this,
+            inputRouter,
+            applicationScope,
+        )
         networkGameplayController = NetworkGameplayController(inputRouter, applicationScope)
         networkDesktopCoordinator = NetworkDesktopCoordinator(
             context = this,

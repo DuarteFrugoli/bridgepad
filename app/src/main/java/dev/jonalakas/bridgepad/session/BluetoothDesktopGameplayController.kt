@@ -5,13 +5,19 @@ import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadClient
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadRequest
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 class BluetoothDesktopGameplayController(
     private val context: Context,
     private val inputRouter: InputRouter,
+    private val scope: CoroutineScope,
 ) {
     private val mutableStatus = MutableStateFlow<BluetoothDesktopGamepadStatus>(
         BluetoothDesktopGamepadStatus.Stopped,
@@ -19,6 +25,7 @@ class BluetoothDesktopGameplayController(
     val status: StateFlow<BluetoothDesktopGamepadStatus> = mutableStatus.asStateFlow()
     private var client: BluetoothDesktopGamepadClient? = null
     private var inputSubscription: InputSubscription? = null
+    private var auxiliaryInputJob: Job? = null
     private var captureMode: PhysicalCaptureMode? = null
     private var generation = 0L
 
@@ -33,6 +40,17 @@ class BluetoothDesktopGameplayController(
         client = nextClient
         captureMode = physicalCaptureMode
         subscribeToInput(nextClient, physicalCaptureMode)
+        auxiliaryInputJob = scope.launch {
+            while (isActive) {
+                inputRouter.peekPointer()?.let { pointer ->
+                    inputRouter.acknowledgePointer(nextClient.sendPointer(pointer))
+                }
+                inputRouter.peekKeyboard()?.let { keyboard ->
+                    inputRouter.acknowledgeKeyboard(nextClient.sendKeyboard(keyboard))
+                }
+                delay(KEYBOARD_POLL_MILLIS)
+            }
+        }
         nextClient.start()
     }
 
@@ -57,6 +75,10 @@ class BluetoothDesktopGameplayController(
     private fun stopCurrent(immediate: Boolean) {
         inputSubscription?.cancel()
         inputSubscription = null
+        auxiliaryInputJob?.cancel()
+        auxiliaryInputJob = null
+        inputRouter.clearPointer()
+        inputRouter.clearKeyboard()
         captureMode = null
         client?.let { active ->
             if (immediate) active.closeImmediately() else active.stop()
@@ -74,6 +96,10 @@ class BluetoothDesktopGameplayController(
         ) {
             inputSubscription?.cancel()
             inputSubscription = null
+            auxiliaryInputJob?.cancel()
+            auxiliaryInputJob = null
+            inputRouter.clearPointer()
+            inputRouter.clearKeyboard()
             client = null
             captureMode = null
         }
@@ -87,5 +113,9 @@ class BluetoothDesktopGameplayController(
         inputSubscription = inputRouter.observe(physicalCaptureMode) { routed ->
             activeClient.send(routed.gamepad)
         }
+    }
+
+    private companion object {
+        const val KEYBOARD_POLL_MILLIS = 10L
     }
 }
