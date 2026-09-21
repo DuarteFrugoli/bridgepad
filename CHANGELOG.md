@@ -9,9 +9,10 @@ The project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Added an opt-in, device-local setting that lets gameplay and the layout editor
-  use the display area around the camera cutout while preserving Android gesture
-  insets. Enabling it warns about possible control repositioning, and the editor
-  outlines the original safe area.
+  use the complete display area around the camera cutout. Enabling it warns about
+  possible control repositioning; disabling it retains Android's safe insets. The
+  collapsed editor toolbar now starts in the top-left corner, away from common
+  portrait camera positions.
 - Added pinch-to-zoom through an atomic `Ctrl + wheel` gesture and Windows-style
   three-finger Task View, reversible minimize/restore and persistent window
   selection gestures to both mouse touchpad surfaces. Task View can be dismissed

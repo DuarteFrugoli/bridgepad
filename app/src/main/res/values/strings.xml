@@ -100,10 +100,9 @@
     <string name="virtual_gamepad_settings">Virtual gamepad</string>
     <string name="virtual_gamepad_settings_description">Customize the position and size of the controls shown while playing.</string>
     <string name="use_display_cutout_area">Use the area around the camera</string>
-    <string name="use_display_cutout_area_description">Expands the controller around the camera cutout while keeping Android navigation gestures protected.</string>
+    <string name="use_display_cutout_area_description">Uses the complete display, including the camera cutout and Android navigation gesture edges.</string>
     <string name="display_cutout_warning_title">Expand the controller area?</string>
     <string name="display_cutout_warning_message">The larger area may slightly reposition some controls. The camera itself remains unavailable. You can adjust the result in the layout editor.</string>
-    <string name="display_cutout_safe_area">Original safe area</string>
     <string name="enable_and_edit_action">Enable and edit</string>
     <string name="enable_only_action">Enable only</string>
     <string name="layout_editor_title">Edit layout</string>

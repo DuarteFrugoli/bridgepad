@@ -423,11 +423,18 @@ class MainActivity : ComponentActivity() {
                     bluetoothDesktopGameplayStatus,
                     showTouchscreenLayoutEditor,
                     sessionOrientationMode,
+                    useDisplayCutoutArea,
                 ) {
                     when {
-                        showTouchscreenLayoutEditor -> enterGamepadMode(SessionOrientationMode.AUTO)
+                        showTouchscreenLayoutEditor -> enterGamepadMode(
+                            orientationMode = SessionOrientationMode.AUTO,
+                            useDisplayCutoutArea = useDisplayCutoutArea,
+                        )
                         sessionUiState.surface != SessionSurface.NONE || diagnosticUsesGamepadMode -> {
-                            enterGamepadMode(sessionOrientationMode)
+                            enterGamepadMode(
+                                orientationMode = sessionOrientationMode,
+                                useDisplayCutoutArea = useDisplayCutoutArea,
+                            )
                         }
                         else -> exitGamepadMode()
                     }
@@ -990,8 +997,12 @@ class MainActivity : ComponentActivity() {
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean =
         gamepadController.handleMotionEvent(event) || super.dispatchGenericMotionEvent(event)
 
-    private fun enterGamepadMode(orientationMode: SessionOrientationMode) {
+    private fun enterGamepadMode(
+        orientationMode: SessionOrientationMode,
+        useDisplayCutoutArea: Boolean,
+    ) {
         TouchGamepadStore.neutralize()
+        setDisplayCutoutMode(useDisplayCutoutArea)
         requestedOrientation = when (orientationMode) {
             SessionOrientationMode.AUTO -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
             SessionOrientationMode.PORTRAIT -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
@@ -1007,9 +1018,23 @@ class MainActivity : ComponentActivity() {
 
     private fun exitGamepadMode() {
         TouchGamepadStore.deactivate()
+        setDisplayCutoutMode(false)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         WindowCompat.getInsetsController(window, window.decorView)
             .show(WindowInsetsCompat.Type.systemBars())
+    }
+
+    private fun setDisplayCutoutMode(useDisplayCutoutArea: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+        window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = when {
+                !useDisplayCutoutArea ->
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R ->
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                else -> WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
     }
 
     private fun hasBluetoothPermission(): Boolean =

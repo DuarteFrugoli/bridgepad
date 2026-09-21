@@ -103,8 +103,7 @@ fun TouchscreenGamepadScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea))
-            .padding(12.dp),
+            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea)),
     ) {
         val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val heightPixels = constraints.maxHeight.toFloat().coerceAtLeast(1f)
@@ -310,8 +309,7 @@ fun MouseTouchpadScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea))
-            .padding(12.dp),
+            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea)),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(

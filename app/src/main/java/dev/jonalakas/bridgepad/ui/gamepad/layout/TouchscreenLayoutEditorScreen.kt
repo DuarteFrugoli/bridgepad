@@ -16,13 +16,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -89,7 +87,7 @@ fun TouchscreenLayoutEditorScreen(
     var selectedName by rememberSaveable { mutableStateOf(TouchControlId.LEFT_STICK.name) }
     var toolbarExpanded by rememberSaveable { mutableStateOf(false) }
     var optionsVisible by rememberSaveable { mutableStateOf(true) }
-    var toolbarCenterX by rememberSaveable { mutableFloatStateOf(0.5f) }
+    var toolbarCenterX by rememberSaveable { mutableFloatStateOf(0f) }
     var toolbarCenterY by rememberSaveable { mutableFloatStateOf(0f) }
     var optionsCenterX by rememberSaveable { mutableFloatStateOf(1f) }
     var optionsCenterY by rememberSaveable { mutableFloatStateOf(1f) }
@@ -133,8 +131,7 @@ fun TouchscreenLayoutEditorScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea))
-            .padding(12.dp),
+            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea)),
     ) {
         val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
         val heightPixels = constraints.maxHeight.toFloat().coerceAtLeast(1f)
@@ -185,31 +182,6 @@ fun TouchscreenLayoutEditorScreen(
             }
         }.zIndex(EDITOR_OVERLAY_Z_INDEX)
         LayoutGrid(Modifier.fillMaxSize())
-        if (useDisplayCutoutArea) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.displayCutout)
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(8.dp),
-                    ),
-            ) {
-                Text(
-                    text = stringResource(R.string.display_cutout_safe_area),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-                            shape = RoundedCornerShape(bottomEnd = 8.dp),
-                        )
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-        }
         TouchControlId.entries.filter(draft::isVisible).forEach { control ->
             EditableControl(
                 control = control,
