@@ -9,13 +9,25 @@ data class PointerReport(
     val deltaX: Int = 0,
     val deltaY: Int = 0,
     val scrollY: Int = 0,
+    val zoomY: Int = 0,
 )
 
 enum class KeyboardKey {
     BACKSPACE,
+    D,
     ENTER,
+    LEFT,
+    M,
+    RIGHT,
     TAB,
     ESCAPE,
+}
+
+enum class KeyboardModifier {
+    ALT,
+    CONTROL,
+    META,
+    SHIFT,
 }
 
 sealed interface KeyboardInput {
@@ -26,6 +38,16 @@ sealed interface KeyboardInput {
     }
 
     data class Key(val key: KeyboardKey) : KeyboardInput
+
+    /** A complete press-and-release chord; modifiers must never remain held. */
+    data class Shortcut(
+        val modifiers: Set<KeyboardModifier>,
+        val key: KeyboardKey,
+    ) : KeyboardInput {
+        init {
+            require(modifiers.isNotEmpty()) { "A keyboard shortcut needs a modifier." }
+        }
+    }
 }
 
 data class TransportCapabilities(

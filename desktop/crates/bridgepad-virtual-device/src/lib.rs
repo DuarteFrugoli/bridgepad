@@ -73,6 +73,7 @@ pub struct PointerReport {
     pub delta_x: i32,
     pub delta_y: i32,
     pub scroll_y: i32,
+    pub zoom_y: i32,
 }
 
 pub trait VirtualPointerDevice: Send {
@@ -96,15 +97,31 @@ pub trait VirtualPointerDevice: Send {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum KeyboardKey {
     Backspace,
+    D,
     Enter,
+    Left,
+    M,
+    Right,
     Tab,
     Escape,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct KeyboardModifiers {
+    pub alt: bool,
+    pub control: bool,
+    pub meta: bool,
+    pub shift: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum KeyboardInput {
     Text(String),
     Key(KeyboardKey),
+    Shortcut {
+        modifiers: KeyboardModifiers,
+        key: KeyboardKey,
+    },
 }
 
 pub trait VirtualKeyboardDevice: Send {

@@ -20,6 +20,13 @@ class TouchscreenGamepadScreenTest {
     }
 
     @Test
+    fun horizontalWindowSwitcherCountsStepsInBothDirections() {
+        assertEquals(-2, windowSwitcherStepCount(-95f, step = 40f))
+        assertEquals(2, windowSwitcherStepCount(95f, step = 40f))
+        assertEquals(0, windowSwitcherStepCount(20f, step = 40f))
+    }
+
+    @Test
     fun dpadCenterIsNeutral() {
         assertEquals(
             DpadDirection.NEUTRAL,

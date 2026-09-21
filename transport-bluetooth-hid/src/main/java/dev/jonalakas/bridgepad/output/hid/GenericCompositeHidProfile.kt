@@ -31,10 +31,46 @@ object GenericCompositeHidProfile : BluetoothHidProfile {
     override fun encodeGamepad(state: VirtualGamepadState) =
         HidReport(GamepadHidDescriptor.REPORT_ID, HidReportEncoder.encode(state))
 
-    override fun encodePointer(report: PointerReport) = HidReport(
-        GamepadHidDescriptor.MOUSE_REPORT_ID,
-        GamepadHidDescriptor.mouseReport(report.buttons, report.deltaX, report.deltaY, report.scrollY),
-    )
+    override fun encodePointer(report: PointerReport): List<HidReport> = buildList {
+        if (
+            report.zoomY == 0 || report.deltaX != 0 || report.deltaY != 0 ||
+            report.scrollY != 0 || report.buttons != 0
+        ) {
+            add(
+                HidReport(
+                    GamepadHidDescriptor.MOUSE_REPORT_ID,
+                    GamepadHidDescriptor.mouseReport(
+                        report.buttons,
+                        report.deltaX,
+                        report.deltaY,
+                        report.scrollY,
+                    ),
+                ),
+            )
+        }
+        if (report.zoomY != 0) {
+            add(
+                HidReport(
+                    GamepadHidDescriptor.KEYBOARD_REPORT_ID,
+                    KeyboardHidEncoder.modifierReport(
+                        setOf(dev.jonalakas.bridgepad.core.ports.KeyboardModifier.CONTROL),
+                    ),
+                ),
+            )
+            add(
+                HidReport(
+                    GamepadHidDescriptor.MOUSE_REPORT_ID,
+                    GamepadHidDescriptor.mouseReport(report.buttons, 0, 0, report.zoomY),
+                ),
+            )
+            add(
+                HidReport(
+                    GamepadHidDescriptor.KEYBOARD_REPORT_ID,
+                    KeyboardHidEncoder.modifierReport(emptySet()),
+                ),
+            )
+        }
+    }
 
     override fun encodeKeyboard(input: KeyboardInput): List<HidReport> =
         KeyboardHidEncoder.encode(input).map { payload ->

@@ -712,5 +712,22 @@ first test.
 4. Tap the touchpad and confirm exactly one left click.
 5. Drag and release; the release must not produce an accidental click.
 6. Use the touchpad simultaneously with a gamepad stick and buttons.
-7. Switch to Physical gamepad input and confirm that touching the old surface
+7. Pinch with two fingers in a browser or editor and confirm that spreading
+   zooms in while closing the fingers zooms out through `Ctrl + wheel`.
+8. Swipe up with three fingers and confirm that Windows opens Task View. Swipe
+   down without selecting a window and confirm that Task View closes without
+   minimizing the windows that were already open.
+9. Swipe down with three fingers and confirm that Windows minimizes every
+   window. Swipe up next and confirm that those windows are restored instead
+   of opening Task View; a later upward swipe must open Task View normally.
+   Repeat the downward gesture, open something from the desktop with the
+   BridgePad pointer, then swipe up and confirm that the old minimized set is
+   not restored and Task View opens instead.
+10. Swipe sideways with three fingers and keep the fingers down. Confirm that
+    the persistent Windows app switcher opens, that continued horizontal
+    movement changes the selected window, and that lifting the fingers opens
+    the selected window.
+11. Repeat the gesture checks on both the integrated controller touchpad and
+    the full-screen physical-controller touchpad.
+12. Switch to Physical gamepad input and confirm that touching the old surface
    cannot move or click the pointer.

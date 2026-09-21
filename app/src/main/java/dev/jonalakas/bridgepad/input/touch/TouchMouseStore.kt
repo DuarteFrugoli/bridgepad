@@ -1,17 +1,22 @@
 package dev.jonalakas.bridgepad.input.touch
 
 import dev.jonalakas.bridgepad.core.ports.PointerReport
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
+import dev.jonalakas.bridgepad.core.ports.KeyboardKey
+import dev.jonalakas.bridgepad.core.ports.KeyboardModifier
 import kotlin.math.roundToInt
 
 object TouchMouseStore {
     private var accumulatedX = 0f
     private var accumulatedY = 0f
     private var accumulatedScrollY = 0f
+    private var accumulatedZoomY = 0f
     private val pendingClicks = ArrayDeque<Int>()
     private var releasePending = false
     private var inFlight: PendingPointer? = null
     private var inputEventCount = 0L
     private var invertedScroll = true
+    private var workspaceGestureState = WorkspaceGestureState.NORMAL
 
     @Synchronized
     fun move(deltaX: Float, deltaY: Float) {
@@ -30,20 +35,69 @@ object TouchMouseStore {
     }
 
     @Synchronized
+    fun zoom(spanDelta: Float) {
+        if (spanDelta == 0f) return
+        accumulatedZoomY += spanDelta * ZOOM_SENSITIVITY
+        inputEventCount++
+    }
+
+    @Synchronized
     fun setInvertedScroll(inverted: Boolean) {
         invertedScroll = inverted
     }
 
     @Synchronized
     fun click() {
+        notifyRegularInteraction()
         pendingClicks.addLast(LEFT_BUTTON)
         inputEventCount++
     }
 
     @Synchronized
     fun rightClick() {
+        notifyRegularInteraction()
         pendingClicks.addLast(RIGHT_BUTTON)
         inputEventCount++
+    }
+
+    @Synchronized
+    fun threeFingerSwipeDown(): KeyboardInput? = when (workspaceGestureState) {
+        WorkspaceGestureState.TASK_VIEW -> {
+            workspaceGestureState = WorkspaceGestureState.NORMAL
+            KeyboardInput.Key(KeyboardKey.ESCAPE)
+        }
+        WorkspaceGestureState.NORMAL -> {
+            workspaceGestureState = WorkspaceGestureState.MINIMIZED
+            KeyboardInput.Shortcut(
+                modifiers = setOf(KeyboardModifier.META),
+                key = KeyboardKey.M,
+            )
+        }
+        WorkspaceGestureState.MINIMIZED -> null
+    }
+
+    @Synchronized
+    fun threeFingerSwipeUp(): KeyboardInput? = when (workspaceGestureState) {
+        WorkspaceGestureState.MINIMIZED -> {
+            workspaceGestureState = WorkspaceGestureState.NORMAL
+            KeyboardInput.Shortcut(
+                modifiers = setOf(KeyboardModifier.META, KeyboardModifier.SHIFT),
+                key = KeyboardKey.M,
+            )
+        }
+        WorkspaceGestureState.NORMAL -> {
+            workspaceGestureState = WorkspaceGestureState.TASK_VIEW
+            KeyboardInput.Shortcut(
+                modifiers = setOf(KeyboardModifier.META),
+                key = KeyboardKey.TAB,
+            )
+        }
+        WorkspaceGestureState.TASK_VIEW -> null
+    }
+
+    @Synchronized
+    fun notifyRegularInteraction() {
+        workspaceGestureState = WorkspaceGestureState.NORMAL
     }
 
     @Synchronized
@@ -52,17 +106,18 @@ object TouchMouseStore {
         val deltaX = nextX()
         val deltaY = nextY()
         val scrollY = nextScrollY()
+        val zoomY = nextZoomY()
         val pending = when {
             releasePending -> PendingPointer(
-                PointerReport(0, deltaX, deltaY, scrollY),
+                PointerReport(0, deltaX, deltaY, scrollY, zoomY),
                 PendingPointerKind.RELEASE,
             )
             pendingClicks.isNotEmpty() -> PendingPointer(
-                PointerReport(pendingClicks.first(), deltaX, deltaY, scrollY),
+                PointerReport(pendingClicks.first(), deltaX, deltaY, scrollY, zoomY),
                 PendingPointerKind.PRESS,
             )
-            deltaX != 0 || deltaY != 0 || scrollY != 0 -> PendingPointer(
-                PointerReport(0, deltaX, deltaY, scrollY),
+            deltaX != 0 || deltaY != 0 || scrollY != 0 || zoomY != 0 -> PendingPointer(
+                PointerReport(0, deltaX, deltaY, scrollY, zoomY),
                 PendingPointerKind.MOVEMENT,
             )
             else -> null
@@ -79,6 +134,7 @@ object TouchMouseStore {
         accumulatedX -= pending.report.deltaX
         accumulatedY -= pending.report.deltaY
         accumulatedScrollY -= pending.report.scrollY
+        accumulatedZoomY -= pending.report.zoomY
         when (pending.kind) {
             PendingPointerKind.PRESS -> {
                 if (pendingClicks.isNotEmpty()) pendingClicks.removeFirst()
@@ -99,7 +155,7 @@ object TouchMouseStore {
 
     @Synchronized
     fun diagnostics(): TouchMouseDiagnostics {
-        val movementPending = nextX() != 0 || nextY() != 0 || nextScrollY() != 0
+        val movementPending = nextX() != 0 || nextY() != 0 || nextScrollY() != 0 || nextZoomY() != 0
         return TouchMouseDiagnostics(
             inputEventCount = inputEventCount,
             pendingReportCount = pendingClicks.size +
@@ -114,7 +170,8 @@ object TouchMouseStore {
         if (
             accumulatedX.roundToInt() == 0 &&
             accumulatedY.roundToInt() == 0 &&
-            accumulatedScrollY.roundToInt() == 0
+            accumulatedScrollY.roundToInt() == 0 &&
+            accumulatedZoomY.roundToInt() == 0
         ) return false
         return true
     }
@@ -124,14 +181,17 @@ object TouchMouseStore {
         accumulatedX = 0f
         accumulatedY = 0f
         accumulatedScrollY = 0f
+        accumulatedZoomY = 0f
         pendingClicks.clear()
         releasePending = false
         inFlight = null
+        workspaceGestureState = WorkspaceGestureState.NORMAL
     }
 
     private fun nextX(): Int = accumulatedX.roundToInt().coerceIn(-127, 127)
     private fun nextY(): Int = accumulatedY.roundToInt().coerceIn(-127, 127)
     private fun nextScrollY(): Int = accumulatedScrollY.roundToInt().coerceIn(-127, 127)
+    private fun nextZoomY(): Int = accumulatedZoomY.roundToInt().coerceIn(-127, 127)
 
     private data class PendingPointer(
         val report: PointerReport,
@@ -144,10 +204,17 @@ object TouchMouseStore {
         MOVEMENT,
     }
 
+    private enum class WorkspaceGestureState {
+        NORMAL,
+        MINIMIZED,
+        TASK_VIEW,
+    }
+
     private const val LEFT_BUTTON = 1
     private const val RIGHT_BUTTON = 2
     private const val POINTER_SENSITIVITY = 0.8f
     private const val SCROLL_SENSITIVITY = 0.05f
+    private const val ZOOM_SENSITIVITY = 0.08f
 }
 
 data class TouchMouseDiagnostics(

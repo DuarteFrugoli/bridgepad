@@ -60,7 +60,11 @@ import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.mapping.AxisMath
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
+import dev.jonalakas.bridgepad.core.ports.KeyboardKey
+import dev.jonalakas.bridgepad.core.ports.KeyboardModifier
 import dev.jonalakas.bridgepad.input.touch.TouchGamepadStore
+import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlId
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchControlInteraction
@@ -71,8 +75,10 @@ import dev.jonalakas.bridgepad.ui.gamepad.layout.controlOffset
 import dev.jonalakas.bridgepad.ui.gamepad.layout.controlWidthDp
 import dev.jonalakas.bridgepad.ui.gamepad.layout.touchControlShape
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
+import kotlin.math.sign
 
 @Composable
 fun TouchscreenGamepadScreen(
@@ -366,56 +372,180 @@ private fun MouseTouchpad(
                     viewConfiguration.touchSlop,
                     TOUCHPAD_TAP_SLOP_DP.dp.toPx(),
                 )
+                val pinchThreshold = TOUCHPAD_PINCH_SLOP_DP.dp.toPx()
+                val threeFingerThreshold = TOUCHPAD_THREE_FINGER_SWIPE_DP.dp.toPx()
+                val windowSwitcherStep = TOUCHPAD_WINDOW_SWITCH_STEP_DP.dp.toPx()
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     var maximumPointerCount = 1
                     var activePointerMode = 1
                     var bufferedDelta = Offset.Zero
+                    var bufferedSpanDelta = 0f
+                    var threeFingerDelta = Offset.Zero
+                    var threeFingerMode = ThreeFingerGestureMode.UNDECIDED
+                    var windowSwitcherRemainder = 0f
+                    var twoFingerMode = TwoFingerGestureMode.UNDECIDED
                     var motionAccepted = false
                     var producedMotion = false
                     while (true) {
                         val changes = awaitPointerEvent().changes
                         val pressedChanges = changes.filter { it.pressed }
                         if (pressedChanges.isEmpty()) break
-                        val pointerMode = if (pressedChanges.size >= 2) 2 else 1
+                        val pointerMode = pressedChanges.size.coerceAtMost(3)
                         maximumPointerCount = maxOf(maximumPointerCount, pointerMode)
-                        if (pointerMode != activePointerMode) {
+                        if (pointerMode > activePointerMode) {
                             activePointerMode = pointerMode
                             bufferedDelta = Offset.Zero
+                            bufferedSpanDelta = 0f
                             motionAccepted = false
+                            changes.forEach { it.consume() }
+                            continue
+                        }
+                        if (pointerMode < activePointerMode) {
+                            changes.forEach { it.consume() }
+                            continue
                         }
                         val delta = pressedChanges.fold(Offset.Zero) { total, change ->
                             total + change.positionChange()
                         } / pressedChanges.size.toFloat()
-                        if (delta != Offset.Zero) {
-                            if (motionAccepted) {
-                                if (activePointerMode >= 2) {
-                                    TouchMouseStore.scroll(delta.y)
-                                } else {
-                                    TouchMouseStore.move(delta.x, delta.y)
-                                }
-                            } else {
-                                bufferedDelta += delta
-                                if (hypot(bufferedDelta.x, bufferedDelta.y) >= motionThreshold) {
-                                    motionAccepted = true
-                                    producedMotion = true
-                                    val initialMotion = movementAfterDeadzone(
-                                        bufferedDelta,
-                                        motionThreshold,
-                                    )
-                                    if (activePointerMode >= 2) {
-                                        TouchMouseStore.scroll(initialMotion.y)
-                                    } else {
-                                        TouchMouseStore.move(initialMotion.x, initialMotion.y)
+                        when (activePointerMode) {
+                            3 -> {
+                                threeFingerDelta += delta
+                                when (threeFingerMode) {
+                                    ThreeFingerGestureMode.UNDECIDED -> {
+                                        val horizontal = abs(threeFingerDelta.x) >
+                                            abs(threeFingerDelta.y)
+                                        if (
+                                            horizontal &&
+                                            abs(threeFingerDelta.x) >= threeFingerThreshold
+                                        ) {
+                                            threeFingerMode = ThreeFingerGestureMode.WINDOW_SWITCHER
+                                            TouchMouseStore.notifyRegularInteraction()
+                                            TouchKeyboardStore.submit(
+                                                KeyboardInput.Shortcut(
+                                                    modifiers = setOf(
+                                                        KeyboardModifier.CONTROL,
+                                                        KeyboardModifier.ALT,
+                                                    ),
+                                                    key = KeyboardKey.TAB,
+                                                ),
+                                            )
+                                            TouchKeyboardStore.submit(
+                                                KeyboardInput.Key(
+                                                    if (threeFingerDelta.x < 0f) {
+                                                        KeyboardKey.LEFT
+                                                    } else {
+                                                        KeyboardKey.RIGHT
+                                                    },
+                                                ),
+                                            )
+                                        } else if (
+                                            !horizontal &&
+                                            abs(threeFingerDelta.y) >= threeFingerThreshold
+                                        ) {
+                                            threeFingerMode = ThreeFingerGestureMode.VERTICAL
+                                        }
                                     }
-                                    bufferedDelta = Offset.Zero
+                                    ThreeFingerGestureMode.WINDOW_SWITCHER -> {
+                                        windowSwitcherRemainder += delta.x
+                                        val steps = windowSwitcherStepCount(
+                                            windowSwitcherRemainder,
+                                            windowSwitcherStep,
+                                        )
+                                        if (steps != 0) {
+                                            val key = if (steps < 0) {
+                                                KeyboardKey.LEFT
+                                            } else {
+                                                KeyboardKey.RIGHT
+                                            }
+                                            repeat(abs(steps)) {
+                                                TouchKeyboardStore.submit(KeyboardInput.Key(key))
+                                            }
+                                            windowSwitcherRemainder -= steps * windowSwitcherStep
+                                        }
+                                    }
+                                    ThreeFingerGestureMode.VERTICAL -> Unit
+                                }
+                            }
+                            2 -> {
+                                val spanDelta = touchSpanDelta(pressedChanges)
+                                when (twoFingerMode) {
+                                    TwoFingerGestureMode.UNDECIDED -> {
+                                        bufferedDelta += delta
+                                        bufferedSpanDelta += spanDelta
+                                        if (
+                                            abs(bufferedSpanDelta) >= pinchThreshold &&
+                                            abs(bufferedSpanDelta) >= abs(bufferedDelta.y)
+                                        ) {
+                                            twoFingerMode = TwoFingerGestureMode.PINCH
+                                            producedMotion = true
+                                            TouchMouseStore.zoom(
+                                                bufferedSpanDelta -
+                                                    pinchThreshold * bufferedSpanDelta.sign,
+                                            )
+                                            bufferedDelta = Offset.Zero
+                                            bufferedSpanDelta = 0f
+                                        } else if (
+                                            hypot(bufferedDelta.x, bufferedDelta.y) >= motionThreshold
+                                        ) {
+                                            twoFingerMode = TwoFingerGestureMode.SCROLL
+                                            producedMotion = true
+                                            TouchMouseStore.scroll(
+                                                movementAfterDeadzone(
+                                                    bufferedDelta,
+                                                    motionThreshold,
+                                                ).y,
+                                            )
+                                            bufferedDelta = Offset.Zero
+                                            bufferedSpanDelta = 0f
+                                        }
+                                    }
+                                    TwoFingerGestureMode.PINCH -> TouchMouseStore.zoom(spanDelta)
+                                    TwoFingerGestureMode.SCROLL -> TouchMouseStore.scroll(delta.y)
+                                }
+                            }
+                            else -> {
+                                if (delta != Offset.Zero) {
+                                    if (motionAccepted) {
+                                        TouchMouseStore.move(delta.x, delta.y)
+                                    } else {
+                                        bufferedDelta += delta
+                                        if (
+                                            hypot(bufferedDelta.x, bufferedDelta.y) >=
+                                            motionThreshold
+                                        ) {
+                                            motionAccepted = true
+                                            producedMotion = true
+                                            val initialMotion = movementAfterDeadzone(
+                                                bufferedDelta,
+                                                motionThreshold,
+                                            )
+                                            TouchMouseStore.move(initialMotion.x, initialMotion.y)
+                                            bufferedDelta = Offset.Zero
+                                        }
+                                    }
                                 }
                             }
                         }
                         changes.forEach { it.consume() }
                     }
-                    if (!producedMotion) {
-                        if (maximumPointerCount >= 2) {
+                    if (maximumPointerCount >= 3) {
+                        when (threeFingerMode) {
+                            ThreeFingerGestureMode.WINDOW_SWITCHER -> TouchKeyboardStore.submit(
+                                KeyboardInput.Key(KeyboardKey.ENTER),
+                            )
+                            ThreeFingerGestureMode.VERTICAL -> {
+                                val shortcut = if (threeFingerDelta.y < 0f) {
+                                    TouchMouseStore.threeFingerSwipeUp()
+                                } else {
+                                    TouchMouseStore.threeFingerSwipeDown()
+                                }
+                                shortcut?.let(TouchKeyboardStore::submit)
+                            }
+                            ThreeFingerGestureMode.UNDECIDED -> Unit
+                        }
+                    } else if (!producedMotion) {
+                        if (maximumPointerCount == 2) {
                             TouchMouseStore.rightClick()
                         } else {
                             TouchMouseStore.click()
@@ -762,6 +892,46 @@ internal fun movementAfterDeadzone(movement: Offset, deadzone: Float): Offset {
     return movement * ((distance - safeDeadzone) / distance)
 }
 
+internal fun windowSwitcherStepCount(distance: Float, step: Float): Int =
+    if (step <= 0f) 0 else (distance / step).toInt()
+
+private fun touchSpanDelta(
+    changes: List<androidx.compose.ui.input.pointer.PointerInputChange>,
+): Float {
+    if (changes.size < 2) return 0f
+    val currentCentroid = changes.fold(Offset.Zero) { total, change ->
+        total + change.position
+    } / changes.size.toFloat()
+    val previousCentroid = changes.fold(Offset.Zero) { total, change ->
+        total + change.previousPosition
+    } / changes.size.toFloat()
+    val currentSpan = changes.sumOf { change ->
+        hypot(
+            (change.position.x - currentCentroid.x).toDouble(),
+            (change.position.y - currentCentroid.y).toDouble(),
+        )
+    }.toFloat() / changes.size
+    val previousSpan = changes.sumOf { change ->
+        hypot(
+            (change.previousPosition.x - previousCentroid.x).toDouble(),
+            (change.previousPosition.y - previousCentroid.y).toDouble(),
+        )
+    }.toFloat() / changes.size
+    return currentSpan - previousSpan
+}
+
+private enum class TwoFingerGestureMode {
+    UNDECIDED,
+    SCROLL,
+    PINCH,
+}
+
+private enum class ThreeFingerGestureMode {
+    UNDECIDED,
+    VERTICAL,
+    WINDOW_SWITCHER,
+}
+
 private fun directionForDpadCell(x: Float, y: Float): DpadDirection? {
     val start = (1f - DPAD_CELL_FRACTION) / 2f
     val end = 1f - start
@@ -805,6 +975,9 @@ private val DpadDirection.hasWest: Boolean
 
 private const val KEYBOARD_SYMBOL = "⌨"
 private const val TOUCHPAD_TAP_SLOP_DP = 2f
+private const val TOUCHPAD_PINCH_SLOP_DP = 4f
+private const val TOUCHPAD_THREE_FINGER_SWIPE_DP = 48f
+private const val TOUCHPAD_WINDOW_SWITCH_STEP_DP = 40f
 private const val DPAD_CELL_FRACTION = 0.36f
 private const val DPAD_INNER_EDGE = 0.36f
 private const val DPAD_CENTER_FRACTION = 0.5f

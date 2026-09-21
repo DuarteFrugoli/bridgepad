@@ -41,8 +41,12 @@ class BluetoothHidOutputTransport(
 
     override fun sendPointer(report: PointerReport): Boolean {
         val device = connectedHost() ?: return false
-        val encoded = profile().encodePointer(report) ?: return false
-        return hidDevice()?.sendReport(device, encoded.id, encoded.payload) == true
+        val bluetoothHid = hidDevice() ?: return false
+        var accepted = true
+        profile().encodePointer(report).forEach { encoded ->
+            if (!bluetoothHid.sendReport(device, encoded.id, encoded.payload)) accepted = false
+        }
+        return accepted
     }
 
     override fun sendKeyboard(input: KeyboardInput): Boolean {

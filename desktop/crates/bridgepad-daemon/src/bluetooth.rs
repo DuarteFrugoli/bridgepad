@@ -5,12 +5,14 @@ mod platform {
     use crate::AnyError;
     use bridgepad_protocol::{
         CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, HEADER_SIZE,
-        KeyboardInput as ProtocolKeyboardInput, KeyboardKey as ProtocolKeyboardKey,
-        MAX_PAYLOAD_SIZE, MessageType, PacketHeader, decode_gamepad_snapshot, decode_keyboard,
-        decode_packet, decode_pointer, decode_session_start, encode_packet,
+        KEYBOARD_MODIFIER_ALT, KEYBOARD_MODIFIER_CONTROL, KEYBOARD_MODIFIER_META,
+        KEYBOARD_MODIFIER_SHIFT, KeyboardInput as ProtocolKeyboardInput,
+        KeyboardKey as ProtocolKeyboardKey, MAX_PAYLOAD_SIZE, MessageType, PacketHeader,
+        decode_gamepad_snapshot, decode_keyboard, decode_packet, decode_pointer,
+        decode_session_start, encode_packet,
     };
     use bridgepad_virtual_device::{
-        DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, PointerReport,
+        DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, KeyboardModifiers, PointerReport,
         VirtualGamepadDevice, VirtualKeyboardDevice, VirtualPointerDevice,
     };
     use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
@@ -209,10 +211,36 @@ mod platform {
                                 ProtocolKeyboardInput::Text(text) => KeyboardInput::Text(text),
                                 ProtocolKeyboardInput::Key(key) => KeyboardInput::Key(match key {
                                     ProtocolKeyboardKey::Backspace => KeyboardKey::Backspace,
+                                    ProtocolKeyboardKey::D => KeyboardKey::D,
                                     ProtocolKeyboardKey::Enter => KeyboardKey::Enter,
+                                    ProtocolKeyboardKey::Left => KeyboardKey::Left,
+                                    ProtocolKeyboardKey::M => KeyboardKey::M,
+                                    ProtocolKeyboardKey::Right => KeyboardKey::Right,
                                     ProtocolKeyboardKey::Tab => KeyboardKey::Tab,
                                     ProtocolKeyboardKey::Escape => KeyboardKey::Escape,
                                 }),
+                                ProtocolKeyboardInput::Shortcut { modifiers, key } => {
+                                    KeyboardInput::Shortcut {
+                                        modifiers: KeyboardModifiers {
+                                            alt: modifiers & KEYBOARD_MODIFIER_ALT != 0,
+                                            control: modifiers & KEYBOARD_MODIFIER_CONTROL != 0,
+                                            meta: modifiers & KEYBOARD_MODIFIER_META != 0,
+                                            shift: modifiers & KEYBOARD_MODIFIER_SHIFT != 0,
+                                        },
+                                        key: match key {
+                                            ProtocolKeyboardKey::Backspace => {
+                                                KeyboardKey::Backspace
+                                            }
+                                            ProtocolKeyboardKey::D => KeyboardKey::D,
+                                            ProtocolKeyboardKey::Enter => KeyboardKey::Enter,
+                                            ProtocolKeyboardKey::Left => KeyboardKey::Left,
+                                            ProtocolKeyboardKey::M => KeyboardKey::M,
+                                            ProtocolKeyboardKey::Right => KeyboardKey::Right,
+                                            ProtocolKeyboardKey::Tab => KeyboardKey::Tab,
+                                            ProtocolKeyboardKey::Escape => KeyboardKey::Escape,
+                                        },
+                                    }
+                                }
                             };
                             keyboard
                                 .as_mut()
@@ -232,6 +260,7 @@ mod platform {
                                     delta_x: report.delta_x,
                                     delta_y: report.delta_y,
                                     scroll_y: report.scroll_y,
+                                    zoom_y: report.zoom_y,
                                 })?;
                         }
                         MessageType::Ping => queue(

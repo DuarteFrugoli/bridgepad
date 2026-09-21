@@ -21,7 +21,7 @@ interface BluetoothHidProfile {
     val reportDescriptor: ByteArray
 
     fun encodeGamepad(state: VirtualGamepadState): HidReport
-    fun encodePointer(report: PointerReport): HidReport?
+    fun encodePointer(report: PointerReport): List<HidReport>
     fun encodeKeyboard(input: KeyboardInput): List<HidReport>
 
     fun onGetReport(type: Byte, id: Byte, bufferSize: Int): HidHostRequestResult =

@@ -1,5 +1,8 @@
 package dev.jonalakas.bridgepad.input.touch
 
+import dev.jonalakas.bridgepad.core.ports.KeyboardInput
+import dev.jonalakas.bridgepad.core.ports.KeyboardKey
+import dev.jonalakas.bridgepad.core.ports.KeyboardModifier
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -73,6 +76,49 @@ class TouchMouseStoreTest {
         TouchMouseStore.scroll(-40f)
         assertEquals(2, TouchMouseStore.consume()?.scrollY)
         assertNull(TouchMouseStore.consume())
+    }
+
+    @Test fun pinchProducesIndependentZoomWheelReports() {
+        TouchMouseStore.zoom(25f)
+
+        val report = TouchMouseStore.consume()
+
+        assertEquals(2, report?.zoomY)
+        assertEquals(0, report?.scrollY)
+        assertNull(TouchMouseStore.consume())
+    }
+
+    @Test fun threeFingerDesktopGestureRestoresBeforeOpeningTaskView() {
+        assertEquals(
+            KeyboardInput.Shortcut(setOf(KeyboardModifier.META), KeyboardKey.M),
+            TouchMouseStore.threeFingerSwipeDown(),
+        )
+        assertNull(TouchMouseStore.threeFingerSwipeDown())
+        assertEquals(
+            KeyboardInput.Shortcut(
+                setOf(KeyboardModifier.META, KeyboardModifier.SHIFT),
+                KeyboardKey.M,
+            ),
+            TouchMouseStore.threeFingerSwipeUp(),
+        )
+        assertEquals(
+            KeyboardInput.Shortcut(setOf(KeyboardModifier.META), KeyboardKey.TAB),
+            TouchMouseStore.threeFingerSwipeUp(),
+        )
+        assertEquals(
+            KeyboardInput.Key(KeyboardKey.ESCAPE),
+            TouchMouseStore.threeFingerSwipeDown(),
+        )
+    }
+
+    @Test fun regularInteractionCancelsRestoringPreviouslyMinimizedWindows() {
+        TouchMouseStore.threeFingerSwipeDown()
+        TouchMouseStore.click()
+
+        assertEquals(
+            KeyboardInput.Shortcut(setOf(KeyboardModifier.META), KeyboardKey.TAB),
+            TouchMouseStore.threeFingerSwipeUp(),
+        )
     }
 
     @Test fun encoderClampsMouseMovement() {

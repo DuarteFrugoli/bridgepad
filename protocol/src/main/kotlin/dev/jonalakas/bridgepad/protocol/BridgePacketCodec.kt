@@ -6,6 +6,7 @@ import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.PointerReport
 import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.ports.KeyboardKey
+import dev.jonalakas.bridgepad.core.ports.KeyboardModifier
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
@@ -336,7 +337,8 @@ object BridgePacketCodec {
         writeByte(report.buttons)
         writeInt(report.deltaX)
         writeInt(report.deltaY)
-        if (report.scrollY != 0) writeInt(report.scrollY)
+        if (report.scrollY != 0 || report.zoomY != 0) writeInt(report.scrollY)
+        if (report.zoomY != 0) writeInt(report.zoomY)
     }
 
     private fun DataInputStream.readPointer() = PointerReport(
@@ -344,6 +346,7 @@ object BridgePacketCodec {
         deltaX = readInt(),
         deltaY = readInt(),
         scrollY = if (available() >= Int.SIZE_BYTES) readInt() else 0,
+        zoomY = if (available() >= Int.SIZE_BYTES) readInt() else 0,
     )
 
     private fun DataOutputStream.writeKeyboard(input: KeyboardInput) {
@@ -356,12 +359,21 @@ object BridgePacketCodec {
                 writeByte(1)
                 writeByte(input.key.wireCode)
             }
+            is KeyboardInput.Shortcut -> {
+                writeByte(2)
+                writeByte(input.modifiers.wireBits)
+                writeByte(input.key.wireCode)
+            }
         }
     }
 
     private fun DataInputStream.readKeyboard(): KeyboardInput = when (readUnsignedByte()) {
         0 -> KeyboardInput.Text(readUtf8U16())
         1 -> KeyboardInput.Key(keyboardKeyFromWireCode(readUnsignedByte()))
+        2 -> KeyboardInput.Shortcut(
+            modifiers = keyboardModifiersFromWireBits(readUnsignedByte()),
+            key = keyboardKeyFromWireCode(readUnsignedByte()),
+        )
         else -> throw BridgeProtocolException("Unknown keyboard input type")
     }
 
@@ -371,6 +383,10 @@ object BridgePacketCodec {
             KeyboardKey.ENTER -> 1
             KeyboardKey.TAB -> 2
             KeyboardKey.ESCAPE -> 3
+            KeyboardKey.D -> 4
+            KeyboardKey.LEFT -> 5
+            KeyboardKey.M -> 6
+            KeyboardKey.RIGHT -> 7
         }
 
     private fun keyboardKeyFromWireCode(code: Int): KeyboardKey = when (code) {
@@ -378,7 +394,34 @@ object BridgePacketCodec {
         1 -> KeyboardKey.ENTER
         2 -> KeyboardKey.TAB
         3 -> KeyboardKey.ESCAPE
+        4 -> KeyboardKey.D
+        5 -> KeyboardKey.LEFT
+        6 -> KeyboardKey.M
+        7 -> KeyboardKey.RIGHT
         else -> throw BridgeProtocolException("Unknown keyboard key: $code")
+    }
+
+    private val Set<KeyboardModifier>.wireBits: Int
+        get() = fold(0) { bits, modifier -> bits or modifier.wireBit }
+
+    private val KeyboardModifier.wireBit: Int
+        get() = when (this) {
+            KeyboardModifier.ALT -> 1 shl 2
+            KeyboardModifier.CONTROL -> 1 shl 0
+            KeyboardModifier.META -> 1 shl 1
+            KeyboardModifier.SHIFT -> 1 shl 3
+        }
+
+    private fun keyboardModifiersFromWireBits(bits: Int): Set<KeyboardModifier> {
+        val knownBits = KeyboardModifier.entries.fold(0) { known, modifier ->
+            known or modifier.wireBit
+        }
+        if (bits == 0 || bits and knownBits != bits) {
+            throw BridgeProtocolException("Unknown keyboard modifiers: $bits")
+        }
+        return KeyboardModifier.entries.filterTo(linkedSetOf()) { modifier ->
+            bits and modifier.wireBit != 0
+        }
     }
 
     private fun DataOutputStream.writeUtf8U8(value: String, maxBytes: Int, field: String) {

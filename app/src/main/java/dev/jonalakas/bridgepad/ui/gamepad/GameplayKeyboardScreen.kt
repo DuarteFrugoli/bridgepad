@@ -45,6 +45,7 @@ import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.ports.KeyboardKey
 import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
+import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 
 /** In-memory only UI state. Call [reset] whenever the gameplay session ends. */
 @Stable
@@ -53,6 +54,7 @@ class GameplayKeyboardState {
         private set
 
     fun update(next: TextFieldValue) {
+        TouchMouseStore.notifyRegularInteraction()
         keyboardInputsForChange(value.text, next.text).forEach(TouchKeyboardStore::submit)
         value = next.copy(selection = TextRange(next.text.length))
     }
@@ -62,6 +64,7 @@ class GameplayKeyboardState {
     }
 
     fun submit(key: KeyboardKey) {
+        TouchMouseStore.notifyRegularInteraction()
         TouchKeyboardStore.submit(KeyboardInput.Key(key))
     }
 

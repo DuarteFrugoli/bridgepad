@@ -39,7 +39,7 @@
     <string name="latency_label">Last event latency</string>
     <string name="open_touch_controller">Open touchscreen controller</string>
     <string name="open_mouse_touchpad">Open mouse touchpad</string>
-    <string name="mouse_touchpad_instructions">Move with one finger and tap for a left click. Tap with two fingers for a right click or drag them vertically to scroll.</string>
+    <string name="mouse_touchpad_instructions">Move with one finger and tap for a left click. Use two fingers to right-click, scroll or pinch to zoom. Swipe three fingers up for Task View or to restore minimized windows, down to return from Task View or minimize all windows, or sideways to choose a window.</string>
     <string name="right_click_short">R</string>
     <string name="right_click">Right click</string>
     <string name="mouse_touchpad_back_hint">← Use Android Back to open the session menu</string>

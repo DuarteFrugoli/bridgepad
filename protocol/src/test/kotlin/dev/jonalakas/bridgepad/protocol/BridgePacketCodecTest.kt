@@ -6,6 +6,7 @@ import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.PointerReport
 import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.ports.KeyboardKey
+import dev.jonalakas.bridgepad.core.ports.KeyboardModifier
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -66,6 +67,18 @@ class BridgePacketCodecTest {
     }
 
     @Test
+    fun pointer_withZoom_roundTripsAtomicZoomPayload() {
+        val report = PointerReport(zoomY = 3)
+        val packet = BridgePacket(1, 2, 3, BridgeMessage.PointerFrame(report))
+
+        assertEquals(
+            report,
+            (BridgePacketCodec.decode(BridgePacketCodec.encode(packet)).message as
+                BridgeMessage.PointerFrame).report,
+        )
+    }
+
+    @Test
     fun controlMessages_roundTripWithoutTransportKnowledge() {
         val peerId = PeerId(0x0102, 0x0304)
         val capabilities = BridgeCapabilities.of(
@@ -82,6 +95,17 @@ class BridgePacketCodecTest {
             BridgeMessage.PointerFrame(PointerReport(buttons = 3, deltaX = -250, deltaY = 500)),
             BridgeMessage.KeyboardFrame(KeyboardInput.Text("Olá, BridgePad!")),
             BridgeMessage.KeyboardFrame(KeyboardInput.Key(KeyboardKey.BACKSPACE)),
+            BridgeMessage.KeyboardFrame(KeyboardInput.Key(KeyboardKey.LEFT)),
+            BridgeMessage.KeyboardFrame(KeyboardInput.Key(KeyboardKey.RIGHT)),
+            BridgeMessage.KeyboardFrame(
+                KeyboardInput.Shortcut(setOf(KeyboardModifier.META), KeyboardKey.TAB),
+            ),
+            BridgeMessage.KeyboardFrame(
+                KeyboardInput.Shortcut(
+                    setOf(KeyboardModifier.META, KeyboardModifier.SHIFT),
+                    KeyboardKey.M,
+                ),
+            ),
             BridgeMessage.Ping(1234),
             BridgeMessage.Pong(1234),
             BridgeMessage.Status(BridgeStatusCode.ACTIVE, "ready"),

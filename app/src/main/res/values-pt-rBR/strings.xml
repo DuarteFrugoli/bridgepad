@@ -39,7 +39,7 @@
     <string name="latency_label">Latência do último comando</string>
     <string name="open_touch_controller">Abrir controle virtual</string>
     <string name="open_mouse_touchpad">Abrir touchpad do mouse</string>
-    <string name="mouse_touchpad_instructions">Mova com um dedo e toque para o clique esquerdo. Toque com dois dedos para o clique direito ou arraste-os verticalmente para rolar.</string>
+    <string name="mouse_touchpad_instructions">Mova com um dedo e toque para o clique esquerdo. Use dois dedos para clicar com o botão direito, rolar ou fazer zoom por pinça. Deslize três dedos para cima para abrir a Visão de Tarefas ou restaurar janelas minimizadas, para baixo para voltar da Visão de Tarefas ou minimizar todas, ou para os lados para escolher uma janela.</string>
     <string name="right_click_short">D</string>
     <string name="right_click">Clique direito</string>
     <string name="mouse_touchpad_back_hint">← Use Voltar do Android para abrir o menu da sessão</string>

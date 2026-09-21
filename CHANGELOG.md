@@ -8,6 +8,11 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Added pinch-to-zoom through an atomic `Ctrl + wheel` gesture and Windows-style
+  three-finger Task View, reversible minimize/restore and persistent window
+  selection gestures to both mouse touchpad surfaces. Task View can be dismissed
+  with the inverse gesture, and regular BridgePad interaction cancels stale
+  window restoration.
 - Added a platform-independent desktop virtual-gamepad contract, an isolated
   experimental ViGEm/XInput adapter and an interactive Windows recognition
   spike for `joy.cpl`, Steam and games.

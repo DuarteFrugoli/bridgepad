@@ -94,6 +94,7 @@ pub enum ProtocolError {
     InvalidDpad(u8),
     UnknownKeyboardInput(u8),
     UnknownKeyboardKey(u8),
+    UnknownKeyboardModifiers(u8),
     InvalidUtf8,
     InvalidPeerId,
     InvalidPeerName,
@@ -232,10 +233,11 @@ pub struct PointerReport {
     pub delta_x: i32,
     pub delta_y: i32,
     pub scroll_y: i32,
+    pub zoom_y: i32,
 }
 
 pub fn decode_pointer(packet: Packet<'_>) -> Result<PointerReport, ProtocolError> {
-    if packet.payload.len() != 9 && packet.payload.len() != 13 {
+    if packet.payload.len() != 9 && packet.payload.len() != 13 && packet.payload.len() != 17 {
         return Err(ProtocolError::InvalidPayloadLength {
             expected: 9,
             actual: packet.payload.len(),
@@ -247,6 +249,13 @@ pub fn decode_pointer(packet: Packet<'_>) -> Result<PointerReport, ProtocolError
         delta_y: read_i32(packet.payload, 5),
         scroll_y: if packet.payload.len() == 13 {
             read_i32(packet.payload, 9)
+        } else if packet.payload.len() == 17 {
+            read_i32(packet.payload, 9)
+        } else {
+            0
+        },
+        zoom_y: if packet.payload.len() == 17 {
+            read_i32(packet.payload, 13)
         } else {
             0
         },
@@ -256,15 +265,29 @@ pub fn decode_pointer(packet: Packet<'_>) -> Result<PointerReport, ProtocolError
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum KeyboardKey {
     Backspace,
+    D,
     Enter,
+    Left,
+    M,
+    Right,
     Tab,
     Escape,
 }
+
+pub const KEYBOARD_MODIFIER_CONTROL: u8 = 1 << 0;
+pub const KEYBOARD_MODIFIER_META: u8 = 1 << 1;
+pub const KEYBOARD_MODIFIER_ALT: u8 = 1 << 2;
+pub const KEYBOARD_MODIFIER_SHIFT: u8 = 1 << 3;
+const KEYBOARD_MODIFIERS: u8 = KEYBOARD_MODIFIER_CONTROL
+    | KEYBOARD_MODIFIER_META
+    | KEYBOARD_MODIFIER_ALT
+    | KEYBOARD_MODIFIER_SHIFT;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum KeyboardInput {
     Text(String),
     Key(KeyboardKey),
+    Shortcut { modifiers: u8, key: KeyboardKey },
 }
 
 pub fn decode_keyboard(packet: Packet<'_>) -> Result<KeyboardInput, ProtocolError> {
@@ -304,9 +327,32 @@ pub fn decode_keyboard(packet: Packet<'_>) -> Result<KeyboardInput, ProtocolErro
                 1 => KeyboardKey::Enter,
                 2 => KeyboardKey::Tab,
                 3 => KeyboardKey::Escape,
+                4 => KeyboardKey::D,
+                5 => KeyboardKey::Left,
+                6 => KeyboardKey::M,
+                7 => KeyboardKey::Right,
                 value => return Err(ProtocolError::UnknownKeyboardKey(value)),
             };
             Ok(KeyboardInput::Key(key))
+        }
+        2 => {
+            require_payload_length(packet.payload, 3)?;
+            let modifiers = packet.payload[1];
+            if modifiers == 0 || modifiers & !KEYBOARD_MODIFIERS != 0 {
+                return Err(ProtocolError::UnknownKeyboardModifiers(modifiers));
+            }
+            let key = match packet.payload[2] {
+                0 => KeyboardKey::Backspace,
+                1 => KeyboardKey::Enter,
+                2 => KeyboardKey::Tab,
+                3 => KeyboardKey::Escape,
+                4 => KeyboardKey::D,
+                5 => KeyboardKey::Left,
+                6 => KeyboardKey::M,
+                7 => KeyboardKey::Right,
+                value => return Err(ProtocolError::UnknownKeyboardKey(value)),
+            };
+            Ok(KeyboardInput::Shortcut { modifiers, key })
         }
         value => Err(ProtocolError::UnknownKeyboardInput(value)),
     }
@@ -466,11 +512,38 @@ mod tests {
                 delta_x: -250,
                 delta_y: 500,
                 scroll_y: 0,
+                zoom_y: 0,
             })
         );
         assert_eq!(
             encode_packet(packet.header, packet.payload).expect("packet must encode"),
             expected
+        );
+    }
+
+    #[test]
+    fn extended_pointer_payload_decodes_zoom() {
+        let payload = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3];
+        let bytes = encode_packet(
+            PacketHeader {
+                session_id: 7,
+                sequence: 9,
+                timestamp_micros: 11,
+                message_type: MessageType::Pointer,
+            },
+            &payload,
+        )
+        .expect("packet must encode");
+
+        assert_eq!(
+            decode_pointer(decode_packet(&bytes).expect("packet must decode")),
+            Ok(PointerReport {
+                buttons: 0,
+                delta_x: 0,
+                delta_y: 0,
+                scroll_y: 0,
+                zoom_y: 3,
+            })
         );
     }
 
@@ -562,6 +635,55 @@ mod tests {
             decode_keyboard(decode_packet(&key_bytes).expect("packet must decode")),
             Ok(KeyboardInput::Key(KeyboardKey::Backspace))
         );
+    }
+
+    #[test]
+    fn keyboard_decodes_atomic_shortcut() {
+        let modifiers = KEYBOARD_MODIFIER_ALT | KEYBOARD_MODIFIER_SHIFT;
+        let payload = [2, modifiers, 2];
+        let bytes = encode_packet(
+            PacketHeader {
+                session_id: 7,
+                sequence: 10,
+                timestamp_micros: 12,
+                message_type: MessageType::Keyboard,
+            },
+            &payload,
+        )
+        .expect("packet must encode");
+
+        assert_eq!(
+            decode_keyboard(decode_packet(&bytes).expect("packet must decode")),
+            Ok(KeyboardInput::Shortcut {
+                modifiers,
+                key: KeyboardKey::Tab,
+            })
+        );
+    }
+
+    #[test]
+    fn keyboard_decodes_window_navigation_keys() {
+        for (wire_code, expected) in [
+            (5, KeyboardKey::Left),
+            (6, KeyboardKey::M),
+            (7, KeyboardKey::Right),
+        ] {
+            let payload = [1, wire_code];
+            let bytes = encode_packet(
+                PacketHeader {
+                    session_id: 7,
+                    sequence: 10,
+                    timestamp_micros: 12,
+                    message_type: MessageType::Keyboard,
+                },
+                &payload,
+            )
+            .expect("packet must encode");
+            assert_eq!(
+                decode_keyboard(decode_packet(&bytes).expect("packet must decode")),
+                Ok(KeyboardInput::Key(expected))
+            );
+        }
     }
 
     fn vector(name: &str) -> Vec<u8> {

@@ -2,6 +2,7 @@ package dev.jonalakas.bridgepad.output.hid
 
 import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.ports.KeyboardKey
+import dev.jonalakas.bridgepad.core.ports.KeyboardModifier
 
 object KeyboardHidEncoder {
     fun encode(input: KeyboardInput): List<ByteArray> = when (input) {
@@ -9,7 +10,11 @@ object KeyboardHidEncoder {
             encodeCharacter(character)?.reports().orEmpty()
         }
         is KeyboardInput.Key -> keyStroke(input.key).reports()
+        is KeyboardInput.Shortcut -> keyStroke(input.key, input.modifiers).reports()
     }
+
+    fun modifierReport(modifiers: Set<KeyboardModifier>): ByteArray =
+        byteArrayOf(modifiers.hidBits.toByte(), 0, 0, 0, 0, 0, 0, 0)
 
     private fun encodeCharacter(character: Char): KeyStroke? {
         val normalized = normalizePortugueseCharacter(character)
@@ -57,13 +62,21 @@ object KeyboardHidEncoder {
         }
     }
 
-    private fun keyStroke(key: KeyboardKey): KeyStroke = KeyStroke(
+    private fun keyStroke(
+        key: KeyboardKey,
+        modifiers: Set<KeyboardModifier> = emptySet(),
+    ): KeyStroke = KeyStroke(
         when (key) {
             KeyboardKey.BACKSPACE -> 0x2A
+            KeyboardKey.D -> 0x07
             KeyboardKey.ENTER -> 0x28
+            KeyboardKey.LEFT -> 0x50
+            KeyboardKey.M -> 0x10
+            KeyboardKey.RIGHT -> 0x4F
             KeyboardKey.TAB -> 0x2B
             KeyboardKey.ESCAPE -> 0x29
         },
+        modifiers.hidBits,
     )
 
     private fun normalizePortugueseCharacter(character: Char): Char = when (character) {
@@ -89,6 +102,19 @@ object KeyboardHidEncoder {
 
     private data class KeyStroke(val usage: Int, val modifier: Int = 0)
 
+    private val Set<KeyboardModifier>.hidBits: Int
+        get() = fold(0) { bits, modifier ->
+            bits or when (modifier) {
+                KeyboardModifier.ALT -> ALT
+                KeyboardModifier.CONTROL -> CONTROL
+                KeyboardModifier.META -> META
+                KeyboardModifier.SHIFT -> SHIFT
+            }
+        }
+
+    private const val CONTROL = 0x01
     private const val SHIFT = 0x02
+    private const val ALT = 0x04
+    private const val META = 0x08
     private const val KEYBOARD_REPORT_SIZE = 8
 }
