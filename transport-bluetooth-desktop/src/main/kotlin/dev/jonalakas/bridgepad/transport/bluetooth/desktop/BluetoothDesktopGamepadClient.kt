@@ -250,9 +250,8 @@ class BluetoothDesktopGamepadClient(
     private companion object {
         const val REPORT_RATE_HZ = 125
         const val IDLE_POLL_MILLIS = 1L
-        // Keep pointer latency bounded. While this single slot is occupied,
-        // TouchMouseStore retains and coalesces newer relative movement.
-        const val POINTER_QUEUE_CAPACITY = 1
+        // Absorb short RFCOMM delivery stalls without rejecting pointer samples.
+        const val POINTER_QUEUE_CAPACITY = 64
         const val KEYBOARD_QUEUE_CAPACITY = 64
         val RECONNECT_DELAYS_MILLIS = longArrayOf(500, 1_000, 2_000)
         val RFCOMM_SERVICE_UUID: UUID = UUID.fromString("7a1b8d5f-6c24-4e71-9f52-a4b8d9c30101")

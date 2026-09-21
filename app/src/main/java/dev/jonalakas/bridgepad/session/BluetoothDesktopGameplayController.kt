@@ -116,6 +116,6 @@ class BluetoothDesktopGameplayController(
     }
 
     private companion object {
-        const val AUXILIARY_INPUT_POLL_MILLIS = 4L
+        const val AUXILIARY_INPUT_POLL_MILLIS = 10L
     }
 }
