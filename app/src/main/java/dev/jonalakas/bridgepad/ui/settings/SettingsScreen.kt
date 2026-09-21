@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -21,8 +22,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
@@ -47,10 +53,12 @@ fun SettingsScreen(
     mappingAvailable: Boolean,
     sessionOrientationMode: SessionOrientationMode,
     invertedTouchpadScroll: Boolean,
+    useDisplayCutoutArea: Boolean,
     onEditTouchscreenLayout: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
     onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
     onInvertedTouchpadScrollChanged: (Boolean) -> Unit,
+    onUseDisplayCutoutAreaChanged: (Boolean) -> Unit,
     onOpenNetworkDiagnostic: () -> Unit,
     onOpenBluetoothDesktopDiagnostic: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
@@ -59,6 +67,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var cutoutConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     BackHandler(onBack = onBack)
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -95,6 +104,30 @@ fun SettingsScreen(
             item {
                 SettingsCard(title = stringResource(R.string.virtual_gamepad_settings)) {
                     Text(stringResource(R.string.virtual_gamepad_settings_description))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.use_display_cutout_area),
+                            modifier = Modifier.weight(1f),
+                        )
+                        Switch(
+                            checked = useDisplayCutoutArea,
+                            onCheckedChange = { enabled ->
+                                if (enabled) {
+                                    cutoutConfirmationVisible = true
+                                } else {
+                                    onUseDisplayCutoutAreaChanged(false)
+                                }
+                            },
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.use_display_cutout_area_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     OutlinedButton(
                         onClick = onEditTouchscreenLayout,
                         modifier = Modifier.fillMaxWidth(),
@@ -235,6 +268,39 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+    if (cutoutConfirmationVisible) {
+        AlertDialog(
+            onDismissRequest = { cutoutConfirmationVisible = false },
+            title = { Text(stringResource(R.string.display_cutout_warning_title)) },
+            text = { Text(stringResource(R.string.display_cutout_warning_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        cutoutConfirmationVisible = false
+                        onUseDisplayCutoutAreaChanged(true)
+                        onEditTouchscreenLayout()
+                    },
+                ) {
+                    Text(stringResource(R.string.enable_and_edit_action))
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { cutoutConfirmationVisible = false }) {
+                        Text(stringResource(R.string.cancel_action))
+                    }
+                    TextButton(
+                        onClick = {
+                            cutoutConfirmationVisible = false
+                            onUseDisplayCutoutAreaChanged(true)
+                        },
+                    ) {
+                        Text(stringResource(R.string.enable_only_action))
+                    }
+                }
+            },
+        )
     }
 }
 

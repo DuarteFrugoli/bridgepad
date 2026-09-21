@@ -56,6 +56,7 @@ fun NetworkDiagnosticScreen(
     gameplayStatus: NetworkGamepadStatus,
     physicalControllerConnected: Boolean,
     touchscreenLayout: TouchscreenLayout,
+    useDisplayCutoutArea: Boolean,
     onStartGameplay: (NetworkGamepadRequest) -> Unit,
     onStopGameplay: () -> Unit,
     modifier: Modifier = Modifier,
@@ -71,6 +72,7 @@ fun NetworkDiagnosticScreen(
         DiagnosticGameplaySession(
             physicalControllerConnected = physicalControllerConnected,
             touchscreenLayout = touchscreenLayout,
+            useDisplayCutoutArea = useDisplayCutoutArea,
             onEndSession = onStopGameplay,
             modifier = modifier,
         )

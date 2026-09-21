@@ -54,6 +54,7 @@ fun BluetoothDesktopDiagnosticScreen(
     gameplayStatus: BluetoothDesktopGamepadStatus,
     physicalControllerConnected: Boolean,
     touchscreenLayout: TouchscreenLayout,
+    useDisplayCutoutArea: Boolean,
     probe: BluetoothDesktopProbe,
     onStartGameplay: (String) -> Unit,
     onStopGameplay: () -> Unit,
@@ -70,6 +71,7 @@ fun BluetoothDesktopDiagnosticScreen(
         DiagnosticGameplaySession(
             physicalControllerConnected = physicalControllerConnected,
             touchscreenLayout = touchscreenLayout,
+            useDisplayCutoutArea = useDisplayCutoutArea,
             onEndSession = onStopGameplay,
             pointerSupported = false,
             modifier = modifier,

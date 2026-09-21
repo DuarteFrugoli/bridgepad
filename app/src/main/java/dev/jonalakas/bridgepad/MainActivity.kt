@@ -76,6 +76,7 @@ import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutEditorScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutOrientation
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenDisplaySettingsStore
 import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
@@ -232,6 +233,8 @@ class MainActivity : ComponentActivity() {
                 val networkPairingStatus by networkDesktopCoordinator.pairingStatus.collectAsState()
                 val networkDiscoveryError by networkDesktopCoordinator.discoveryError.collectAsState()
                 val touchscreenLayoutProfile by TouchscreenLayoutStore.profile.collectAsState()
+                val useDisplayCutoutArea by
+                    TouchscreenDisplaySettingsStore.useDisplayCutoutArea.collectAsState()
                 val sessionOrientationMode by SessionOrientationStore.mode.collectAsState()
                 val invertedTouchpadScroll by TouchpadSettingsStore.invertedScroll.collectAsState()
                 val configurationOrientation = LocalConfiguration.current.orientation
@@ -571,6 +574,7 @@ class MainActivity : ComponentActivity() {
                     TouchscreenLayoutEditorScreen(
                         initialProfile = touchscreenLayoutProfile,
                         editingOrientation = currentLayoutOrientation,
+                        useDisplayCutoutArea = useDisplayCutoutArea,
                         onSave = { profile ->
                             TouchGamepadStore.neutralize()
                             TouchscreenLayoutStore.save(profile)
@@ -591,6 +595,7 @@ class MainActivity : ComponentActivity() {
                         gameplayStatus = bluetoothDesktopGameplayStatus,
                         physicalControllerConnected = physicalControllerConnected,
                         touchscreenLayout = touchscreenLayout,
+                        useDisplayCutoutArea = useDisplayCutoutArea,
                         probe = remember { BluetoothDesktopProbe(this@MainActivity) },
                         onStartGameplay = { address ->
                             bluetoothDesktopGameplayController.start(address, effectiveCaptureMode)
@@ -607,6 +612,7 @@ class MainActivity : ComponentActivity() {
                         gameplayStatus = networkGameplayStatus,
                         physicalControllerConnected = physicalControllerConnected,
                         touchscreenLayout = touchscreenLayout,
+                        useDisplayCutoutArea = useDisplayCutoutArea,
                         onStartGameplay = { request ->
                             networkGameplayController.start(request, effectiveCaptureMode)
                         },
@@ -630,6 +636,7 @@ class MainActivity : ComponentActivity() {
                         mappingAvailable = mappingInput != null,
                         sessionOrientationMode = sessionOrientationMode,
                         invertedTouchpadScroll = invertedTouchpadScroll,
+                        useDisplayCutoutArea = useDisplayCutoutArea,
                         onEditTouchscreenLayout = {
                             returnToSettingsAfterLayoutEditor = true
                             showSettings = false
@@ -644,6 +651,8 @@ class MainActivity : ComponentActivity() {
                         },
                         onSessionOrientationModeChanged = SessionOrientationStore::set,
                         onInvertedTouchpadScrollChanged = TouchpadSettingsStore::setInvertedScroll,
+                        onUseDisplayCutoutAreaChanged =
+                            TouchscreenDisplaySettingsStore::setUseDisplayCutoutArea,
                         onOpenNetworkDiagnostic = {
                             showSettings = false
                             showNetworkDiagnostic = true
@@ -720,6 +729,7 @@ class MainActivity : ComponentActivity() {
                 } else if (sessionUiState.surface == SessionSurface.TOUCH_CONTROLLER) {
                     TouchscreenGamepadScreen(
                         layout = touchscreenLayout,
+                        useDisplayCutoutArea = useDisplayCutoutArea,
                         onOpenKeyboard = {
                             sessionUiViewModel.dispatch(SessionUiEvent.KeyboardOpened)
                         },
@@ -729,6 +739,7 @@ class MainActivity : ComponentActivity() {
                     )
                 } else if (sessionUiState.surface == SessionSurface.MOUSE_TOUCHPAD) {
                     MouseTouchpadScreen(
+                        useDisplayCutoutArea = useDisplayCutoutArea,
                         onOpenKeyboard = {
                             sessionUiViewModel.dispatch(SessionUiEvent.KeyboardOpened)
                         },

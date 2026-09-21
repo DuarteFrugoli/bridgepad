@@ -32,6 +32,7 @@ import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
 internal fun DiagnosticGameplaySession(
     physicalControllerConnected: Boolean,
     touchscreenLayout: TouchscreenLayout,
+    useDisplayCutoutArea: Boolean,
     onEndSession: () -> Unit,
     pointerSupported: Boolean = true,
     modifier: Modifier = Modifier,
@@ -55,6 +56,7 @@ internal fun DiagnosticGameplaySession(
     when (DiagnosticGameplaySurface.valueOf(surfaceName)) {
         DiagnosticGameplaySurface.GAMEPAD -> TouchscreenGamepadScreen(
             layout = touchscreenLayout,
+            useDisplayCutoutArea = useDisplayCutoutArea,
             onOpenKeyboard = {
                 keyboardReturnSurfaceName = surfaceName
                 surfaceName = DiagnosticGameplaySurface.KEYBOARD.name
@@ -63,6 +65,7 @@ internal fun DiagnosticGameplaySession(
             modifier = modifier,
         )
         DiagnosticGameplaySurface.TOUCHPAD -> MouseTouchpadScreen(
+            useDisplayCutoutArea = useDisplayCutoutArea,
             onOpenKeyboard = {
                 keyboardReturnSurfaceName = surfaceName
                 surfaceName = DiagnosticGameplaySurface.KEYBOARD.name

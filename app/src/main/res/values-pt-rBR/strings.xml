@@ -99,6 +99,13 @@
     <string name="edit_controller_layout">Editar layout virtual</string>
     <string name="virtual_gamepad_settings">Controle virtual</string>
     <string name="virtual_gamepad_settings_description">Personalize a posição e o tamanho dos controles mostrados durante o jogo.</string>
+    <string name="use_display_cutout_area">Usar a área ao redor da câmera</string>
+    <string name="use_display_cutout_area_description">Amplia o controle ao redor do recorte da câmera e mantém protegidos os gestos de navegação do Android.</string>
+    <string name="display_cutout_warning_title">Ampliar a área do controle?</string>
+    <string name="display_cutout_warning_message">A área maior pode reposicionar levemente alguns controles. A câmera em si continua indisponível. Você pode ajustar o resultado no editor de layout.</string>
+    <string name="display_cutout_safe_area">Área segura original</string>
+    <string name="enable_and_edit_action">Ativar e editar</string>
+    <string name="enable_only_action">Só ativar</string>
     <string name="layout_editor_title">Editar layout</string>
     <string name="show_layout_options">Opções</string>
     <string name="hide_layout_options">Ocultar opções</string>

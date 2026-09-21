@@ -4,6 +4,7 @@ import android.app.Application
 import dev.jonalakas.bridgepad.input.usb.DirectUsbCaptureManager
 import dev.jonalakas.bridgepad.input.touch.TouchpadSettingsStore
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
+import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenDisplaySettingsStore
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationStore
 import dev.jonalakas.bridgepad.session.InputRouter
 import dev.jonalakas.bridgepad.session.SessionCoordinator
@@ -37,6 +38,7 @@ class BridgePadApplication : Application() {
         DirectUsbCaptureManager.initialize(this)
         TouchpadSettingsStore.initialize(this)
         TouchscreenLayoutStore.initialize(this)
+        TouchscreenDisplaySettingsStore.initialize(this)
         SessionOrientationStore.initialize(this)
         inputRouter = InputRouter(applicationScope)
         bluetoothDesktopGameplayController = BluetoothDesktopGameplayController(

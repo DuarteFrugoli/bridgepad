@@ -400,6 +400,12 @@ checklist. These checks are pending hardware validation for the UI redesign.
 - Load the **Symmetric**, **Asymmetric** and **Mobile** starting layouts. Confirm
   their previews differ, each remains editable, cancel does not apply a selected
   preset, and saving each preset changes the gameplay arrangement.
+- In Settings, confirm **Use the area around the camera** is disabled by default.
+  Enable it, verify the repositioning warning appears, and open the layout editor.
+  Confirm the editor outlines the original safe area and expands into the space
+  beside the camera cutout. Save and verify gameplay uses the same expanded area
+  while Android navigation gestures remain available. Restart the app and confirm
+  the device-local setting persists; disabling it must restore safe-area bounds.
 - Select physical input and confirm **Connect and play** remains disabled until
   either Compatibility or Background USB is selected. Choose each capture mode
   before connecting, then configure buttons in both modes. Verify cancellation,

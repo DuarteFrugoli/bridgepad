@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,6 +73,7 @@ import dev.jonalakas.bridgepad.ui.gamepad.layout.controlHeightDp
 import dev.jonalakas.bridgepad.ui.gamepad.layout.controlOffset
 import dev.jonalakas.bridgepad.ui.gamepad.layout.controlWidthDp
 import dev.jonalakas.bridgepad.ui.gamepad.layout.touchControlShape
+import dev.jonalakas.bridgepad.ui.gamepad.layout.touchscreenContentInsets
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -83,6 +83,7 @@ import kotlin.math.sign
 @Composable
 fun TouchscreenGamepadScreen(
     layout: TouchscreenLayout,
+    useDisplayCutoutArea: Boolean,
     onOpenKeyboard: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
@@ -102,7 +103,7 @@ fun TouchscreenGamepadScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea))
             .padding(12.dp),
     ) {
         val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
@@ -298,6 +299,7 @@ private fun AndroidKeyboardButton(
 
 @Composable
 fun MouseTouchpadScreen(
+    useDisplayCutoutArea: Boolean,
     onOpenKeyboard: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
@@ -308,7 +310,7 @@ fun MouseTouchpadScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea))
             .padding(12.dp),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {

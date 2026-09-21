@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -74,6 +74,7 @@ import kotlin.math.roundToInt
 fun TouchscreenLayoutEditorScreen(
     initialProfile: TouchscreenLayoutProfile,
     editingOrientation: TouchscreenLayoutOrientation,
+    useDisplayCutoutArea: Boolean,
     onSave: (TouchscreenLayoutProfile) -> Unit,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
@@ -132,7 +133,7 @@ fun TouchscreenLayoutEditorScreen(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surface)
-            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea))
             .padding(12.dp),
     ) {
         val widthPixels = constraints.maxWidth.toFloat().coerceAtLeast(1f)
@@ -184,6 +185,31 @@ fun TouchscreenLayoutEditorScreen(
             }
         }.zIndex(EDITOR_OVERLAY_Z_INDEX)
         LayoutGrid(Modifier.fillMaxSize())
+        if (useDisplayCutoutArea) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .windowInsetsPadding(WindowInsets.displayCutout)
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.72f),
+                        shape = RoundedCornerShape(8.dp),
+                    ),
+            ) {
+                Text(
+                    text = stringResource(R.string.display_cutout_safe_area),
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                            shape = RoundedCornerShape(bottomEnd = 8.dp),
+                        )
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        }
         TouchControlId.entries.filter(draft::isVisible).forEach { control ->
             EditableControl(
                 control = control,
