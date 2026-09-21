@@ -9,8 +9,9 @@ mod platform {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_KEYUP,
         KEYEVENTF_UNICODE, MOUSE_EVENT_FLAGS, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP,
-        MOUSEEVENTF_MOVE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
-        MOUSEINPUT, SendInput, VIRTUAL_KEY, VK_BACK, VK_ESCAPE, VK_RETURN, VK_TAB,
+        MOUSEEVENTF_MOVE, MOUSEEVENTF_MOVE_NOCOALESCE, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP,
+        MOUSEEVENTF_WHEEL, MOUSEINPUT, SendInput, VIRTUAL_KEY, VK_BACK, VK_ESCAPE, VK_RETURN,
+        VK_TAB,
     };
 
     pub struct WindowsPointer {
@@ -152,7 +153,7 @@ mod platform {
     fn mouse_flags(previous_buttons: u8, report: PointerReport) -> MOUSE_EVENT_FLAGS {
         let mut flags = MOUSE_EVENT_FLAGS(0);
         if report.delta_x != 0 || report.delta_y != 0 {
-            flags |= MOUSEEVENTF_MOVE;
+            flags |= MOUSEEVENTF_MOVE | MOUSEEVENTF_MOVE_NOCOALESCE;
         }
         if report.scroll_y != 0 {
             flags |= MOUSEEVENTF_WHEEL;
@@ -196,6 +197,7 @@ mod platform {
                 },
             );
             assert!(down.contains(MOUSEEVENTF_MOVE));
+            assert!(down.contains(MOUSEEVENTF_MOVE_NOCOALESCE));
             assert!(down.contains(MOUSEEVENTF_LEFTDOWN));
             assert!(!down.contains(MOUSEEVENTF_LEFTUP));
 

@@ -169,6 +169,15 @@ class BluetoothDesktopGamepadClient(
             onStatus(BluetoothDesktopGamepadStatus.Active)
 
             while (!stopping.get()) {
+                val pointer = pendingPointers.poll()
+                if (pointer != null) {
+                    sequence = writePacket(
+                        output,
+                        sessionId,
+                        sequence,
+                        BridgeMessage.PointerFrame(pointer),
+                    )
+                }
                 val now = System.nanoTime()
                 val state = scheduler.poll(now)
                 if (state != null) {
@@ -183,14 +192,6 @@ class BluetoothDesktopGamepadClient(
                     scheduler.complete(state, sent, System.nanoTime())
                     if (!sent) error("Bluetooth gamepad write failed")
                 }
-                pendingPointers.poll()?.let { pointer ->
-                    sequence = writePacket(
-                        output,
-                        sessionId,
-                        sequence,
-                        BridgeMessage.PointerFrame(pointer),
-                    )
-                }
                 pendingKeyboard.poll()?.let { keyboard ->
                     sequence = writePacket(
                         output,
@@ -199,7 +200,12 @@ class BluetoothDesktopGamepadClient(
                         BridgeMessage.KeyboardFrame(keyboard),
                     )
                 }
-                if (state == null && pendingPointers.isEmpty() && pendingKeyboard.isEmpty()) {
+                if (
+                    pointer == null &&
+                    state == null &&
+                    pendingPointers.isEmpty() &&
+                    pendingKeyboard.isEmpty()
+                ) {
                     Thread.sleep(IDLE_POLL_MILLIS)
                 }
             }
@@ -244,7 +250,9 @@ class BluetoothDesktopGamepadClient(
     private companion object {
         const val REPORT_RATE_HZ = 125
         const val IDLE_POLL_MILLIS = 1L
-        const val POINTER_QUEUE_CAPACITY = 64
+        // Keep pointer latency bounded. While this single slot is occupied,
+        // TouchMouseStore retains and coalesces newer relative movement.
+        const val POINTER_QUEUE_CAPACITY = 1
         const val KEYBOARD_QUEUE_CAPACITY = 64
         val RECONNECT_DELAYS_MILLIS = longArrayOf(500, 1_000, 2_000)
         val RFCOMM_SERVICE_UUID: UUID = UUID.fromString("7a1b8d5f-6c24-4e71-9f52-a4b8d9c30101")

@@ -24,7 +24,8 @@ mod platform {
     use windows::Devices::Bluetooth::Rfcomm::{RfcommServiceId, RfcommServiceProvider};
     use windows::Foundation::TypedEventHandler;
     use windows::Networking::Sockets::{
-        StreamSocket, StreamSocketListener, StreamSocketListenerConnectionReceivedEventArgs,
+        SocketQualityOfService, StreamSocket, StreamSocketListener,
+        StreamSocketListenerConnectionReceivedEventArgs,
     };
     use windows::Storage::Streams::{DataReader, DataWriter, InputStreamOptions};
     use windows::core::GUID;
@@ -50,6 +51,9 @@ mod platform {
             let service_id = RfcommServiceId::FromUuid(RFCOMM_SERVICE_UUID)?;
             let provider = wait(RfcommServiceProvider::CreateAsync(&service_id)?)?;
             let listener = StreamSocketListener::new()?;
+            listener
+                .Control()?
+                .SetQualityOfService(SocketQualityOfService::LowLatency)?;
             let connected_clients = Arc::new(AtomicUsize::new(0));
             let active_sessions = Arc::new(AtomicUsize::new(0));
             let callback_clients = Arc::clone(&connected_clients);

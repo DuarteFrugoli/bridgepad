@@ -48,7 +48,7 @@ class BluetoothDesktopGameplayController(
                 inputRouter.peekKeyboard()?.let { keyboard ->
                     inputRouter.acknowledgeKeyboard(nextClient.sendKeyboard(keyboard))
                 }
-                delay(KEYBOARD_POLL_MILLIS)
+                delay(AUXILIARY_INPUT_POLL_MILLIS)
             }
         }
         nextClient.start()
@@ -116,6 +116,6 @@ class BluetoothDesktopGameplayController(
     }
 
     private companion object {
-        const val KEYBOARD_POLL_MILLIS = 10L
+        const val AUXILIARY_INPUT_POLL_MILLIS = 4L
     }
 }
