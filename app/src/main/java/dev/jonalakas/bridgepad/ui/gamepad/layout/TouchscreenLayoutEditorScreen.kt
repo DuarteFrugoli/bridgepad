@@ -80,9 +80,10 @@ fun TouchscreenLayoutEditorScreen(
     val encodedInitialProfile = remember(initialProfile) {
         TouchscreenLayoutProfileCodec.encode(initialProfile)
     }
-    var encodedDraft by rememberSaveable {
-        mutableStateOf(encodedInitialProfile)
+    var history by rememberSaveable(stateSaver = TouchscreenLayoutHistorySaver) {
+        mutableStateOf(TouchscreenLayoutHistory(initialProfile))
     }
+    var gestureStartSnapshot by rememberSaveable { mutableStateOf<String?>(null) }
     var discardConfirmationVisible by rememberSaveable { mutableStateOf(false) }
     var selectedName by rememberSaveable { mutableStateOf(TouchControlId.LEFT_STICK.name) }
     var toolbarExpanded by rememberSaveable { mutableStateOf(false) }
@@ -94,31 +95,52 @@ fun TouchscreenLayoutEditorScreen(
     var collapsedToolbarSize by remember { mutableStateOf(IntSize.Zero) }
     var expandedToolbarSize by remember { mutableStateOf(IntSize.Zero) }
     var optionsPanelSize by remember { mutableStateOf(IntSize.Zero) }
-    val draftProfile = remember(encodedDraft) {
-        TouchscreenLayoutProfileCodec.decode(encodedDraft) ?: DefaultTouchscreenLayoutProfile.value
-    }
+    val draftProfile = history.current
     val draft = draftProfile.layout(editingOrientation)
     val selected = TouchControlId.valueOf(selectedName)
 
-    fun replaceDraft(profile: TouchscreenLayoutProfile) {
-        encodedDraft = TouchscreenLayoutProfileCodec.encode(profile)
+    fun recordDraft(profile: TouchscreenLayoutProfile) {
+        history = history.record(editingOrientation, profile)
     }
 
     fun replaceCurrentLayout(layout: TouchscreenLayout) {
-        replaceDraft(draftProfile.update(editingOrientation, layout))
+        recordDraft(history.current.update(editingOrientation, layout))
     }
 
     fun updateDraft(transform: (TouchscreenLayout) -> TouchscreenLayout) {
-        val currentProfile = TouchscreenLayoutProfileCodec.decode(encodedDraft)
-            ?: DefaultTouchscreenLayoutProfile.value
+        val currentProfile = history.current
         val currentLayout = currentProfile.layout(editingOrientation)
-        encodedDraft = TouchscreenLayoutProfileCodec.encode(
+        history = history.record(
+            editingOrientation,
             currentProfile.update(editingOrientation, transform(currentLayout)),
         )
     }
 
+    fun previewDraft(transform: (TouchscreenLayout) -> TouchscreenLayout) {
+        val currentProfile = history.current
+        val currentLayout = currentProfile.layout(editingOrientation)
+        history = history.preview(
+            editingOrientation,
+            currentProfile.update(editingOrientation, transform(currentLayout)),
+        )
+    }
+
+    fun beginTransformGesture() {
+        if (gestureStartSnapshot == null) {
+            gestureStartSnapshot = TouchscreenLayoutProfileCodec.encode(history.current)
+        }
+    }
+
+    fun endTransformGesture() {
+        val before = TouchscreenLayoutProfileCodec.decode(gestureStartSnapshot)
+        gestureStartSnapshot = null
+        if (before != null) {
+            history = history.commitGesture(editingOrientation, before)
+        }
+    }
+
     fun requestCancel() {
-        if (encodedDraft == encodedInitialProfile) {
+        if (TouchscreenLayoutProfileCodec.encode(history.current) == encodedInitialProfile) {
             onCancel()
         } else {
             discardConfirmationVisible = true
@@ -190,9 +212,10 @@ fun TouchscreenLayoutEditorScreen(
                 canvasWidthPixels = widthPixels,
                 canvasHeightPixels = heightPixels,
                 onSelect = { selectedName = control.name },
+                onTransformStart = ::beginTransformGesture,
+                onTransformEnd = ::endTransformGesture,
                 onMove = { deltaX, deltaY ->
-                    val currentProfile = TouchscreenLayoutProfileCodec.decode(encodedDraft)
-                        ?: DefaultTouchscreenLayoutProfile.value
+                    val currentProfile = history.current
                     val updated = currentProfile.layout(editingOrientation)
                         .move(control, deltaX, deltaY)
                     if (toolbarExpanded && optionsVisible) {
@@ -208,10 +231,13 @@ fun TouchscreenLayoutEditorScreen(
                             )
                         }
                     }
-                    replaceCurrentLayout(updated)
+                    history = history.preview(
+                        editingOrientation,
+                        currentProfile.update(editingOrientation, updated),
+                    )
                 },
                 onResize = { widthDelta, heightDelta, centerDeltaX, centerDeltaY ->
-                    updateDraft { current ->
+                    previewDraft { current ->
                         val placement = current.placement(control)
                         current.resize(
                             control = control,
@@ -226,7 +252,11 @@ fun TouchscreenLayoutEditorScreen(
         if (toolbarExpanded) {
             EditorToolbar(
                 optionsVisible = optionsVisible,
+                canUndo = history.canUndo(editingOrientation),
+                canRedo = history.canRedo(editingOrientation),
                 onCollapse = { toolbarExpanded = false },
+                onUndo = { history = history.undo(editingOrientation) },
+                onRedo = { history = history.redo(editingOrientation) },
                 onToggleOptions = { optionsVisible = !optionsVisible },
                 onCancel = { requestCancel() },
                 onSave = { onSave(draftProfile) },
@@ -369,7 +399,11 @@ fun TouchscreenLayoutEditorScreen(
 @Composable
 private fun EditorToolbar(
     optionsVisible: Boolean,
+    canUndo: Boolean,
+    canRedo: Boolean,
     onCollapse: () -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
     onToggleOptions: () -> Unit,
     onCancel: () -> Unit,
     onSave: () -> Unit,
@@ -377,6 +411,8 @@ private fun EditorToolbar(
     modifier: Modifier = Modifier,
 ) {
     val collapseDescription = stringResource(R.string.collapse_layout_editor_actions)
+    val undoDescription = stringResource(R.string.undo_layout_edit)
+    val redoDescription = stringResource(R.string.redo_layout_edit)
     val cancelDescription = stringResource(R.string.cancel_action)
     val optionsDescription = stringResource(
         if (optionsVisible) R.string.hide_layout_options else R.string.show_layout_options,
@@ -387,6 +423,18 @@ private fun EditorToolbar(
                 symbol = COLLAPSE_ACTION_SYMBOL,
                 contentDescription = collapseDescription,
                 onClick = onCollapse,
+            )
+            EditorActionButton(
+                symbol = UNDO_ACTION_SYMBOL,
+                contentDescription = undoDescription,
+                onClick = onUndo,
+                enabled = canUndo,
+            )
+            EditorActionButton(
+                symbol = REDO_ACTION_SYMBOL,
+                contentDescription = redoDescription,
+                onClick = onRedo,
+                enabled = canRedo,
             )
             EditorActionButton(
                 symbol = CANCEL_ACTION_SYMBOL,
@@ -442,6 +490,7 @@ private fun EditorActionButton(
     selected: Boolean = false,
     emphasized: Boolean = false,
     destructive: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val containerColor = when {
         destructive -> MaterialTheme.colorScheme.error
@@ -449,14 +498,16 @@ private fun EditorActionButton(
         selected -> MaterialTheme.colorScheme.secondaryContainer
         else -> Color.Transparent
     }
-    val contentColor = when {
+    val enabledContentColor = when {
         destructive -> MaterialTheme.colorScheme.onError
         emphasized -> MaterialTheme.colorScheme.onPrimary
         selected -> MaterialTheme.colorScheme.onSecondaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
+    val contentColor = if (enabled) enabledContentColor else enabledContentColor.copy(alpha = 0.38f)
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
             .size(40.dp)
             .semantics {
@@ -918,6 +969,8 @@ private fun BoxWithConstraintsScope.EditableControl(
     canvasWidthPixels: Float,
     canvasHeightPixels: Float,
     onSelect: () -> Unit,
+    onTransformStart: () -> Unit,
+    onTransformEnd: () -> Unit,
     onMove: (Float, Float) -> Unit,
     onResize: (Float, Float, Float, Float) -> Unit,
 ) {
@@ -929,6 +982,8 @@ private fun BoxWithConstraintsScope.EditableControl(
     val widthPixels = with(density) { width.toPx() }
     val heightPixels = with(density) { height.toPx() }
     val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentOnTransformStart by rememberUpdatedState(onTransformStart)
+    val currentOnTransformEnd by rememberUpdatedState(onTransformEnd)
     val currentOnMove by rememberUpdatedState(onMove)
     val currentOnResize by rememberUpdatedState(onResize)
     val offset = controlOffset(
@@ -952,19 +1007,24 @@ private fun BoxWithConstraintsScope.EditableControl(
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         currentOnSelect()
+                        currentOnTransformStart()
                         val pointerId = down.id
-                        while (true) {
-                            val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
-                                ?: break
-                            if (!change.pressed) break
-                            val delta = change.positionChange()
-                            if (delta != Offset.Zero) {
-                                currentOnMove(
-                                    delta.x / canvasWidthPixels,
-                                    delta.y / canvasHeightPixels,
-                                )
+                        try {
+                            while (true) {
+                                val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
+                                    ?: break
+                                if (!change.pressed) break
+                                val delta = change.positionChange()
+                                if (delta != Offset.Zero) {
+                                    currentOnMove(
+                                        delta.x / canvasWidthPixels,
+                                        delta.y / canvasHeightPixels,
+                                    )
+                                }
+                                change.consume()
                             }
-                            change.consume()
+                        } finally {
+                            currentOnTransformEnd()
                         }
                     }
                 },
@@ -1005,6 +1065,8 @@ private fun BoxWithConstraintsScope.EditableControl(
                         canvasHeightPixels = canvasHeightPixels,
                         lockAspectRatio = lockAspectRatio,
                         onSelect = currentOnSelect,
+                        onTransformStart = currentOnTransformStart,
+                        onTransformEnd = currentOnTransformEnd,
                         onResize = currentOnResize,
                     )
                 }
@@ -1024,9 +1086,13 @@ private fun BoxScope.ResizeHandle(
     canvasHeightPixels: Float,
     lockAspectRatio: Boolean,
     onSelect: () -> Unit,
+    onTransformStart: () -> Unit,
+    onTransformEnd: () -> Unit,
     onResize: (Float, Float, Float, Float) -> Unit,
 ) {
     val currentOnSelect by rememberUpdatedState(onSelect)
+    val currentOnTransformStart by rememberUpdatedState(onTransformStart)
+    val currentOnTransformEnd by rememberUpdatedState(onTransformEnd)
     val currentOnResize by rememberUpdatedState(onResize)
     val latestWidthScale by rememberUpdatedState(currentWidthScale)
     val latestHeightScale by rememberUpdatedState(currentHeightScale)
@@ -1056,38 +1122,43 @@ private fun BoxScope.ResizeHandle(
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     currentOnSelect()
+                    currentOnTransformStart()
                     val pointerId = down.id
                     var gestureWidthScale = latestWidthScale
                     var gestureHeightScale = latestHeightScale
-                    while (true) {
-                        val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
-                            ?: break
-                        if (!change.pressed) break
-                        val delta = change.positionChange()
-                        if (delta != Offset.Zero) {
-                            val resize = controlResizeDelta(
-                                currentWidthScale = gestureWidthScale,
-                                currentHeightScale = gestureHeightScale,
-                                horizontalDirection = anchor.horizontalDirection,
-                                verticalDirection = anchor.verticalDirection,
-                                pointerDeltaX = delta.x,
-                                pointerDeltaY = delta.y,
-                                baseControlWidth = baseControlWidthPixels,
-                                baseControlHeight = baseControlHeightPixels,
-                                containerWidth = canvasWidthPixels,
-                                containerHeight = canvasHeightPixels,
-                                lockAspectRatio = lockAspectRatio,
-                            )
-                            gestureWidthScale += resize.widthScaleDelta
-                            gestureHeightScale += resize.heightScaleDelta
-                            currentOnResize(
-                                resize.widthScaleDelta,
-                                resize.heightScaleDelta,
-                                resize.centerDeltaX,
-                                resize.centerDeltaY,
-                            )
+                    try {
+                        while (true) {
+                            val change = awaitPointerEvent().changes.firstOrNull { it.id == pointerId }
+                                ?: break
+                            if (!change.pressed) break
+                            val delta = change.positionChange()
+                            if (delta != Offset.Zero) {
+                                val resize = controlResizeDelta(
+                                    currentWidthScale = gestureWidthScale,
+                                    currentHeightScale = gestureHeightScale,
+                                    horizontalDirection = anchor.horizontalDirection,
+                                    verticalDirection = anchor.verticalDirection,
+                                    pointerDeltaX = delta.x,
+                                    pointerDeltaY = delta.y,
+                                    baseControlWidth = baseControlWidthPixels,
+                                    baseControlHeight = baseControlHeightPixels,
+                                    containerWidth = canvasWidthPixels,
+                                    containerHeight = canvasHeightPixels,
+                                    lockAspectRatio = lockAspectRatio,
+                                )
+                                gestureWidthScale += resize.widthScaleDelta
+                                gestureHeightScale += resize.heightScaleDelta
+                                currentOnResize(
+                                    resize.widthScaleDelta,
+                                    resize.heightScaleDelta,
+                                    resize.centerDeltaX,
+                                    resize.centerDeltaY,
+                                )
+                            }
+                            change.consume()
                         }
-                        change.consume()
+                    } finally {
+                        currentOnTransformEnd()
                     }
                 }
             },
@@ -1215,6 +1286,8 @@ private const val EDITOR_MENU_SYMBOL = "\u22EE"
 private const val OPTIONS_HORIZONTAL_DRAG_SYMBOL = "\u2194"
 private const val OPTIONS_VERTICAL_DRAG_SYMBOL = "\u2195"
 private const val COLLAPSE_ACTION_SYMBOL = "\u2212"
+private const val UNDO_ACTION_SYMBOL = "\u21B6"
+private const val REDO_ACTION_SYMBOL = "\u21B7"
 private const val CANCEL_ACTION_SYMBOL = "\u2715"
 private const val OPTIONS_ACTION_SYMBOL = "\u2699"
 private const val SAVE_ACTION_SYMBOL = "\u2713"

@@ -52,6 +52,107 @@ class TouchscreenLayoutTest {
     }
 
     @Test
+    fun layoutHistoryKeepsPortraitAndLandscapeUndoIndependent() {
+        val initial = DefaultTouchscreenLayoutProfile.value
+        val landscapeEdit = initial.update(
+            TouchscreenLayoutOrientation.LANDSCAPE,
+            initial.landscape.move(TouchControlId.LEFT_STICK, 0.08f, 0f),
+        )
+        val afterLandscape = TouchscreenLayoutHistory(initial).record(
+            TouchscreenLayoutOrientation.LANDSCAPE,
+            landscapeEdit,
+        )
+
+        assertEquals(true, afterLandscape.canUndo(TouchscreenLayoutOrientation.LANDSCAPE))
+        assertEquals(false, afterLandscape.canUndo(TouchscreenLayoutOrientation.PORTRAIT))
+        assertEquals(
+            afterLandscape,
+            afterLandscape.undo(TouchscreenLayoutOrientation.PORTRAIT),
+        )
+
+        val portraitEdit = afterLandscape.current.update(
+            TouchscreenLayoutOrientation.PORTRAIT,
+            afterLandscape.current.portrait.move(TouchControlId.RIGHT_STICK, -0.07f, 0f),
+        )
+        val history = afterLandscape
+            .record(TouchscreenLayoutOrientation.PORTRAIT, portraitEdit)
+            .undo(TouchscreenLayoutOrientation.PORTRAIT)
+
+        assertEquals(landscapeEdit.landscape, history.current.landscape)
+        assertEquals(initial.portrait, history.current.portrait)
+    }
+
+    @Test
+    fun continuousLayoutPreviewCommitsAsOneHistoryAction() {
+        val initial = DefaultTouchscreenLayoutProfile.value
+        var history = TouchscreenLayoutHistory(initial)
+
+        repeat(12) {
+            val profile = history.current
+            history = history.preview(
+                TouchscreenLayoutOrientation.LANDSCAPE,
+                profile.update(
+                    TouchscreenLayoutOrientation.LANDSCAPE,
+                    profile.landscape.move(TouchControlId.LEFT_STICK, 0.01f, 0f),
+                ),
+            )
+        }
+        history = history.commitGesture(TouchscreenLayoutOrientation.LANDSCAPE, initial)
+
+        assertEquals(1, history.undoCount(TouchscreenLayoutOrientation.LANDSCAPE))
+        assertEquals(
+            initial,
+            history.undo(TouchscreenLayoutOrientation.LANDSCAPE).current,
+        )
+    }
+
+    @Test
+    fun newLayoutEditClearsRedoHistory() {
+        val initial = DefaultTouchscreenLayoutProfile.value
+        val moved = initial.update(
+            TouchscreenLayoutOrientation.LANDSCAPE,
+            initial.landscape.move(TouchControlId.DPAD, 0.1f, 0f),
+        )
+        val resized = initial.update(
+            TouchscreenLayoutOrientation.LANDSCAPE,
+            initial.landscape.resize(TouchControlId.DPAD, 1.2f),
+        )
+
+        val history = TouchscreenLayoutHistory(initial)
+            .record(TouchscreenLayoutOrientation.LANDSCAPE, moved)
+            .undo(TouchscreenLayoutOrientation.LANDSCAPE)
+            .record(TouchscreenLayoutOrientation.LANDSCAPE, resized)
+
+        assertEquals(false, history.canRedo(TouchscreenLayoutOrientation.LANDSCAPE))
+        assertEquals(resized, history.current)
+    }
+
+    @Test
+    fun layoutHistoryKeepsOnlyTheMostRecentFortyStates() {
+        var history = TouchscreenLayoutHistory(DefaultTouchscreenLayoutProfile.value)
+
+        repeat(LAYOUT_HISTORY_LIMIT + 10) { index ->
+            val profile = history.current
+            history = history.record(
+                TouchscreenLayoutOrientation.LANDSCAPE,
+                profile.update(
+                    TouchscreenLayoutOrientation.LANDSCAPE,
+                    profile.landscape.resize(
+                        TouchControlId.MOUSE_TOUCHPAD,
+                        widthScale = 1f + index,
+                        heightScale = 1f,
+                    ),
+                ),
+            )
+        }
+
+        assertEquals(
+            LAYOUT_HISTORY_LIMIT,
+            history.undoCount(TouchscreenLayoutOrientation.LANDSCAPE),
+        )
+    }
+
+    @Test
     fun controlVisibilityIsIndependentBetweenOrientations() {
         val original = DefaultTouchscreenLayoutProfile.value
         val hiddenPortrait = original.portrait.setVisible(TouchControlId.FACE_NORTH, false)

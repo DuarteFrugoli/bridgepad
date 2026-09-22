@@ -119,6 +119,8 @@
     <string name="save_layout">Save layout</string>
     <string name="expand_layout_editor_actions">Open layout editor actions</string>
     <string name="collapse_layout_editor_actions">Collapse layout editor actions</string>
+    <string name="undo_layout_edit">Undo last layout edit</string>
+    <string name="redo_layout_edit">Redo last layout edit</string>
     <string name="discard_layout_title">Discard layout changes?</string>
     <string name="discard_layout_message">All changes made since opening the editor will be lost.</string>
     <string name="discard_changes">Discard changes</string>

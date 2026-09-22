@@ -8,6 +8,10 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Added orientation-specific undo and redo to the touchscreen layout editor.
+  Portrait and landscape remain in one saved profile but have independent history
+  branches. Drag and resize gestures create one action when released, discrete
+  options create one action, and each history is capped at 40 states.
 - Added an opt-in, device-local setting that lets gameplay and the layout editor
   use the complete display area around the camera cutout. Enabling it warns about
   possible control repositioning; disabling it retains Android's safe insets. The

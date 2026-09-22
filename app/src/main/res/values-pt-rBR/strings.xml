@@ -119,6 +119,8 @@
     <string name="save_layout">Salvar layout</string>
     <string name="expand_layout_editor_actions">Abrir ações do editor de layout</string>
     <string name="collapse_layout_editor_actions">Recolher ações do editor de layout</string>
+    <string name="undo_layout_edit">Desfazer última edição do layout</string>
+    <string name="redo_layout_edit">Refazer última edição do layout</string>
     <string name="discard_layout_title">Descartar alterações do layout?</string>
     <string name="discard_layout_message">Todas as alterações feitas desde que o editor foi aberto serão perdidas.</string>
     <string name="discard_changes">Descartar alterações</string>

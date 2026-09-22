@@ -400,6 +400,13 @@ checklist. These checks are pending hardware validation for the UI redesign.
 - Load the **Symmetric**, **Asymmetric** and **Mobile** starting layouts. Confirm
   their previews differ, each remains editable, cancel does not apply a selected
   preset, and saving each preset changes the gameplay arrangement.
+- Move and resize controls through several continuous gestures, then confirm each
+  press of Undo reverses exactly one complete gesture. Change a preset, shape,
+  visibility, deadzone and hold/toggle option; confirm each is one undoable action.
+  Redo the changes, undo one again and make a different edit; Redo must then be
+  unavailable. Make a landscape edit, rotate to portrait and confirm Undo is not
+  enabled there until a portrait edit is made. Undo each orientation independently,
+  then save and confirm both drafts remain stored in the same layout profile.
 - In Settings, confirm **Use the area around the camera** is disabled by default.
   Enable it, verify the repositioning warning appears, and open the layout editor.
   Confirm the editor keeps its normal appearance while its canvas reaches every
