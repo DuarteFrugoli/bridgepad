@@ -59,6 +59,11 @@ class NetworkGameplayController(
     }
 
     @Synchronized
+    fun updateEndpoints(hosts: List<String>) {
+        client?.updateEndpoints(hosts)
+    }
+
+    @Synchronized
     fun shutdown() {
         stopCurrent(immediate = true)
     }

@@ -94,7 +94,8 @@
     <string name="step_destination">1 · Destination</string>
     <string name="destination_pc">PC · Windows or Linux</string>
     <string name="wifi_label">Wi-Fi</string>
-    <string name="usb_connection_coming_soon">USB cable · Coming soon</string>
+    <string name="usb_connection_label">USB cable</string>
+    <string name="usb_connection_description">Connect a data cable and enable USB tethering in Android settings. BridgePad will use the Desktop protocol over the cable; Wi-Fi is not required.</string>
     <string name="choose_input_hint">Choose the controls you want to use on this phone.</string>
     <string name="edit_controller_layout">Edit virtual layout</string>
     <string name="virtual_gamepad_settings">Virtual gamepad</string>
@@ -283,6 +284,9 @@
     <string name="notification_automatic_input_active">Session active · touchscreen and physical controllers enabled</string>
     <string name="network_physical_controller_active">Physical controller active. You can keep using it on either session screen.</string>
     <string name="wifi_searching_desktops">Searching for BridgePad Desktop on this network…</string>
+    <string name="usb_searching_desktops">Waiting for BridgePad Desktop through USB tethering…</string>
+    <string name="usb_desktop_detected">%1$s · Detected</string>
+    <string name="usb_desktop_saved">%1$s · Saved</string>
     <string name="wifi_discovery_failed">Automatic search failed. Check that the phone and desktop are on the same network and that BridgePad Desktop is running.</string>
     <string name="wifi_desktop_online">%1$s · Available</string>
     <string name="wifi_desktop_offline">%1$s · Offline</string>
@@ -306,6 +310,8 @@
     <string name="wifi_protocol_error">This BridgePad Desktop version is not compatible with the app.</string>
     <string name="wifi_connection_failed">Could not connect to BridgePad Desktop. Check the network and try again.</string>
     <string name="wifi_reconnecting">Connection interrupted. Reconnecting… (%1$d/%2$d)</string>
+    <string name="network_waiting_to_reconnect">Connection interrupted. Waiting for the cable or network…</string>
+    <string name="network_desktop_offline_hint">Desktop discovery is temporarily unavailable. BridgePad will try its saved addresses.</string>
     <string name="virtual_controller">Virtual controller</string>
     <string name="physical_controller">Physical controller</string>
     <string name="physical_gamepad_settings">Physical controller</string>
@@ -371,7 +377,9 @@
     <string name="control_interaction_hold">Hold</string>
     <string name="control_interaction_toggle">Toggle</string>
     <string name="control_interaction_hint">Toggle keeps the control pressed until you tap it again.</string>
-    <string name="network_session_notification_channel">Wi-Fi gameplay session</string>
+    <string name="network_session_notification_channel">Desktop network session</string>
     <string name="notification_wifi_session_active">Wi-Fi session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
     <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>
+    <string name="notification_usb_session_active">USB cable session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
+    <string name="notification_usb_session_background_input_active">USB cable session and Background USB input active. You can play with BridgePad minimized or the screen off.</string>
 </resources>

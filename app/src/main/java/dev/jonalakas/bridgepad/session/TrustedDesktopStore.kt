@@ -23,8 +23,12 @@ data class TrustedDesktop(
     val certificateSha256: String,
     val sharedSecret: ByteArray,
     val lastHost: String,
+    val alternateHosts: List<String>,
     val port: Int,
-)
+) {
+    val endpointHosts: List<String>
+        get() = (listOf(lastHost) + alternateHosts).distinct()
+}
 
 class TrustedDesktopStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -46,6 +50,7 @@ class TrustedDesktopStore(context: Context) {
             .putString(key(id, "fingerprint"), discovered.certificateSha256)
             .putString(key(id, "secret"), encrypt(sharedSecret))
             .putString(key(id, "host"), discovered.host)
+            .putStringSet(key(id, "hosts"), discovered.endpointHosts.toSet())
             .putInt(key(id, "port"), discovered.port)
             .apply()
         mutableDesktops.value = load()
@@ -56,6 +61,13 @@ class TrustedDesktopStore(context: Context) {
         if (discovered.peerIdHex !in ids()) return
         preferences.edit()
             .putString(key(discovered.peerIdHex, "host"), discovered.host)
+            .putStringSet(
+                key(discovered.peerIdHex, "hosts"),
+                (
+                    preferences.getStringSet(key(discovered.peerIdHex, "hosts"), emptySet())
+                        .orEmpty() + discovered.endpointHosts
+                    ).toSet(),
+            )
             .putInt(key(discovered.peerIdHex, "port"), discovered.port)
             .apply()
         mutableDesktops.value = load()
@@ -70,6 +82,7 @@ class TrustedDesktopStore(context: Context) {
             .remove(key(peerIdHex, "fingerprint"))
             .remove(key(peerIdHex, "secret"))
             .remove(key(peerIdHex, "host"))
+            .remove(key(peerIdHex, "hosts"))
             .remove(key(peerIdHex, "port"))
             .apply()
         mutableDesktops.value = load()
@@ -81,6 +94,7 @@ class TrustedDesktopStore(context: Context) {
             fun longAt(offset: Int): Long = (0 until 8).fold(0L) { result, index ->
                 (result shl 8) or (bytes[offset + index].toLong() and 0xff)
             }
+            val lastHost = requireNotNull(preferences.getString(key(id, "host"), null))
             TrustedDesktop(
                 peerId = PeerId(longAt(0), longAt(8)),
                 peerIdHex = id,
@@ -89,7 +103,10 @@ class TrustedDesktopStore(context: Context) {
                     preferences.getString(key(id, "fingerprint"), null),
                 ),
                 sharedSecret = decrypt(requireNotNull(preferences.getString(key(id, "secret"), null))),
-                lastHost = requireNotNull(preferences.getString(key(id, "host"), null)),
+                lastHost = lastHost,
+                alternateHosts = preferences.getStringSet(key(id, "hosts"), emptySet())
+                    .orEmpty()
+                    .filterNot { it == lastHost },
                 port = preferences.getInt(key(id, "port"), 39_393),
             )
         }.getOrNull()

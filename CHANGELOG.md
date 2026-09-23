@@ -8,6 +8,17 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Network sessions now keep reconnecting while the user still wants the
+  session, retain and refresh every trusted Desktop endpoint, and can attempt a
+  saved address even while mDNS temporarily labels the computer offline. Local
+  reconnects also use shorter connection timeouts and a faster capped backoff.
+- Wi-Fi and USB cable are now separate choices in the Android session flow,
+  while still sharing the authenticated protocol and virtual-device backend.
+  USB no longer labels a trusted desktop offline solely because Wi-Fi-oriented
+  mDNS discovery is absent on the tethered interface.
+- Exiting BridgePad Desktop from its tray now closes active TCP and RFCOMM
+  sessions, waits for a neutral controller report to reach Windows and then
+  removes the virtual gamepad before the process exits.
 - Started the Android Open Accessory USB spike with an isolated Android
   transport module, a Windows/libusb AOA host, a 125 Hz protocol-v1 diagnostic,
   bilingual settings UI, CI coverage and an explicit clean-driver acceptance

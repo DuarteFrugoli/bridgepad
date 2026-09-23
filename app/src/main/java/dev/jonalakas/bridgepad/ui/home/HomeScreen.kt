@@ -46,6 +46,8 @@ fun HomeScreen(
     onDestinationChanged: (DestinationType) -> Unit,
     onSelectBluetooth: () -> Unit,
     onSelectWifi: () -> Unit,
+    onSelectUsb: () -> Unit,
+    onOpenUsbSettings: () -> Unit,
     pairedHosts: List<PairedHost>,
     selectedAddress: String?,
     pairNewPcSelected: Boolean,
@@ -82,6 +84,8 @@ fun HomeScreen(
     var forgettingDesktopId by rememberSaveable { mutableStateOf<String?>(null) }
     val bluetoothSelected = connectionMethod == ConnectionMethod.BLUETOOTH
     val wifiSelected = connectionMethod == ConnectionMethod.WIFI
+    val usbSelected = connectionMethod == ConnectionMethod.USB
+    val networkSelected = wifiSelected || usbSelected
     val networkConnected = networkGameplayStatus is NetworkGamepadStatus.Active
     val bluetoothDesktopConnected =
         bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Active
@@ -97,11 +101,11 @@ fun HomeScreen(
     val targetChosen = connected || when {
         destinationType != DestinationType.PC -> false
         bluetoothSelected -> selectedAddress != null || pairNewPcSelected
-        wifiSelected -> selectedNetworkDesktopId != null
+        networkSelected -> selectedNetworkDesktopId != null
         else -> false
     }
-    val setupComplete = if (wifiSelected) {
-        destinationType == DestinationType.PC && selectedNetworkTrusted && selectedNetworkOnline
+    val setupComplete = if (networkSelected) {
+        destinationType == DestinationType.PC && selectedNetworkTrusted
     } else {
         SessionSetup.canConnect(
             draft = sessionDraft,
@@ -193,7 +197,7 @@ fun HomeScreen(
                             onSelectBluetooth,
                         )
                         Choice(wifiSelected, R.string.wifi_label, !busy && !connected, onSelectWifi)
-                        Choice(false, R.string.usb_connection_coming_soon, false) {}
+                        Choice(usbSelected, R.string.usb_connection_label, !busy && !connected, onSelectUsb)
                         if (bluetoothSelected) {
                             BluetoothDestinations(
                                 connected,
@@ -212,10 +216,12 @@ fun HomeScreen(
                                 onSelectHost,
                             )
                         }
-                        if (wifiSelected) {
-                            WifiDestinations(
+                        if (networkSelected) {
+                            NetworkDestinations(
                                 connected,
                                 busy,
+                                usbSelected,
+                                onOpenUsbSettings,
                                 discoveredDesktops,
                                 trustedDesktops,
                                 selectedNetworkDesktopId,
@@ -311,7 +317,7 @@ fun HomeScreen(
                     BluetoothDesktopGamepadStatus.Stopped -> Unit
                 }
             }
-            if (wifiSelected) {
+            if (networkSelected) {
                 when (val pairing = networkPairingStatus) {
                     is NetworkPairingStatus.Failed -> item {
                         NoticeCard(stringResource(pairing.reason.messageResource()), NoticeTone.ERROR)
@@ -326,15 +332,20 @@ fun HomeScreen(
                     else -> Unit
                 }
             }
-            if (wifiSelected) {
+            if (networkSelected) {
                 when (val status = networkGameplayStatus) {
                     is NetworkGamepadStatus.Reconnecting -> item {
+                        val maximumAttempts = status.maximumAttempts
                         NoticeCard(
-                            stringResource(
-                                R.string.wifi_reconnecting,
-                                status.attempt,
-                                status.maximumAttempts,
-                            ),
+                            if (maximumAttempts == null) {
+                                stringResource(R.string.network_waiting_to_reconnect)
+                            } else {
+                                stringResource(
+                                    R.string.wifi_reconnecting,
+                                    status.attempt,
+                                    maximumAttempts,
+                                )
+                            },
                             NoticeTone.WARNING,
                         )
                     }
@@ -473,9 +484,11 @@ private fun BluetoothDestinations(
 }
 
 @Composable
-private fun WifiDestinations(
+private fun NetworkDestinations(
     connected: Boolean,
     busy: Boolean,
+    usbSelected: Boolean,
+    onOpenUsbSettings: () -> Unit,
     discovered: List<DiscoveredDesktop>,
     trusted: List<TrustedDesktop>,
     selectedId: String?,
@@ -485,6 +498,16 @@ private fun WifiDestinations(
     onForget: (String) -> Unit,
 ) {
     HorizontalDivider()
+    if (usbSelected && !connected) {
+        NoticeCard(stringResource(R.string.usb_connection_description), NoticeTone.WARNING)
+        OutlinedButton(
+            onClick = onOpenUsbSettings,
+            enabled = !busy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.usb_network_open_settings))
+        }
+    }
     Text(stringResource(R.string.choose_destination_title), style = MaterialTheme.typography.titleSmall)
     val discoveredIds = discovered.mapTo(hashSetOf()) { it.peerIdHex }
     if (connected) {
@@ -501,10 +524,12 @@ private fun WifiDestinations(
                 label = {
                     Text(
                         stringResource(
-                            if (desktop.peerIdHex in discoveredIds) {
-                                R.string.wifi_desktop_online
-                            } else {
-                                R.string.wifi_desktop_offline
+                            when {
+                                usbSelected && desktop.peerIdHex in discoveredIds ->
+                                    R.string.usb_desktop_detected
+                                usbSelected -> R.string.usb_desktop_saved
+                                desktop.peerIdHex in discoveredIds -> R.string.wifi_desktop_online
+                                else -> R.string.wifi_desktop_offline
                             },
                             desktop.name,
                         ),
@@ -527,13 +552,21 @@ private fun WifiDestinations(
             ) { Text(stringResource(R.string.wifi_pair_desktop, desktop.name)) }
         }
     if (trusted.isEmpty() && discovered.isEmpty()) {
-        Text(stringResource(R.string.wifi_searching_desktops))
+        Text(
+            stringResource(
+                if (usbSelected) {
+                    R.string.usb_searching_desktops
+                } else {
+                    R.string.wifi_searching_desktops
+                },
+            ),
+        )
     }
-    if (discoveryError != null) {
+    if (discoveryError != null && !usbSelected) {
         NoticeCard(stringResource(R.string.wifi_discovery_failed), NoticeTone.WARNING)
     }
-    if (selectedId != null && selectedId !in discoveredIds) {
-        NoticeCard(stringResource(R.string.wifi_desktop_not_available), NoticeTone.WARNING)
+    if (!usbSelected && selectedId != null && selectedId !in discoveredIds) {
+        NoticeCard(stringResource(R.string.network_desktop_offline_hint), NoticeTone.WARNING)
     }
 }
 

@@ -328,20 +328,24 @@ class MainActivity : ComponentActivity() {
                     physicalControllerConnected,
                     showNetworkDiagnostic,
                     showUsbNetworkDiagnostic,
+                    effectiveConnectionMethod,
                 ) {
                     if (!showNetworkDiagnostic && !showUsbNetworkDiagnostic) {
+                        val networkTransport = effectiveConnectionMethod.takeIf {
+                            it == ConnectionMethod.WIFI || it == ConnectionMethod.USB
+                        } ?: ConnectionMethod.WIFI
                         when (networkGameplayStatus) {
                             NetworkGamepadStatus.Active -> sessionUiViewModel.dispatch(
                                 SessionUiEvent.TransportConnected(
-                                    ConnectionMethod.WIFI,
+                                    networkTransport,
                                     physicalControllerConnected,
                                 ),
                             )
                             is NetworkGamepadStatus.Failed -> sessionUiViewModel.dispatch(
-                                SessionUiEvent.TransportFailed(ConnectionMethod.WIFI),
+                                SessionUiEvent.TransportFailed(networkTransport),
                             )
                             NetworkGamepadStatus.Stopped -> sessionUiViewModel.dispatch(
-                                SessionUiEvent.TransportStopped(ConnectionMethod.WIFI),
+                                SessionUiEvent.TransportStopped(networkTransport),
                             )
                             else -> Unit
                         }
@@ -831,6 +835,18 @@ class MainActivity : ComponentActivity() {
                             networkDesktopCoordinator.clearPairingStatus()
                         }
                     },
+                    onSelectUsb = {
+                        if (connectionMethodName != ConnectionMethod.USB.name) {
+                            connectionMethodName = ConnectionMethod.USB.name
+                            selectedAddress = null
+                            pairNewPcSelected = false
+                            useDirectBluetooth = false
+                            networkDesktopCoordinator.clearPairingStatus()
+                        }
+                    },
+                    onOpenUsbSettings = {
+                        startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+                    },
                     pairedHosts = pairedHosts,
                     selectedAddress = selectedAddress,
                     pairNewPcSelected = pairNewPcSelected,
@@ -885,12 +901,19 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     onPlay = {
-                        if (effectiveConnectionMethod == ConnectionMethod.WIFI) {
+                        if (
+                            effectiveConnectionMethod == ConnectionMethod.WIFI ||
+                            effectiveConnectionMethod == ConnectionMethod.USB
+                        ) {
                             selectedNetworkDesktopId?.let { peerId ->
                                 sessionUiViewModel.dispatch(
-                                    SessionUiEvent.ConnectionRequested(ConnectionMethod.WIFI),
+                                    SessionUiEvent.ConnectionRequested(effectiveConnectionMethod),
                                 )
-                                networkDesktopCoordinator.startGameplay(peerId, effectiveCaptureMode)
+                                networkDesktopCoordinator.startGameplay(
+                                    peerId,
+                                    effectiveCaptureMode,
+                                    effectiveConnectionMethod,
+                                )
                             }
                             return@HomeScreen
                         }

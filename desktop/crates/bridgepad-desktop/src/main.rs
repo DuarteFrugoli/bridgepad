@@ -130,6 +130,20 @@ fn show_main_window(app: &tauri::AppHandle) {
     }
 }
 
+fn stop_servers(app: &tauri::AppHandle) {
+    let state = app.state::<DesktopState>();
+    if let Ok(mut bluetooth) = state.bluetooth_server.lock() {
+        if let Some(mut bluetooth) = bluetooth.take() {
+            bluetooth.stop();
+        }
+    }
+    if let Ok(mut server) = state.server.lock()
+        && let Some(mut server) = server.take()
+    {
+        server.stop();
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
@@ -174,7 +188,10 @@ fn main() {
                         }
                         show_main_window(app);
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        stop_servers(app);
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {

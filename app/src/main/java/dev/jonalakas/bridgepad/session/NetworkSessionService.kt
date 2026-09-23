@@ -19,6 +19,7 @@ import dev.jonalakas.bridgepad.BridgePadApplication
 import dev.jonalakas.bridgepad.MainActivity
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.ConnectionMethod
 import dev.jonalakas.bridgepad.input.usb.DirectUsbCaptureManager
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
 import kotlinx.coroutines.CoroutineScope
@@ -29,7 +30,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-/** Android lifecycle host that keeps an active Wi-Fi gameplay session alive off-screen. */
+/** Android lifecycle host that keeps an active IP gameplay session alive off-screen. */
 class NetworkSessionService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var statusJob: Job? = null
@@ -37,12 +38,13 @@ class NetworkSessionService : Service() {
     private var ownsDirectUsbCapture = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var connectionMethod = ConnectionMethod.WIFI
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         startAsForeground(buildNotification())
-        acquireSessionLocks()
+        acquireWakeLock()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -53,6 +55,11 @@ class NetworkSessionService : Service() {
         val captureMode = intent.getStringExtra(EXTRA_CAPTURE_MODE)
             ?.let { runCatching { PhysicalCaptureMode.valueOf(it) }.getOrNull() }
             ?: PhysicalCaptureMode.COMPATIBILITY
+        connectionMethod = intent.getStringExtra(EXTRA_CONNECTION_METHOD)
+            ?.let { runCatching { ConnectionMethod.valueOf(it) }.getOrNull() }
+            ?.takeIf { it == ConnectionMethod.WIFI || it == ConnectionMethod.USB }
+            ?: ConnectionMethod.WIFI
+        configureWifiLock(connectionMethod == ConnectionMethod.WIFI)
         configureDirectUsbCapture(captureMode)
         observeSessionStatus()
         return START_NOT_STICKY
@@ -98,13 +105,23 @@ class NetworkSessionService : Service() {
 
     @SuppressLint("WakelockTimeout")
     @Suppress("DEPRECATION")
-    private fun acquireSessionLocks() {
+    private fun acquireWakeLock() {
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:network-session")
             .apply {
                 setReferenceCounted(false)
                 acquire()
             }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun configureWifiLock(enabled: Boolean) {
+        if (!enabled) {
+            wifiLock?.let { if (it.isHeld) it.release() }
+            wifiLock = null
+            return
+        }
+        if (wifiLock?.isHeld == true) return
         wifiLock = getSystemService(WifiManager::class.java)
             .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "$packageName:network-session")
             .apply {
@@ -134,13 +151,17 @@ class NetworkSessionService : Service() {
         status: NetworkGamepadStatus = NetworkGamepadStatus.Connecting,
     ): Notification {
         val message = when (status) {
-            is NetworkGamepadStatus.Reconnecting -> getString(
-                R.string.wifi_reconnecting,
-                status.attempt,
-                status.maximumAttempts,
-            )
+            is NetworkGamepadStatus.Reconnecting -> status.maximumAttempts?.let { maximumAttempts ->
+                getString(R.string.wifi_reconnecting, status.attempt, maximumAttempts)
+            } ?: getString(R.string.network_waiting_to_reconnect)
             else -> getString(
-                if (ownsDirectUsbCapture) {
+                if (connectionMethod == ConnectionMethod.USB) {
+                    if (ownsDirectUsbCapture) {
+                        R.string.notification_usb_session_background_input_active
+                    } else {
+                        R.string.notification_usb_session_active
+                    }
+                } else if (ownsDirectUsbCapture) {
                     R.string.notification_wifi_background_usb_active
                 } else {
                     R.string.notification_wifi_session_active
@@ -187,15 +208,21 @@ class NetworkSessionService : Service() {
     companion object {
         private const val ACTION_START = "dev.jonalakas.bridgepad.network.START_SESSION"
         private const val EXTRA_CAPTURE_MODE = "capture_mode"
+        private const val EXTRA_CONNECTION_METHOD = "connection_method"
         private const val CHANNEL_ID = "bridgepad_network_session"
         private const val NOTIFICATION_ID = 1_002
 
-        fun start(context: Context, captureMode: PhysicalCaptureMode) {
+        fun start(
+            context: Context,
+            captureMode: PhysicalCaptureMode,
+            connectionMethod: ConnectionMethod,
+        ) {
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, NetworkSessionService::class.java)
                     .setAction(ACTION_START)
-                    .putExtra(EXTRA_CAPTURE_MODE, captureMode.name),
+                    .putExtra(EXTRA_CAPTURE_MODE, captureMode.name)
+                    .putExtra(EXTRA_CONNECTION_METHOD, connectionMethod.name),
             )
         }
 

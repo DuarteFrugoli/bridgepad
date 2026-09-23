@@ -28,9 +28,10 @@ use rcgen::{CertifiedKey, generate_simple_self_signed};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs;
 use std::io::{self, Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -119,6 +120,8 @@ impl DesktopServer {
             allow_unpaired: options.allow_unpaired,
             connected_clients: AtomicUsize::new(0),
             active_sessions: AtomicUsize::new(0),
+            active_sockets: Mutex::new(HashMap::new()),
+            next_connection_id: AtomicUsize::new(1),
             last_error: Mutex::new(None),
         });
         let fingerprint_mdns = encode_hex(&state.certificate_fingerprint);
@@ -143,8 +146,15 @@ impl DesktopServer {
                         }
                         let config = Arc::clone(&config);
                         let state = Arc::clone(&worker_state);
+                        let connection_id =
+                            state.next_connection_id.fetch_add(1, Ordering::Relaxed);
+                        if let Ok(tracked_socket) = socket.try_clone()
+                            && let Ok(mut active_sockets) = state.active_sockets.lock()
+                        {
+                            active_sockets.insert(connection_id, tracked_socket);
+                        }
                         thread::spawn(move || {
-                            let _connection = ConnectionLease::new(&state);
+                            let _connection = ConnectionLease::new(&state, connection_id);
                             if let Err(error) = serve(socket, config, Arc::clone(&state)) {
                                 let message = error.to_string();
                                 eprintln!("Connection ended: {message}");
@@ -222,6 +232,15 @@ impl DesktopServer {
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
+        self.state.close_active_connections();
+        // Active gameplay sockets use a three-second read timeout. Waiting a
+        // little longer guarantees their leases can neutralize and unplug the
+        // virtual devices even if a platform socket ignores shutdown briefly.
+        let deadline = Instant::now() + Duration::from_secs(4);
+        while self.state.connected_clients.load(Ordering::Relaxed) > 0 && Instant::now() < deadline
+        {
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 }
 
@@ -241,7 +260,19 @@ struct ServerState {
     allow_unpaired: bool,
     connected_clients: AtomicUsize,
     active_sessions: AtomicUsize,
+    active_sockets: Mutex<HashMap<usize, TcpStream>>,
+    next_connection_id: AtomicUsize,
     last_error: Mutex<Option<String>>,
+}
+
+impl ServerState {
+    fn close_active_connections(&self) {
+        if let Ok(sockets) = self.active_sockets.lock() {
+            for socket in sockets.values() {
+                let _ = socket.shutdown(Shutdown::Both);
+            }
+        }
+    }
 }
 
 struct PairAttempt {
@@ -733,17 +764,24 @@ struct GamepadLease {
 
 struct ConnectionLease<'a> {
     state: &'a ServerState,
+    connection_id: usize,
 }
 
 impl<'a> ConnectionLease<'a> {
-    fn new(state: &'a ServerState) -> Self {
+    fn new(state: &'a ServerState, connection_id: usize) -> Self {
         state.connected_clients.fetch_add(1, Ordering::Relaxed);
-        Self { state }
+        Self {
+            state,
+            connection_id,
+        }
     }
 }
 
 impl Drop for ConnectionLease<'_> {
     fn drop(&mut self) {
+        if let Ok(mut sockets) = self.state.active_sockets.lock() {
+            sockets.remove(&self.connection_id);
+        }
         self.state.connected_clients.fetch_sub(1, Ordering::Relaxed);
     }
 }
@@ -779,8 +817,8 @@ impl GamepadLease {
 
 impl Drop for GamepadLease {
     fn drop(&mut self) {
-        if let Err(error) = self.device.neutralize() {
-            eprintln!("Could not neutralize virtual gamepad: {error}");
+        if let Err(error) = self.device.shutdown() {
+            eprintln!("Could not safely stop virtual gamepad: {error}");
         }
     }
 }

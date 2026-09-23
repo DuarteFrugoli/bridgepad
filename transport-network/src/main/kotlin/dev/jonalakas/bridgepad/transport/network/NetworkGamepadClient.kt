@@ -30,7 +30,7 @@ data class NetworkGamepadRequest(
     val credentials: NetworkCredentials? = null,
     val connectTimeoutMillis: Int = 5_000,
     val readTimeoutMillis: Int = 2_000,
-    val reconnectAttempts: Int = 3,
+    val reconnectAttempts: Int? = 3,
 ) {
     init {
         require(host.isNotBlank()) { "host must not be blank" }
@@ -38,7 +38,9 @@ data class NetworkGamepadRequest(
         require(port in 1..65_535) { "port must be between 1 and 65535" }
         require(connectTimeoutMillis > 0) { "connect timeout must be positive" }
         require(readTimeoutMillis > 0) { "read timeout must be positive" }
-        require(reconnectAttempts in 0..10) { "reconnectAttempts must be between 0 and 10" }
+        require(reconnectAttempts == null || reconnectAttempts in 0..10) {
+            "reconnectAttempts must be null or between 0 and 10"
+        }
     }
 
     internal val endpointHosts: List<String>
@@ -56,7 +58,7 @@ enum class NetworkFailureReason {
 
 sealed interface NetworkGamepadStatus {
     data object Connecting : NetworkGamepadStatus
-    data class Reconnecting(val attempt: Int, val maximumAttempts: Int) : NetworkGamepadStatus
+    data class Reconnecting(val attempt: Int, val maximumAttempts: Int?) : NetworkGamepadStatus
     data object Active : NetworkGamepadStatus
     data object Stopped : NetworkGamepadStatus
     data class Failed(val reason: NetworkFailureReason, val detail: String) : NetworkGamepadStatus
@@ -90,6 +92,7 @@ class NetworkGamepadClient(
     private val pointerBackpressureCount = AtomicLong(0)
     private val acceptedKeyboardInputs = AtomicLong(0)
     private val keyboardBackpressureCount = AtomicLong(0)
+    private val endpointHosts = AtomicReference(request.endpointHosts)
     @Volatile
     private var socket: SSLSocket? = null
     @Volatile
@@ -133,6 +136,11 @@ class NetworkGamepadClient(
         return accepted
     }
 
+    fun updateEndpoints(hosts: List<String>) {
+        val normalized = hosts.filter(String::isNotBlank).distinct()
+        if (normalized.isNotEmpty()) endpointHosts.set(normalized)
+    }
+
     fun inputDiagnostics(): NetworkInputDiagnostics = NetworkInputDiagnostics(
         acceptedPointerReports = acceptedPointerReports.get(),
         pointerBackpressureCount = pointerBackpressureCount.get(),
@@ -173,7 +181,8 @@ class NetworkGamepadClient(
                     NetworkFailureReason.CONNECTION_LOST,
                     NetworkFailureReason.UNKNOWN,
                 )
-                if (!retryable || reconnectAttempt >= request.reconnectAttempts) {
+                val maximumAttempts = request.reconnectAttempts
+                if (!retryable || maximumAttempts != null && reconnectAttempt >= maximumAttempts) {
                     onStatus(failure)
                     return
                 }
@@ -181,21 +190,34 @@ class NetworkGamepadClient(
                 onStatus(
                     NetworkGamepadStatus.Reconnecting(
                         attempt = reconnectAttempt,
-                        maximumAttempts = request.reconnectAttempts,
+                        maximumAttempts = maximumAttempts,
                     ),
                 )
                 pendingState.set(latestState.get())
                 pendingPointers.clear()
                 pendingKeyboard.clear()
-                Thread.sleep(RECONNECT_DELAYS_MILLIS[(reconnectAttempt - 1).coerceAtMost(2)])
+                waitBeforeReconnect(
+                    RECONNECT_DELAYS_MILLIS[
+                        (reconnectAttempt - 1).coerceAtMost(RECONNECT_DELAYS_MILLIS.lastIndex)
+                    ],
+                )
             }
         }
         onStatus(NetworkGamepadStatus.Stopped)
     }
 
+    private fun waitBeforeReconnect(delayMillis: Long) {
+        val deadline = System.nanoTime() + delayMillis * 1_000_000L
+        while (!stopping.get()) {
+            val remainingMillis = (deadline - System.nanoTime()) / 1_000_000L
+            if (remainingMillis <= 0) return
+            Thread.sleep(remainingMillis.coerceAtMost(STOP_POLL_MILLIS))
+        }
+    }
+
     private fun runConnectedSession() {
         var lastFailure: Exception? = null
-        request.endpointHosts.forEach { host ->
+        endpointHosts.get().forEach { host ->
             try {
                 runConnectedSession(host)
                 return
@@ -352,7 +374,8 @@ class NetworkGamepadClient(
         // like input lag after a temporary Wi-Fi stall.
         const val POINTER_QUEUE_CAPACITY = 8
         const val KEYBOARD_QUEUE_CAPACITY = 128
-        val RECONNECT_DELAYS_MILLIS = longArrayOf(500, 1_000, 2_000)
+        const val STOP_POLL_MILLIS = 100L
+        val RECONNECT_DELAYS_MILLIS = longArrayOf(250, 500, 1_000, 1_500, 2_000)
     }
 }
 

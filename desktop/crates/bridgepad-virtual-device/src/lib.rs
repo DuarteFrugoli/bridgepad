@@ -65,6 +65,14 @@ pub trait VirtualGamepadDevice: Send {
     fn neutralize(&mut self) -> Result<(), VirtualDeviceError> {
         self.update(GamepadReport::default())
     }
+
+    /// Releases all controls and detaches the platform device when supported.
+    ///
+    /// Backends that enqueue reports should override this method so the neutral
+    /// state reaches the operating system before the virtual device disappears.
+    fn shutdown(&mut self) -> Result<(), VirtualDeviceError> {
+        self.neutralize()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

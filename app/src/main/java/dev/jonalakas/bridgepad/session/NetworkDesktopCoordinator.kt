@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
+import dev.jonalakas.bridgepad.core.session.ConnectionMethod
 import dev.jonalakas.bridgepad.transport.network.NetworkAuthenticationException
 import dev.jonalakas.bridgepad.transport.network.NetworkCredentials
 import dev.jonalakas.bridgepad.transport.network.NetworkFailureReason
@@ -17,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.security.cert.CertificateException
@@ -59,6 +61,25 @@ class NetworkDesktopCoordinator(
     val discoveryError: StateFlow<String?> = discovery.error
     val pairingStatus: StateFlow<NetworkPairingStatus> = mutablePairingStatus.asStateFlow()
     val gameplayStatus: StateFlow<NetworkGamepadStatus> = gameplay.status
+    @Volatile
+    private var activePeerIdHex: String? = null
+
+    init {
+        scope.launch {
+            discovery.desktops.collectLatest { desktops ->
+                val activePeer = activePeerIdHex ?: return@collectLatest
+                val discovered = desktops.firstOrNull { it.peerIdHex == activePeer }
+                    ?: return@collectLatest
+                val trusted = trustedStore.desktops.value.firstOrNull {
+                    it.peerIdHex == activePeer
+                }
+                trustedStore.updateEndpoint(discovered)
+                gameplay.updateEndpoints(
+                    (discovered.endpointHosts + trusted?.endpointHosts.orEmpty()).distinct(),
+                )
+            }
+        }
+    }
 
     fun startDiscovery() = discovery.start()
 
@@ -121,13 +142,19 @@ class NetworkDesktopCoordinator(
     }
 
     fun prepareRepair(peerIdHex: String) {
+        activePeerIdHex = null
         gameplay.stop()
         NetworkSessionService.stop(applicationContext)
         trustedStore.forget(peerIdHex)
         clearPairingStatus()
     }
 
-    fun startGameplay(peerIdHex: String, captureMode: PhysicalCaptureMode) {
+    fun startGameplay(
+        peerIdHex: String,
+        captureMode: PhysicalCaptureMode,
+        connectionMethod: ConnectionMethod,
+    ) {
+        require(connectionMethod == ConnectionMethod.WIFI || connectionMethod == ConnectionMethod.USB)
         val trusted = trustedStore.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
         if (trusted == null) {
             gameplay.reportFailure(NetworkFailureReason.AUTHENTICATION_REJECTED, "Desktop is not trusted")
@@ -143,8 +170,10 @@ class NetworkDesktopCoordinator(
             )
             return
         }
+        activePeerIdHex = peerIdHex
+        if (discovered != null) trustedStore.updateEndpoint(discovered)
         val endpointHosts = (
-            discovered?.endpointHosts.orEmpty() + trusted.lastHost
+            discovered?.endpointHosts.orEmpty() + trusted.endpointHosts
             ).distinct()
         gameplay.start(
             request = NetworkGamepadRequest(
@@ -157,18 +186,22 @@ class NetworkDesktopCoordinator(
                     serverPeerId = trusted.peerId,
                     sharedSecret = trusted.sharedSecret,
                 ),
+                connectTimeoutMillis = 1_000,
+                reconnectAttempts = null,
             ),
             physicalCaptureMode = captureMode,
         )
-        NetworkSessionService.start(applicationContext, captureMode)
+        NetworkSessionService.start(applicationContext, captureMode, connectionMethod)
     }
 
     fun stopGameplay() {
+        activePeerIdHex = null
         gameplay.stop()
         NetworkSessionService.stop(applicationContext)
     }
 
     fun shutdown() {
+        activePeerIdHex = null
         discovery.stop()
         gameplay.shutdown()
         NetworkSessionService.stop(applicationContext)

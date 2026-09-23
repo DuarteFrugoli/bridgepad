@@ -18,11 +18,13 @@ mod platform {
     use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
     use bridgepad_windows_vigem::VigemGamepad;
     use futures_executor::block_on;
+    use std::collections::HashMap;
     use std::future::IntoFuture;
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::mpsc::{SyncSender, sync_channel};
+    use std::sync::{Arc, Mutex};
     use std::thread;
+    use std::time::{Duration, Instant};
     use windows::Devices::Bluetooth::Rfcomm::{RfcommServiceId, RfcommServiceProvider};
     use windows::Foundation::TypedEventHandler;
     use windows::Networking::Sockets::{
@@ -46,6 +48,8 @@ mod platform {
         connection_token: i64,
         connected_clients: Arc<AtomicUsize>,
         active_sessions: Arc<AtomicUsize>,
+        active_sockets: Arc<Mutex<HashMap<usize, StreamSocket>>>,
+        stopped: bool,
     }
 
     impl BluetoothDesktopServer {
@@ -60,6 +64,10 @@ mod platform {
             let active_sessions = Arc::new(AtomicUsize::new(0));
             let callback_clients = Arc::clone(&connected_clients);
             let callback_sessions = Arc::clone(&active_sessions);
+            let active_sockets = Arc::new(Mutex::new(HashMap::new()));
+            let callback_sockets = Arc::clone(&active_sockets);
+            let next_connection_id = Arc::new(AtomicUsize::new(1));
+            let callback_connection_id = Arc::clone(&next_connection_id);
             let connection_token =
                 listener.ConnectionReceived(&TypedEventHandler::<
                     StreamSocketListener,
@@ -68,8 +76,13 @@ mod platform {
                     let socket = event.ok()?.Socket()?;
                     let clients = Arc::clone(&callback_clients);
                     let sessions = Arc::clone(&callback_sessions);
+                    let sockets = Arc::clone(&callback_sockets);
+                    let connection_id = callback_connection_id.fetch_add(1, Ordering::Relaxed);
+                    if let Ok(mut active) = sockets.lock() {
+                        active.insert(connection_id, socket.clone());
+                    }
                     thread::spawn(move || {
-                        let _client = CounterLease::new(clients);
+                        let _client = ConnectionLease::new(clients, sockets, connection_id);
                         println!("Bluetooth RFCOMM client connected");
                         if let Err(error) = serve_gamepad(socket, sessions) {
                             eprintln!("Bluetooth RFCOMM connection ended: {error}");
@@ -88,6 +101,8 @@ mod platform {
                 connection_token,
                 connected_clients,
                 active_sessions,
+                active_sockets,
+                stopped: false,
             })
         }
 
@@ -97,15 +112,32 @@ mod platform {
                 active_sessions: self.active_sessions.load(Ordering::Relaxed),
             }
         }
-    }
 
-    impl Drop for BluetoothDesktopServer {
-        fn drop(&mut self) {
+        pub fn stop(&mut self) {
+            if self.stopped {
+                return;
+            }
+            self.stopped = true;
             let _ = self.provider.StopAdvertising();
             let _ = self
                 .listener
                 .RemoveConnectionReceived(self.connection_token);
             let _ = self.listener.Close();
+            if let Ok(sockets) = self.active_sockets.lock() {
+                for socket in sockets.values() {
+                    let _ = socket.Close();
+                }
+            }
+            let deadline = Instant::now() + Duration::from_secs(4);
+            while self.connected_clients.load(Ordering::Relaxed) > 0 && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
+
+    impl Drop for BluetoothDesktopServer {
+        fn drop(&mut self) {
+            self.stop();
         }
     }
 
@@ -389,8 +421,8 @@ mod platform {
 
     impl Drop for GamepadLease {
         fn drop(&mut self) {
-            if let Err(error) = self.device.neutralize() {
-                eprintln!("Could not neutralize Bluetooth XInput gamepad: {error}");
+            if let Err(error) = self.device.shutdown() {
+                eprintln!("Could not safely stop Bluetooth XInput gamepad: {error}");
             }
             self.active_sessions.fetch_sub(1, Ordering::Relaxed);
         }
@@ -421,18 +453,33 @@ mod platform {
         }
     }
 
-    struct CounterLease(Arc<AtomicUsize>);
+    struct ConnectionLease {
+        connected_clients: Arc<AtomicUsize>,
+        active_sockets: Arc<Mutex<HashMap<usize, StreamSocket>>>,
+        connection_id: usize,
+    }
 
-    impl CounterLease {
-        fn new(counter: Arc<AtomicUsize>) -> Self {
-            counter.fetch_add(1, Ordering::Relaxed);
-            Self(counter)
+    impl ConnectionLease {
+        fn new(
+            connected_clients: Arc<AtomicUsize>,
+            active_sockets: Arc<Mutex<HashMap<usize, StreamSocket>>>,
+            connection_id: usize,
+        ) -> Self {
+            connected_clients.fetch_add(1, Ordering::Relaxed);
+            Self {
+                connected_clients,
+                active_sockets,
+                connection_id,
+            }
         }
     }
 
-    impl Drop for CounterLease {
+    impl Drop for ConnectionLease {
         fn drop(&mut self) {
-            self.0.fetch_sub(1, Ordering::Relaxed);
+            if let Ok(mut sockets) = self.active_sockets.lock() {
+                sockets.remove(&self.connection_id);
+            }
+            self.connected_clients.fetch_sub(1, Ordering::Relaxed);
         }
     }
 

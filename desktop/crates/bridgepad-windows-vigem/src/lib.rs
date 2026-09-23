@@ -58,6 +58,19 @@ mod platform {
                     )
                 })
         }
+
+        fn shutdown(&mut self) -> Result<(), VirtualDeviceError> {
+            self.update(GamepadReport::default())?;
+            // ViGEm updates are observed asynchronously by Windows. Give the
+            // neutral report a few polling frames before removing the target.
+            std::thread::sleep(std::time::Duration::from_millis(32));
+            self.target.unplug().map_err(|error| {
+                VirtualDeviceError::new(
+                    VirtualDeviceErrorKind::Update,
+                    format!("could not unplug the neutral virtual controller: {error}"),
+                )
+            })
+        }
     }
 
     fn to_x360_report(source: GamepadReport) -> X360Report {

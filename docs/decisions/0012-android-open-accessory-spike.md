@@ -109,3 +109,21 @@ closes automatic discovery, pairing and cross-interface trust continuity for
 the first USB-tethering device pair. Abrupt cable removal also neutralized the
 active virtual controller correctly. Automatic reconnection and screen-off
 behavior remain open.
+
+The first cable-reconnection tests showed that three fixed retries could finish
+before Android, RNDIS and DHCP restored the USB network. Product sessions now
+remain in a waiting/reconnecting state until the user ends them, refresh their
+endpoint list when discovery returns and may try saved trusted addresses while
+mDNS is temporarily unavailable. Manual validation of delayed tethering
+reactivation remains open.
+
+Wi-Fi and USB tethering remain implementations of the same authenticated IP
+transport internally, but they are separate product choices. The Android home
+flow identifies the selected route, gives USB-tethering setup guidance, avoids
+holding a Wi-Fi performance lock for a USB session and reports the correct
+transport to the session UI. This separation must not duplicate protocol,
+pairing or virtual-device logic.
+
+BridgePad Desktop shutdown is part of the transport safety boundary. Tray exit
+closes both TCP and RFCOMM clients, sends a neutral ViGEm report, allows Windows
+to consume it and explicitly unplugs the virtual target before terminating.
