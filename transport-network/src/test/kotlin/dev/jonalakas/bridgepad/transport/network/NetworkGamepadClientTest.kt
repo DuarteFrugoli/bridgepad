@@ -72,6 +72,17 @@ class NetworkGamepadClientTest {
         assertEquals(failure, normalizeFailureAfterActiveSession(failure, hasBeenActive = true))
     }
 
+    @Test
+    fun endpointHostsKeepPrimaryFirstAndRemoveDuplicates() {
+        val request = NetworkGamepadRequest(
+            host = "10.232.206.43",
+            alternateHosts = listOf("192.168.15.3", "10.232.206.43"),
+            certificateSha256 = "test",
+        )
+
+        assertEquals(listOf("10.232.206.43", "192.168.15.3"), request.endpointHosts)
+    }
+
     private fun newClient() = NetworkGamepadClient(
         request = NetworkGamepadRequest(
             host = "127.0.0.1",

@@ -46,6 +46,7 @@ dependencies {
     implementation(project(":transport-bluetooth-hid"))
     implementation(project(":transport-bluetooth-desktop"))
     implementation(project(":transport-network"))
+    implementation(project(":transport-usb-accessory"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

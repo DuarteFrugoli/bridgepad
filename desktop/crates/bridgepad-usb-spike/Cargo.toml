@@ -1,0 +1,16 @@
+[package]
+name = "bridgepad-usb-spike"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+bridgepad-protocol = { path = "../bridgepad-protocol" }
+
+[target.'cfg(windows)'.dependencies]
+rusb = { version = "0.9.4", features = ["vendored"] }
+
+[lints]
+workspace = true

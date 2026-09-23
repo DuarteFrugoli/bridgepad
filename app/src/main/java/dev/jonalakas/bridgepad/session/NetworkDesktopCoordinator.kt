@@ -78,23 +78,17 @@ class NetworkDesktopCoordinator(
         scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    NetworkPairingClient.pair(
-                        NetworkPairingRequest(
-                            host = desktop.host,
-                            port = desktop.port,
-                            certificateSha256 = desktop.certificateSha256,
-                            expectedServerPeerId = desktop.peerId,
-                            clientPeerId = trustedStore.clientPeerId,
-                            clientName = applicationName,
-                            pairingCode = pairingCode,
-                        ),
-                    )
+                    pairUsingDiscoveredEndpoints(desktop, pairingCode)
                 }
-            }.onSuccess { result ->
-                trustedStore.save(desktop, result.serverName, result.sharedSecret)
+            }.onSuccess { success ->
+                trustedStore.save(
+                    desktop.preferring(success.host),
+                    success.result.serverName,
+                    success.result.sharedSecret,
+                )
                 mutablePairingStatus.value = NetworkPairingStatus.Success(peerIdHex)
             }.onFailure { error ->
-                Log.e("BridgePadNetwork", "Wi-Fi pairing failed for $peerIdHex", error)
+                Log.e("BridgePadNetwork", "Network pairing failed for $peerIdHex", error)
                 val causes = generateSequence<Throwable>(error) { it.cause }.toList()
                 mutablePairingStatus.value = NetworkPairingStatus.Failed(
                     peerIdHex = peerIdHex,
@@ -149,10 +143,13 @@ class NetworkDesktopCoordinator(
             )
             return
         }
-        if (discovered != null) trustedStore.updateEndpoint(discovered)
+        val endpointHosts = (
+            discovered?.endpointHosts.orEmpty() + trusted.lastHost
+            ).distinct()
         gameplay.start(
             request = NetworkGamepadRequest(
-                host = discovered?.host ?: trusted.lastHost,
+                host = endpointHosts.first(),
+                alternateHosts = endpointHosts.drop(1),
                 port = discovered?.port ?: trusted.port,
                 certificateSha256 = trusted.certificateSha256,
                 credentials = NetworkCredentials(
@@ -176,7 +173,41 @@ class NetworkDesktopCoordinator(
         gameplay.shutdown()
         NetworkSessionService.stop(applicationContext)
     }
+
+    private fun pairUsingDiscoveredEndpoints(
+        desktop: DiscoveredDesktop,
+        pairingCode: String,
+    ): PairingEndpointSuccess {
+        var lastFailure: Throwable? = null
+        desktop.endpointHosts.forEach { host ->
+            try {
+                val result = NetworkPairingClient.pair(
+                    NetworkPairingRequest(
+                        host = host,
+                        port = desktop.port,
+                        certificateSha256 = desktop.certificateSha256,
+                        expectedServerPeerId = desktop.peerId,
+                        clientPeerId = trustedStore.clientPeerId,
+                        clientName = applicationName,
+                        pairingCode = pairingCode,
+                    ),
+                )
+                return PairingEndpointSuccess(host, result)
+            } catch (failure: Throwable) {
+                if (failure is IllegalArgumentException || failure is PairingRejectedException) {
+                    throw failure
+                }
+                lastFailure = failure
+            }
+        }
+        throw lastFailure ?: IllegalStateException("Discovered desktop has no network endpoint")
+    }
 }
+
+private data class PairingEndpointSuccess(
+    val host: String,
+    val result: dev.jonalakas.bridgepad.transport.network.NetworkPairingResult,
+)
 
 private fun String.utf8Prefix(maxBytes: Int): String {
     var end = 0

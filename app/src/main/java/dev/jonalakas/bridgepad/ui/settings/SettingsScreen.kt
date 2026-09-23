@@ -60,7 +60,9 @@ fun SettingsScreen(
     onInvertedTouchpadScrollChanged: (Boolean) -> Unit,
     onUseDisplayCutoutAreaChanged: (Boolean) -> Unit,
     onOpenNetworkDiagnostic: () -> Unit,
+    onOpenUsbNetworkDiagnostic: () -> Unit,
     onOpenBluetoothDesktopDiagnostic: () -> Unit,
+    onOpenUsbAccessoryDiagnostic: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
@@ -180,6 +182,17 @@ fun SettingsScreen(
                 }
             }
             item {
+                SettingsCard(title = stringResource(R.string.usb_network_test_title)) {
+                    Text(stringResource(R.string.usb_network_test_settings_description))
+                    OutlinedButton(
+                        onClick = onOpenUsbNetworkDiagnostic,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.usb_network_test_open))
+                    }
+                }
+            }
+            item {
                 SettingsCard(title = stringResource(R.string.bluetooth_desktop_test_title)) {
                     Text(stringResource(R.string.bluetooth_desktop_test_settings_description))
                     OutlinedButton(
@@ -187,6 +200,17 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.bluetooth_desktop_test_open))
+                    }
+                }
+            }
+            item {
+                SettingsCard(title = stringResource(R.string.usb_accessory_test_title)) {
+                    Text(stringResource(R.string.usb_accessory_test_settings_description))
+                    OutlinedButton(
+                        onClick = onOpenUsbAccessoryDiagnostic,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.usb_accessory_test_open))
                     }
                 }
             }

@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
+import android.os.Build
 import dev.jonalakas.bridgepad.protocol.PeerId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +20,25 @@ data class DiscoveredDesktop(
     val port: Int,
     val certificateSha256: String,
     val serviceName: String,
-)
+    val alternateHosts: List<String> = emptyList(),
+) {
+    val endpointHosts: List<String>
+        get() = (listOf(host) + alternateHosts).distinct()
+
+    fun preferring(preferredHost: String): DiscoveredDesktop = copy(
+        host = preferredHost,
+        alternateHosts = endpointHosts.filterNot { it == preferredHost },
+    )
+
+    fun mergedWith(previous: DiscoveredDesktop?): DiscoveredDesktop {
+        if (previous == null) return this
+        return copy(
+            alternateHosts = (endpointHosts + previous.endpointHosts)
+                .distinct()
+                .filterNot { it == host },
+        )
+    }
+}
 
 @Suppress("DEPRECATION")
 class NetworkDiscoveryManager(context: Context) {
@@ -175,8 +194,11 @@ class NetworkDiscoveryManager(context: Context) {
                     resolving = false
                     parse(serviceInfo)?.let { desktop ->
                         serviceToPeer[serviceInfo.serviceName] = desktop.peerIdHex
+                        val merged = desktop.mergedWith(
+                            mutableDesktops.value.firstOrNull { it.peerIdHex == desktop.peerIdHex },
+                        )
                         mutableDesktops.value = (
-                            mutableDesktops.value.filterNot { it.peerIdHex == desktop.peerIdHex } + desktop
+                            mutableDesktops.value.filterNot { it.peerIdHex == desktop.peerIdHex } + merged
                             ).sortedBy { it.name.lowercase() }
                         mutableError.value = null
                     }
@@ -192,7 +214,13 @@ class NetworkDiscoveryManager(context: Context) {
         val fingerprint = service.attribute("fp")
         require(fingerprint.length == 64)
         require(service.attribute("v") == "1")
-        val host = requireNotNull(service.host?.hostAddress)
+        val resolvedHosts = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            service.hostAddresses.mapNotNull { it.hostAddress }
+        } else {
+            listOfNotNull(service.host?.hostAddress)
+        }.distinct()
+        val legacyHost = service.host?.hostAddress
+        val host = legacyHost?.takeIf { it in resolvedHosts } ?: resolvedHosts.first()
         DiscoveredDesktop(
             peerId = peerIdHex.toPeerId(),
             peerIdHex = peerIdHex,
@@ -201,6 +229,7 @@ class NetworkDiscoveryManager(context: Context) {
             port = service.port,
             certificateSha256 = fingerprint,
             serviceName = service.serviceName,
+            alternateHosts = resolvedHosts.filterNot { it == host },
         )
     }.getOrNull()
 

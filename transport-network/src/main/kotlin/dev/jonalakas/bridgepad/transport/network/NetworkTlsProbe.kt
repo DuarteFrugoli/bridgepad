@@ -27,6 +27,8 @@ data class NetworkProbeRequest(
 }
 
 data class NetworkProbeResult(
+    val localAddress: String,
+    val remoteAddress: String,
     val tlsVersion: String,
     val cipherSuite: String,
     val connectAndHandshakeMillis: Double,
@@ -79,6 +81,8 @@ object NetworkTlsProbe {
 
             val summary = summarizeNanoseconds(rtts)
             return NetworkProbeResult(
+                localAddress = tlsSocket.localAddress.hostAddress.orEmpty(),
+                remoteAddress = tlsSocket.inetAddress.hostAddress.orEmpty(),
                 tlsVersion = tlsSocket.session.protocol,
                 cipherSuite = tlsSocket.session.cipherSuite,
                 connectAndHandshakeMillis = handshakeMillis,

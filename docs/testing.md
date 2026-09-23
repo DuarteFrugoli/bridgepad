@@ -744,3 +744,49 @@ first test.
     the full-screen physical-controller touchpad.
 12. Switch to Physical gamepad input and confirm that touching the old surface
    cannot move or click the pointer.
+
+### Android Open Accessory USB spike
+
+This diagnostic is not yet a playable USB session. Install the APK before AOA
+starts because Android may remove the ADB interface while the phone is in
+accessory mode.
+
+1. Connect one unlocked Android phone to the Windows PC with a known data cable.
+2. From `desktop/`, run `cargo run -p bridgepad-usb-spike`.
+3. Confirm that the phone re-enumerates, Android associates BridgePad with the
+   accessory and the Desktop reports `USB bulk link ready`.
+4. Open **Settings > USB Desktop test**, approve the USB permission if requested
+   and run the test.
+5. Record received/lost samples, effective frequency and RTT p50/p95/p99.
+6. Repeat at least five times without restarting the Android or Desktop app.
+7. Remove and reconnect the cable, then confirm the test recovers without
+   clearing app data.
+8. Repeat with a charge-only cable and confirm that both sides show an
+   actionable failure rather than claiming to be connected.
+9. Repeat on a clean Windows installation without ADB, Android Studio or Zadig.
+   Record any driver installed by Windows and whether the initial Android device
+   and the re-enumerated AOA interface can both be opened.
+10. Compare the same PC/phone with the existing Wi-Fi diagnostic and with IP
+    over USB tethering before deciding the production transport.
+
+### USB tethering network spike
+
+1. Leave the phone connected through a data cable and enable Android USB
+   tethering. Turn off phone Wi-Fi for the first test.
+2. From `desktop/`, run
+   `cargo run -p bridgepad-daemon -- --identity-dir ..\.bridgepad-dev --allow-unpaired`.
+3. Use `ipconfig` to find the Windows IPv4 address on the new USB/Ethernet
+   adapter. Do not use the normal Wi-Fi address.
+4. Open **Settings > USB network test** and enter that address, port `39393` and
+   the complete fingerprint printed by the daemon.
+5. Run the encrypted test. Confirm that its displayed local/remote route uses
+   the USB subnet and record handshake plus RTT p50/p95/p99.
+6. Start the playable session and validate virtual gamepad, physical gamepad,
+   pointer and keyboard. Removing the cable must terminate and neutralize it.
+7. Repeat rapid disconnect/reconnect, Android background and screen-off tests.
+8. With Wi-Fi still off, start the normal graphical BridgePad Desktop. Confirm
+   whether Android Home discovers it automatically, pairs and starts gameplay.
+9. Repeat with Wi-Fi enabled and verify from the displayed socket route that
+   selecting USB cannot silently send traffic through Wi-Fi.
+10. Compare loss, latency, reconnection and setup steps against Wi-Fi and the
+    recorded AOA attempt before closing Gate D4.

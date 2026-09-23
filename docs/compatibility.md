@@ -123,3 +123,28 @@ its evidence recorded here.
 - Relative Windows mouse movement and click over Wi-Fi: PASS
 - Compatibility and Background USB capture with the shared router: PASS
 - Result: no blocking defect observed
+
+### 2026-09-22 — USB tethering transport spike
+
+- Android device: Samsung Galaxy A35, Android 16 (API 36)
+- Host: Windows with the standard Microsoft Remote NDIS driver
+- Android USB function: `rndis,adb`; USB subnet: `10.232.206.0/24`
+- Encrypted BridgePad protocol over USB tethering: PASS
+- Verified socket route: `10.232.206.111 -> 10.232.206.43`
+- TLS: TLS 1.3 with `TLS_AES_128_GCM_SHA256`
+- Samples: 250
+- TLS handshake: 64.329 ms
+- RTT: p50 2.055 ms, p95 3.049 ms, p99 5.337 ms
+- Compared Wi-Fi evidence: p50 9.114 ms, p95 14.597 ms, p99 16.553 ms
+- Playable virtual-controller session through the same USB route: PASS
+- Gamepad, mouse touchpad and keyboard behavior: PASS
+- Normal Desktop discovery and pairing over the USB route: PASS
+- Trusted-session authentication over USB after pairing: PASS
+- Cable removal followed by a Wi-Fi session with the same trusted identity,
+  without pairing again: PASS
+- Abrupt cable removal safely neutralized the active virtual controller: PASS
+- Verified session source transition: `10.232.206.111` over USB to
+  `192.168.15.3` over Wi-Fi
+- Status: transport reachability, encryption, automatic discovery, pairing,
+  playable input, cable-removal neutralization and cross-interface trust
+  continuity passed; reconnection and screen-off behavior remain pending

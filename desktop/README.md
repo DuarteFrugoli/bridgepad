@@ -200,3 +200,50 @@ RFCOMM service automatically. In the Android Home flow, selecting an already
 paired Bluetooth PC tries Desktop/XInput first. If the Desktop service is not
 available, Android offers direct HID as an explicit fallback; it never keeps
 both output paths active for the same session.
+
+## Android Open Accessory USB spike
+
+Install the current Android debug build before starting the Desktop spike. AOA
+can temporarily disconnect USB debugging when the phone re-enumerates. Then
+connect one unlocked Android phone with a data-capable cable and run from
+`desktop/`:
+
+```powershell
+cargo run -p bridgepad-usb-spike
+```
+
+The executable performs the official AOA handshake and waits for the phone to
+appear as a Google accessory. On Android, approve the accessory/app prompt,
+open **Settings > USB Desktop test**, and run the 250-sample benchmark.
+
+This is a transport experiment, not a playable session. Windows may refuse to
+open or claim the AOA interface unless a WinUSB-compatible driver is associated
+with it. Do not use Zadig as evidence that the product flow is solved: the spike
+must establish whether a signed BridgePad installer can configure everything
+on a clean machine without ADB or developer tools.
+
+USB tethering is the comparison candidate. It can reuse the Wi-Fi/network
+transport over the cable-created private network, but it still requires
+BridgePad Desktop to authenticate the phone and create XInput, mouse and
+keyboard devices.
+
+### USB tethering network spike
+
+Connect the data cable and enable USB tethering on Android. Turn off phone Wi-Fi
+during the first run so a successful socket cannot silently use the wireless
+route. Start the existing receiver from `desktop/`:
+
+```powershell
+cargo run -p bridgepad-daemon -- --identity-dir ..\.bridgepad-dev --allow-unpaired
+```
+
+Run `ipconfig` and locate the IPv4 address assigned to the new Ethernet/USB
+adapter. In Android, open **Settings > USB network test**, enter that address,
+port `39393`, and the certificate fingerprint printed by the daemon. The result
+prints the socket's local and remote addresses in addition to TLS and latency
+metrics. Then start the playable session and validate gamepad, mouse and
+keyboard.
+
+After the manual route succeeds, restart with the regular BridgePad Desktop and
+test Home discovery while Wi-Fi remains off. This distinguishes basic USB/IP
+reachability from automatic mDNS discovery across Android's tethering link.

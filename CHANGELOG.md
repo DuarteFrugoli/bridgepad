@@ -8,6 +8,24 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Started the Android Open Accessory USB spike with an isolated Android
+  transport module, a Windows/libusb AOA host, a 125 Hz protocol-v1 diagnostic,
+  bilingual settings UI, CI coverage and an explicit clean-driver acceptance
+  gate. USB tethering remains the comparison candidate and still requires
+  BridgePad Desktop.
+- Recorded the first AOA driver failure and added a USB-tethering diagnostic
+  that reuses the encrypted network/playable path while displaying the actual
+  local and remote socket addresses to prove which interface carried traffic.
+- Validated the first encrypted and playable USB-tethering session, including
+  the existing virtual gamepad, Windows pointer and keyboard paths, at 2.055 ms
+  median RTT without adding transport-specific input logic.
+- Network discovery now retains every address advertised for the same Desktop;
+  pairing and playable sessions try those endpoints in order instead of binding
+  the trusted computer to whichever Wi-Fi or USB address Android returned first.
+- Validated normal USB discovery, pairing and authenticated gameplay, followed
+  by cable removal and a Wi-Fi session using the same trusted identity without
+  requiring another pairing operation. Abrupt cable removal also neutralizes
+  the active virtual controller correctly.
 - Added orientation-specific undo and redo to the touchscreen layout editor.
   Portrait and landscape remain in one saved profile but have independent history
   branches. Drag and resize gestures create one action when released, discrete

@@ -52,6 +52,8 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NetworkDiagnosticScreen(
+    usbTetheringMode: Boolean = false,
+    onOpenConnectionSettings: () -> Unit = {},
     onBack: () -> Unit,
     gameplayStatus: NetworkGamepadStatus,
     physicalControllerConnected: Boolean,
@@ -86,7 +88,17 @@ fun NetworkDiagnosticScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.network_diagnostic_title)) },
+                title = {
+                    Text(
+                        stringResource(
+                            if (usbTetheringMode) {
+                                R.string.usb_network_test_title
+                            } else {
+                                R.string.network_diagnostic_title
+                            },
+                        ),
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
@@ -106,7 +118,25 @@ fun NetworkDiagnosticScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                Text(stringResource(R.string.network_diagnostic_description))
+                Text(
+                    stringResource(
+                        if (usbTetheringMode) {
+                            R.string.usb_network_test_description
+                        } else {
+                            R.string.network_diagnostic_description
+                        },
+                    ),
+                )
+            }
+            if (usbTetheringMode) {
+                item {
+                    OutlinedButton(
+                        onClick = onOpenConnectionSettings,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.usb_network_open_settings))
+                    }
+                }
             }
             item {
                 OutlinedTextField(
@@ -209,6 +239,8 @@ fun NetworkDiagnosticScreen(
                         stringResource(
                             if (connectingGamepad) {
                                 R.string.network_gameplay_connecting
+                            } else if (usbTetheringMode) {
+                                R.string.usb_network_gameplay_action
                             } else {
                                 R.string.network_gameplay_action
                             },
@@ -237,6 +269,14 @@ fun NetworkDiagnosticScreen(
                                     format(probeResult.rttP99Millis),
                                     probeResult.samples,
                                 ),
+                            )
+                            Text(
+                                stringResource(
+                                    R.string.network_test_route,
+                                    probeResult.localAddress,
+                                    probeResult.remoteAddress,
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
                             )
                             Text(
                                 probeResult.cipherSuite,

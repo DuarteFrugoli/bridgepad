@@ -83,8 +83,10 @@ import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
 import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
+import dev.jonalakas.bridgepad.ui.settings.UsbAccessoryDiagnosticScreen
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbe
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
+import dev.jonalakas.bridgepad.transport.usb.accessory.UsbAccessoryProbe
 import dev.jonalakas.bridgepad.ui.session.SessionSurface
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationStore
@@ -120,7 +122,9 @@ class MainActivity : ComponentActivity() {
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var showSettings by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
+                var showUsbNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showBluetoothDesktopDiagnostic by rememberSaveable { mutableStateOf(false) }
+                var showUsbAccessoryDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
@@ -323,8 +327,9 @@ class MainActivity : ComponentActivity() {
                     networkGameplayStatus,
                     physicalControllerConnected,
                     showNetworkDiagnostic,
+                    showUsbNetworkDiagnostic,
                 ) {
-                    if (!showNetworkDiagnostic) {
+                    if (!showNetworkDiagnostic && !showUsbNetworkDiagnostic) {
                         when (networkGameplayStatus) {
                             NetworkGamepadStatus.Active -> sessionUiViewModel.dispatch(
                                 SessionUiEvent.TransportConnected(
@@ -390,7 +395,8 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val diagnosticUsesGamepadMode =
-                    showNetworkDiagnostic && networkGameplayStatus is NetworkGamepadStatus.Active ||
+                    (showNetworkDiagnostic || showUsbNetworkDiagnostic) &&
+                        networkGameplayStatus is NetworkGamepadStatus.Active ||
                         showBluetoothDesktopDiagnostic &&
                         bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Active
                 val compatibilityInputNeedsScreen =
@@ -419,6 +425,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(
                     sessionUiState.surface,
                     showNetworkDiagnostic,
+                    showUsbNetworkDiagnostic,
                     networkGameplayStatus,
                     bluetoothDesktopGameplayStatus,
                     showTouchscreenLayoutEditor,
@@ -614,8 +621,20 @@ class MainActivity : ComponentActivity() {
                             showSettings = true
                         },
                     )
-                } else if (showNetworkDiagnostic) {
+                } else if (showUsbAccessoryDiagnostic) {
+                    UsbAccessoryDiagnosticScreen(
+                        probe = remember { UsbAccessoryProbe(this@MainActivity) },
+                        onBack = {
+                            showUsbAccessoryDiagnostic = false
+                            showSettings = true
+                        },
+                    )
+                } else if (showNetworkDiagnostic || showUsbNetworkDiagnostic) {
                     NetworkDiagnosticScreen(
+                        usbTetheringMode = showUsbNetworkDiagnostic,
+                        onOpenConnectionSettings = {
+                            startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS))
+                        },
                         gameplayStatus = networkGameplayStatus,
                         physicalControllerConnected = physicalControllerConnected,
                         touchscreenLayout = touchscreenLayout,
@@ -630,6 +649,7 @@ class MainActivity : ComponentActivity() {
                         onBack = {
                             networkGameplayController.shutdown()
                             showNetworkDiagnostic = false
+                            showUsbNetworkDiagnostic = false
                             showSettings = true
                         },
                     )
@@ -664,9 +684,17 @@ class MainActivity : ComponentActivity() {
                             showSettings = false
                             showNetworkDiagnostic = true
                         },
+                        onOpenUsbNetworkDiagnostic = {
+                            showSettings = false
+                            showUsbNetworkDiagnostic = true
+                        },
                         onOpenBluetoothDesktopDiagnostic = {
                             showSettings = false
                             showBluetoothDesktopDiagnostic = true
+                        },
+                        onOpenUsbAccessoryDiagnostic = {
+                            showSettings = false
+                            showUsbAccessoryDiagnostic = true
                         },
                         onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
                             runCatching {
@@ -945,7 +973,8 @@ class MainActivity : ComponentActivity() {
                         sessionCoordinator.stop()
                         if (
                             networkGameplayStatus !is NetworkGamepadStatus.Stopped &&
-                            !showNetworkDiagnostic
+                            !showNetworkDiagnostic &&
+                            !showUsbNetworkDiagnostic
                         ) {
                             networkDesktopCoordinator.stopGameplay()
                         }

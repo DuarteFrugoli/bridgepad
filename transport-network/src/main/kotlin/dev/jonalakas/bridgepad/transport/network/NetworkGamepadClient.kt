@@ -23,6 +23,7 @@ import javax.net.ssl.SSLSocket
 
 data class NetworkGamepadRequest(
     val host: String,
+    val alternateHosts: List<String> = emptyList(),
     val port: Int = 39_393,
     val certificateSha256: String,
     val inputKind: BridgeInputKind = BridgeInputKind.AUTOMATIC,
@@ -33,11 +34,15 @@ data class NetworkGamepadRequest(
 ) {
     init {
         require(host.isNotBlank()) { "host must not be blank" }
+        require(alternateHosts.none(String::isBlank)) { "alternate hosts must not be blank" }
         require(port in 1..65_535) { "port must be between 1 and 65535" }
         require(connectTimeoutMillis > 0) { "connect timeout must be positive" }
         require(readTimeoutMillis > 0) { "read timeout must be positive" }
         require(reconnectAttempts in 0..10) { "reconnectAttempts must be between 0 and 10" }
     }
+
+    internal val endpointHosts: List<String>
+        get() = (listOf(host) + alternateHosts).distinct()
 }
 
 enum class NetworkFailureReason {
@@ -189,10 +194,27 @@ class NetworkGamepadClient(
     }
 
     private fun runConnectedSession() {
+        var lastFailure: Exception? = null
+        request.endpointHosts.forEach { host ->
+            try {
+                runConnectedSession(host)
+                return
+            } catch (failure: Exception) {
+                if (stopping.get()) throw failure
+                lastFailure = failure
+                pendingState.set(latestState.get())
+                pendingPointers.clear()
+                pendingKeyboard.clear()
+            }
+        }
+        throw lastFailure ?: IllegalStateException("No network endpoint is available")
+    }
+
+    private fun runConnectedSession(host: String) {
         val sessionId = SecureRandom().nextLong().and(Long.MAX_VALUE).coerceAtLeast(1)
         var sequence = 0L
         val tlsSocket = openPinnedTlsSocket(
-            request.host,
+            host,
             request.port,
             request.certificateSha256,
             request.connectTimeoutMillis,
