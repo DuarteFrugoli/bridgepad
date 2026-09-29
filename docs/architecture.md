@@ -7,8 +7,11 @@ new connection methods and destinations do not change existing input adapters.
 
 ```text
 :app ---------------------> :protocol -----------------> :domain
-  |                                                       ^
+  |                           ^                           ^
   +----------------> :transport-network -----------------+
+  |                           |
+  |                           +---------> :streaming-core
+  +------------------------------------> :streaming-core
   |                                                       ^
   +--------> :transport-bluetooth-desktop ----------------+
   |                                                       ^
@@ -23,8 +26,11 @@ new connection methods and destinations do not change existing input adapters.
 - `:protocol` owns versioned messages shared with a future BridgePad receiver.
   It depends only on `:domain`. A published wire format must remain independent
   of the desktop implementation language.
+- `:streaming-core` owns transport- and platform-independent video/audio
+  contracts, frame models, decoder boundaries and pipeline metrics.
 - `:transport-network` owns the platform-independent encrypted socket client,
-  pairing/authentication exchange, bounded gamepad sender and reconnect policy.
+  pairing/authentication exchange, bounded input sender, isolated synthetic
+  media client and reconnect policy.
   Discovery and persistence remain above it and never enter input code.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
@@ -126,6 +132,15 @@ advanced diagnostic; both consume only `InputRouter`'s normalized state.
 Connection method and output-adapter identity are deliberately separate. The
 generic Bluetooth HID profile and future Wi-Fi or USB desktop receivers can all
 target a PC while retaining independent protocol behavior.
+
+Streaming follows the same separation rule at a stricter boundary. The
+`streaming-core` module defines capture, encode, media transport, decode,
+rendering metrics and audio contracts without depending on Android UI or a
+desktop operating system. The Rust `bridgepad-media` crate mirrors the desktop
+side and provides the bounded synthetic pipeline. Media uses a connection and
+workers separate from `NetworkGamepadClient`; bounded two-frame queues discard
+stale video under pressure, so a blocked stream cannot delay or recreate input
+devices. ADR 0013 selects WebRTC for the production media plane.
 
 The setup model is a progressive dependency chain:
 

@@ -14,8 +14,5 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":domain"))
-    implementation(project(":protocol"))
-    implementation(project(":streaming-core"))
     testImplementation(libs.junit)
 }

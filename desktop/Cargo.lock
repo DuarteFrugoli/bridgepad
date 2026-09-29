@@ -264,6 +264,7 @@ dependencies = [
 name = "bridgepad-daemon"
 version = "0.1.0"
 dependencies = [
+ "bridgepad-media",
  "bridgepad-protocol",
  "bridgepad-virtual-device",
  "bridgepad-windows-pointer",
@@ -294,6 +295,10 @@ dependencies = [
  "bridgepad-virtual-device",
  "bridgepad-windows-vigem",
 ]
+
+[[package]]
+name = "bridgepad-media"
+version = "0.1.0"
 
 [[package]]
 name = "bridgepad-protocol"

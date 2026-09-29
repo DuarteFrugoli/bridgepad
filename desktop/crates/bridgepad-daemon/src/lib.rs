@@ -10,13 +10,16 @@ use auth::{
     create_proof, derive_pairing_key, pairing_transcript, role_transcript, secure_array,
     verify_proof,
 };
+use bridgepad_media::{MediaPipeline, VideoCodec, VideoFormat};
 use bridgepad_protocol::{
-    CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, HEADER_SIZE,
+    CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, CAPABILITY_VIDEO, HEADER_SIZE,
     KEYBOARD_MODIFIER_ALT, KEYBOARD_MODIFIER_CONTROL, KEYBOARD_MODIFIER_META,
     KEYBOARD_MODIFIER_SHIFT, KeyboardInput as ProtocolKeyboardInput,
     KeyboardKey as ProtocolKeyboardKey, MAX_PAYLOAD_SIZE, MAX_PEER_NAME_SIZE, MessageType,
-    PacketHeader, decode_auth_proof, decode_auth_request, decode_gamepad_snapshot, decode_keyboard,
-    decode_packet, decode_pair_request, decode_pointer, decode_session_start, encode_packet,
+    PacketHeader, VIDEO_CHUNK_HEADER_SIZE, VideoChunk, decode_auth_proof, decode_auth_request,
+    decode_gamepad_snapshot, decode_keyboard, decode_media_offer, decode_packet,
+    decode_pair_request, decode_pointer, decode_session_start, encode_media_answer, encode_packet,
+    encode_video_chunk,
 };
 use bridgepad_virtual_device::{
     DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, KeyboardModifiers, PointerReport,
@@ -579,6 +582,67 @@ fn serve(
                 stream.sock.set_read_timeout(Some(Duration::from_secs(3)))?;
                 println!("Playable gamepad session started for {peer}");
             }
+            MessageType::MediaOffer => {
+                if authenticated_peer.is_none() && !state.allow_unpaired {
+                    return Err("authentication is required before streaming".into());
+                }
+                if gamepad.is_some() {
+                    return Err("media must use its own connection".into());
+                }
+                let offer = decode_media_offer(packet)?;
+                if offer.requested_capabilities & CAPABILITY_VIDEO == 0 {
+                    return Err("the client did not request the video capability".into());
+                }
+                let mut width = offer.max_width.min(320);
+                let mut height = offer.max_height.min(180);
+                let mut frames_per_second = offer.max_frames_per_second.min(20);
+                if width == 0 || height == 0 || frames_per_second == 0 {
+                    return Err("invalid media limits".into());
+                }
+                let maximum_bitrate = u64::from(offer.max_bitrate_bits_per_second);
+                while raw_rgb565_bitrate(width, height, frames_per_second) > maximum_bitrate
+                    && (width > 16 || height > 9)
+                {
+                    width = (width.saturating_mul(3) / 4).max(16).min(width);
+                    height = (height.saturating_mul(3) / 4).max(9).min(height);
+                }
+                let maximum_fps = maximum_bitrate / (u64::from(width) * u64::from(height) * 16);
+                frames_per_second = frames_per_second
+                    .min(u16::try_from(maximum_fps.min(u64::from(u16::MAX))).unwrap_or(u16::MAX));
+                if frames_per_second == 0 {
+                    return Err("offered bitrate is too low for diagnostic video".into());
+                }
+                let raw_bitrate = raw_rgb565_bitrate(width, height, frames_per_second);
+                let target_bitrate = u32::try_from(raw_bitrate.min(u64::from(u32::MAX)))?;
+                let answer = encode_media_answer(
+                    CAPABILITY_VIDEO,
+                    0,
+                    width,
+                    height,
+                    frames_per_second,
+                    target_bitrate,
+                    1_000,
+                );
+                write_response(
+                    &mut stream,
+                    packet.header,
+                    MessageType::MediaAnswer,
+                    &answer,
+                )?;
+                println!("Synthetic video stream started for {peer}");
+                return stream_synthetic_video(
+                    &mut stream,
+                    packet.header,
+                    VideoFormat {
+                        codec: VideoCodec::RawRgb565,
+                        width,
+                        height,
+                        frames_per_second,
+                        target_bitrate_bits_per_second: target_bitrate,
+                    },
+                    peer,
+                );
+            }
             MessageType::GamepadSnapshot => {
                 if active_session_id != Some(packet.header.session_id) {
                     return Err("gamepad snapshot does not belong to the active session".into());
@@ -662,6 +726,65 @@ fn serve(
             _ => return Err("message is not supported by the receiver".into()),
         }
     }
+}
+
+fn raw_rgb565_bitrate(width: u16, height: u16, frames_per_second: u16) -> u64 {
+    u64::from(width) * u64::from(height) * u64::from(frames_per_second) * 16
+}
+
+fn stream_synthetic_video(
+    stream: &mut StreamOwned<ServerConnection, TcpStream>,
+    request: PacketHeader,
+    format: VideoFormat,
+    peer: std::net::SocketAddr,
+) -> Result<(), AnyError> {
+    let pipeline = MediaPipeline::start_synthetic(format);
+    let max_chunk_data = MAX_PAYLOAD_SIZE - VIDEO_CHUNK_HEADER_SIZE;
+    let mut sequence = request.sequence.wrapping_add(1);
+    while let Ok(frame) = pipeline.frames.recv() {
+        let chunk_count = frame.payload.len().div_ceil(max_chunk_data);
+        let chunk_count = u16::try_from(chunk_count)?;
+        let total_frame_bytes = u32::try_from(frame.payload.len())?;
+        for (chunk_index, data) in frame.payload.chunks(max_chunk_data).enumerate() {
+            let payload = encode_video_chunk(VideoChunk {
+                frame_id: frame.frame_id,
+                presentation_timestamp_micros: frame.presentation_timestamp_micros,
+                keyframe: frame.keyframe,
+                chunk_index: u16::try_from(chunk_index)?,
+                chunk_count,
+                total_frame_bytes,
+                generation_micros: frame.generation_micros,
+                encode_micros: frame.encode_micros,
+                data,
+            })?;
+            let packet = encode_packet(
+                PacketHeader {
+                    session_id: request.session_id,
+                    sequence,
+                    timestamp_micros: monotonic_micros(),
+                    message_type: MessageType::VideoChunk,
+                },
+                &payload,
+            )?;
+            if let Err(error) = stream.write_all(&packet) {
+                if is_expected_disconnect(&error) {
+                    println!("Synthetic video stream stopped for {peer}");
+                    return Ok(());
+                }
+                return Err(error.into());
+            }
+            sequence = sequence.wrapping_add(1);
+        }
+        if let Err(error) = stream.flush() {
+            if is_expected_disconnect(&error) {
+                println!("Synthetic video stream stopped for {peer}");
+                return Ok(());
+            }
+            return Err(error.into());
+        }
+    }
+    println!("Synthetic video stream stopped for {peer}");
+    Ok(())
 }
 
 fn pair_result_payload(

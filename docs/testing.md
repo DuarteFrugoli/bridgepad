@@ -790,3 +790,27 @@ accessory mode.
    selecting USB cannot silently send traffic through Wi-Fi.
 10. Compare loss, latency, reconnection and setup steps against Wi-Fi and the
     recorded AOA attempt before closing Gate D4.
+
+### Synthetic streaming foundation
+
+This gate validates isolation and scheduling, not final image quality. RGB565
+over TLS is intentionally temporary; production media will use WebRTC.
+
+1. Pair the Android app with the graphical BridgePad Desktop and leave the
+   desktop receiver running.
+2. Install the current debug APK, open **Settings > Streaming foundation**,
+   select the paired computer and start synthetic video.
+3. Confirm that animated color bars appear at `320 x 180`, remain fluid for at
+   least five minutes and do not build an ever-growing delay.
+4. Confirm that generation, encode, network/assembly, decode and presentation
+   metrics update independently and that received frames/bytes increase.
+5. Stop and start video ten times. The Desktop must log a clean media stop and
+   must not create an Xbox controller for a media-only connection.
+6. Start a normal Wi-Fi or USB gameplay session, return to Home without ending
+   it, open the synthetic stream from Settings and exercise `joy.cpl` while the
+   color bars are running. Input must remain responsive.
+7. Stop only video and confirm the existing controller remains present and
+   responsive. Restart video and confirm no second controller appears.
+8. Deliberately constrain or congest the network. Frames may be discarded, but
+   input must stay responsive and video latency must recover instead of replaying
+   a stale backlog.

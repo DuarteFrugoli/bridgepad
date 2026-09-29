@@ -382,4 +382,25 @@
     <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>
     <string name="notification_usb_session_active">USB cable session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
     <string name="notification_usb_session_background_input_active">USB cable session and Background USB input active. You can play with BridgePad minimized or the screen off.</string>
+    <string name="synthetic_stream_title">Streaming foundation</string>
+    <string name="synthetic_stream_settings_description">Validate the isolated video pipeline with a synthetic Desktop source.</string>
+    <string name="synthetic_stream_open">Open streaming test</string>
+    <string name="synthetic_stream_description">This diagnostic opens a media-only authenticated connection. Input remains on its own connection and is not stopped when video ends.</string>
+    <string name="synthetic_stream_desktop">Paired computer</string>
+    <string name="synthetic_stream_no_desktop">Pair a BridgePad Desktop before running this test.</string>
+    <string name="synthetic_stream_start">Start synthetic video</string>
+    <string name="synthetic_stream_stop">Stop video</string>
+    <string name="synthetic_stream_frame">Synthetic streaming frame</string>
+    <string name="synthetic_stream_metrics">Pipeline metrics</string>
+    <string name="synthetic_stream_generation">Generation: %1$d µs</string>
+    <string name="synthetic_stream_encode">Encode: %1$d µs</string>
+    <string name="synthetic_stream_network">Network estimate and assembly: %1$d µs</string>
+    <string name="synthetic_stream_decode">Decode: %1$d µs</string>
+    <string name="synthetic_stream_present">Presentation: %1$d µs</string>
+    <string name="synthetic_stream_totals">Frames: %1$d received, %2$d dropped · %3$d bytes</string>
+    <string name="synthetic_stream_idle">Ready to start</string>
+    <string name="synthetic_stream_connecting">Connecting to BridgePad Desktop…</string>
+    <string name="synthetic_stream_active">%1$d × %2$d at %3$d fps</string>
+    <string name="synthetic_stream_stopped">Video stopped. Input sessions are unaffected.</string>
+    <string name="synthetic_stream_failed">Streaming failed: %1$s</string>
 </resources>

@@ -33,6 +33,11 @@ pub enum MessageType {
     Status = 0x30,
     Error = 0x31,
     Rumble = 0x40,
+    MediaOffer = 0x50,
+    MediaAnswer = 0x51,
+    VideoChunk = 0x52,
+    MediaFeedback = 0x53,
+    MediaStop = 0x54,
 }
 
 impl TryFrom<u8> for MessageType {
@@ -61,6 +66,11 @@ impl TryFrom<u8> for MessageType {
             0x30 => Ok(Self::Status),
             0x31 => Ok(Self::Error),
             0x40 => Ok(Self::Rumble),
+            0x50 => Ok(Self::MediaOffer),
+            0x51 => Ok(Self::MediaAnswer),
+            0x52 => Ok(Self::VideoChunk),
+            0x53 => Ok(Self::MediaFeedback),
+            0x54 => Ok(Self::MediaStop),
             _ => Err(ProtocolError::UnknownMessageType(value)),
         }
     }
@@ -179,6 +189,8 @@ pub fn decode_ping(packet: Packet<'_>) -> Result<u64, ProtocolError> {
 
 pub const CAPABILITY_GAMEPAD: u32 = 1;
 pub const CAPABILITY_POINTER: u32 = 1 << 1;
+pub const CAPABILITY_VIDEO: u32 = 1 << 3;
+pub const CAPABILITY_AUDIO: u32 = 1 << 4;
 pub const CAPABILITY_KEYBOARD: u32 = 1 << 5;
 pub const AUTH_NONCE_SIZE: usize = 32;
 pub const AUTH_PROOF_SIZE: usize = 32;
@@ -195,6 +207,80 @@ pub fn decode_session_start(packet: Packet<'_>) -> Result<SessionStart, Protocol
         input_kind: packet.payload[0],
         requested_capabilities: read_u32(packet.payload, 1),
     })
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct MediaOffer {
+    pub requested_capabilities: u32,
+    pub max_width: u16,
+    pub max_height: u16,
+    pub max_frames_per_second: u16,
+    pub max_bitrate_bits_per_second: u32,
+}
+
+pub fn decode_media_offer(packet: Packet<'_>) -> Result<MediaOffer, ProtocolError> {
+    require_payload_length(packet.payload, 14)?;
+    Ok(MediaOffer {
+        requested_capabilities: read_u32(packet.payload, 0),
+        max_width: read_u16(packet.payload, 4),
+        max_height: read_u16(packet.payload, 6),
+        max_frames_per_second: read_u16(packet.payload, 8),
+        max_bitrate_bits_per_second: read_u32(packet.payload, 10),
+    })
+}
+
+pub fn encode_media_answer(
+    enabled_capabilities: u32,
+    codec: u8,
+    width: u16,
+    height: u16,
+    frames_per_second: u16,
+    target_bitrate_bits_per_second: u32,
+    keyframe_interval_millis: u16,
+) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(17);
+    payload.extend_from_slice(&enabled_capabilities.to_be_bytes());
+    payload.push(codec);
+    payload.extend_from_slice(&width.to_be_bytes());
+    payload.extend_from_slice(&height.to_be_bytes());
+    payload.extend_from_slice(&frames_per_second.to_be_bytes());
+    payload.extend_from_slice(&target_bitrate_bits_per_second.to_be_bytes());
+    payload.extend_from_slice(&keyframe_interval_millis.to_be_bytes());
+    payload
+}
+
+pub const VIDEO_CHUNK_HEADER_SIZE: usize = 29;
+
+#[derive(Clone, Copy, Debug)]
+pub struct VideoChunk<'a> {
+    pub frame_id: u32,
+    pub presentation_timestamp_micros: u64,
+    pub keyframe: bool,
+    pub chunk_index: u16,
+    pub chunk_count: u16,
+    pub total_frame_bytes: u32,
+    pub generation_micros: u32,
+    pub encode_micros: u32,
+    pub data: &'a [u8],
+}
+
+pub fn encode_video_chunk(chunk: VideoChunk<'_>) -> Result<Vec<u8>, ProtocolError> {
+    if chunk.data.is_empty() || chunk.data.len() + VIDEO_CHUNK_HEADER_SIZE > MAX_PAYLOAD_SIZE {
+        return Err(ProtocolError::PayloadTooLarge(
+            chunk.data.len() + VIDEO_CHUNK_HEADER_SIZE,
+        ));
+    }
+    let mut payload = Vec::with_capacity(VIDEO_CHUNK_HEADER_SIZE + chunk.data.len());
+    payload.extend_from_slice(&chunk.frame_id.to_be_bytes());
+    payload.extend_from_slice(&chunk.presentation_timestamp_micros.to_be_bytes());
+    payload.push(u8::from(chunk.keyframe));
+    payload.extend_from_slice(&chunk.chunk_index.to_be_bytes());
+    payload.extend_from_slice(&chunk.chunk_count.to_be_bytes());
+    payload.extend_from_slice(&chunk.total_frame_bytes.to_be_bytes());
+    payload.extend_from_slice(&chunk.generation_micros.to_be_bytes());
+    payload.extend_from_slice(&chunk.encode_micros.to_be_bytes());
+    payload.extend_from_slice(chunk.data);
+    Ok(payload)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -684,6 +770,43 @@ mod tests {
                 Ok(KeyboardInput::Key(expected))
             );
         }
+    }
+
+    #[test]
+    fn media_offer_and_video_chunk_have_stable_wire_shapes() {
+        let offer_payload = [0, 0, 0, 0x18, 1, 0x40, 0, 0xb4, 0, 20, 1, 0x19, 0x40, 0];
+        let offer_bytes = encode_packet(
+            PacketHeader {
+                session_id: 9,
+                sequence: 1,
+                timestamp_micros: 2,
+                message_type: MessageType::MediaOffer,
+            },
+            &offer_payload,
+        )
+        .unwrap();
+        let offer = decode_media_offer(decode_packet(&offer_bytes).unwrap()).unwrap();
+        assert_eq!(
+            offer.requested_capabilities,
+            CAPABILITY_VIDEO | CAPABILITY_AUDIO
+        );
+        assert_eq!(offer.max_width, 320);
+        assert_eq!(offer.max_height, 180);
+
+        let payload = encode_video_chunk(VideoChunk {
+            frame_id: 7,
+            presentation_timestamp_micros: 8,
+            keyframe: true,
+            chunk_index: 0,
+            chunk_count: 1,
+            total_frame_bytes: 4,
+            generation_micros: 10,
+            encode_micros: 11,
+            data: &[1, 2, 3, 4],
+        })
+        .unwrap();
+        assert_eq!(payload.len(), VIDEO_CHUNK_HEADER_SIZE + 4);
+        assert_eq!(&payload[VIDEO_CHUNK_HEADER_SIZE..], &[1, 2, 3, 4]);
     }
 
     fn vector(name: &str) -> Vec<u8> {

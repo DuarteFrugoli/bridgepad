@@ -60,11 +60,31 @@ enum class BridgeMessageType(val code: Int) {
     AUTH_REQUEST(0x0a), AUTH_CHALLENGE(0x0b), AUTH_PROOF(0x0c), AUTH_RESULT(0x0d),
     GAMEPAD_SNAPSHOT(0x10), POINTER(0x11), KEYBOARD(0x12),
     PING(0x20), PONG(0x21), STATUS(0x30), ERROR(0x31),
-    RUMBLE(0x40);
+    RUMBLE(0x40),
+    MEDIA_OFFER(0x50), MEDIA_ANSWER(0x51), VIDEO_CHUNK(0x52),
+    MEDIA_FEEDBACK(0x53), MEDIA_STOP(0x54);
 
     companion object {
         fun fromCode(code: Int): BridgeMessageType = entries.firstOrNull { it.code == code }
             ?: throw BridgeProtocolException("Unknown message type: $code")
+    }
+}
+
+enum class BridgeVideoCodec(val code: Int) {
+    RAW_RGB565(0), H264(1);
+
+    companion object {
+        fun fromCode(code: Int): BridgeVideoCodec = entries.firstOrNull { it.code == code }
+            ?: throw BridgeProtocolException("Unknown video codec: $code")
+    }
+}
+
+enum class BridgeMediaStopReason(val code: Int) {
+    USER_REQUEST(0), SOURCE_ENDED(1), TRANSPORT_LOST(2), PROTOCOL_ERROR(3);
+
+    companion object {
+        fun fromCode(code: Int): BridgeMediaStopReason = entries.firstOrNull { it.code == code }
+            ?: throw BridgeProtocolException("Unknown media stop reason: $code")
     }
 }
 

@@ -36,6 +36,8 @@ Present in the current build:
   trusted-phone revocation and system-tray behavior;
 - guided pairing, reconnection, session notices and safe shutdown;
 - live metrics and privacy-conscious diagnostic report export;
+- an isolated synthetic-video streaming foundation with per-stage metrics
+  (diagnostic only; real screen/audio streaming is not implemented yet);
 - English and Brazilian Portuguese interfaces;
 - unit tests, Android lint and independent debug APK builds in CI.
 

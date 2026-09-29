@@ -10,6 +10,7 @@ repository.workspace = true
 
 [dependencies]
 bridgepad-protocol = { path = "../bridgepad-protocol" }
+bridgepad-media = { path = "../bridgepad-media" }
 bridgepad-virtual-device = { path = "../bridgepad-virtual-device" }
 bridgepad-windows-vigem = { path = "../bridgepad-windows-vigem" }
 bridgepad-windows-pointer = { path = "../bridgepad-windows-pointer" }

@@ -43,6 +43,7 @@ android {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":protocol"))
+    implementation(project(":streaming-core"))
     implementation(project(":transport-bluetooth-hid"))
     implementation(project(":transport-bluetooth-desktop"))
     implementation(project(":transport-network"))

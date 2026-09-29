@@ -33,6 +33,8 @@ Disponível na build atual:
 - descoberta Wi-Fi automática e sessão autenticada pelo BridgePad Desktop no Windows;
 - pareamento guiado, reconexão, avisos e encerramento seguro;
 - métricas ao vivo e exportação de diagnóstico com foco em privacidade;
+- fundação isolada de streaming com vídeo sintético e métricas por etapa
+  (somente diagnóstico; streaming real de tela e áudio ainda não foi implementado);
 - interface em inglês e português brasileiro;
 - janela mínima bilíngue do BridgePad Desktop com status, PIN, revogação de
   celulares confiáveis e funcionamento pela bandeja do sistema;

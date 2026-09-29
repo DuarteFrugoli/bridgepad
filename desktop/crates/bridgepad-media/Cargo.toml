@@ -1,0 +1,12 @@
+[package]
+name = "bridgepad-media"
+description = "Transport-independent media contracts and synthetic sources for BridgePad"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true

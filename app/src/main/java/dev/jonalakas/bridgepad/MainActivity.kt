@@ -84,6 +84,7 @@ import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.UsbAccessoryDiagnosticScreen
+import dev.jonalakas.bridgepad.ui.settings.SyntheticStreamingScreen
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbe
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
 import dev.jonalakas.bridgepad.transport.usb.accessory.UsbAccessoryProbe
@@ -125,6 +126,7 @@ class MainActivity : ComponentActivity() {
                 var showUsbNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showBluetoothDesktopDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showUsbAccessoryDiagnostic by rememberSaveable { mutableStateOf(false) }
+                var showSyntheticStreaming by rememberSaveable { mutableStateOf(false) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
@@ -633,6 +635,15 @@ class MainActivity : ComponentActivity() {
                             showSettings = true
                         },
                     )
+                } else if (showSyntheticStreaming) {
+                    SyntheticStreamingScreen(
+                        desktops = trustedDesktops,
+                        requestFor = networkDesktopCoordinator::mediaRequest,
+                        onBack = {
+                            showSyntheticStreaming = false
+                            showSettings = true
+                        },
+                    )
                 } else if (showNetworkDiagnostic || showUsbNetworkDiagnostic) {
                     NetworkDiagnosticScreen(
                         usbTetheringMode = showUsbNetworkDiagnostic,
@@ -699,6 +710,10 @@ class MainActivity : ComponentActivity() {
                         onOpenUsbAccessoryDiagnostic = {
                             showSettings = false
                             showUsbAccessoryDiagnostic = true
+                        },
+                        onOpenSyntheticStreaming = {
+                            showSettings = false
+                            showSyntheticStreaming = true
                         },
                         onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
                             runCatching {

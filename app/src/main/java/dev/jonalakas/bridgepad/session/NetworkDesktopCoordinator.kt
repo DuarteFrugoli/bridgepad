@@ -9,6 +9,7 @@ import dev.jonalakas.bridgepad.transport.network.NetworkAuthenticationException
 import dev.jonalakas.bridgepad.transport.network.NetworkCredentials
 import dev.jonalakas.bridgepad.transport.network.NetworkFailureReason
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadRequest
+import dev.jonalakas.bridgepad.transport.network.NetworkMediaRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
 import dev.jonalakas.bridgepad.transport.network.NetworkPairingClient
 import dev.jonalakas.bridgepad.transport.network.NetworkPairingRequest
@@ -198,6 +199,31 @@ class NetworkDesktopCoordinator(
         activePeerIdHex = null
         gameplay.stop()
         NetworkSessionService.stop(applicationContext)
+    }
+
+    fun mediaRequest(peerIdHex: String): NetworkMediaRequest? {
+        val trusted = trustedStore.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
+            ?: return null
+        val discovered = discovery.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
+        if (discovered != null &&
+            !trusted.certificateSha256.equals(discovered.certificateSha256, ignoreCase = true)
+        ) {
+            return null
+        }
+        if (discovered != null) trustedStore.updateEndpoint(discovered)
+        val hosts = (discovered?.endpointHosts.orEmpty() + trusted.endpointHosts).distinct()
+        if (hosts.isEmpty()) return null
+        return NetworkMediaRequest(
+            host = hosts.first(),
+            alternateHosts = hosts.drop(1),
+            port = discovered?.port ?: trusted.port,
+            certificateSha256 = trusted.certificateSha256,
+            credentials = NetworkCredentials(
+                clientPeerId = trustedStore.clientPeerId,
+                serverPeerId = trusted.peerId,
+                sharedSecret = trusted.sharedSecret,
+            ),
+        )
     }
 
     fun shutdown() {

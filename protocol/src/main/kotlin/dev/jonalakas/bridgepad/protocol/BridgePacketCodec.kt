@@ -163,6 +163,43 @@ object BridgePacketCodec {
                         output.writeShort(message.highFrequency.toUnsignedNormalized())
                         output.writeShort(message.durationMillis)
                     }
+                    is BridgeMessage.MediaOffer -> {
+                        output.writeInt(message.requestedCapabilities.bits)
+                        output.writeShort(message.maxWidth)
+                        output.writeShort(message.maxHeight)
+                        output.writeShort(message.maxFramesPerSecond)
+                        output.writeInt(message.maxBitrateBitsPerSecond.toInt())
+                    }
+                    is BridgeMessage.MediaAnswer -> {
+                        output.writeInt(message.enabledCapabilities.bits)
+                        output.writeByte(message.codec.code)
+                        output.writeShort(message.width)
+                        output.writeShort(message.height)
+                        output.writeShort(message.framesPerSecond)
+                        output.writeInt(message.targetBitrateBitsPerSecond.toInt())
+                        output.writeShort(message.keyframeIntervalMillis)
+                    }
+                    is BridgeMessage.VideoChunk -> {
+                        output.writeInt(message.frameId.toInt())
+                        output.writeLong(message.presentationTimestampMicros)
+                        output.writeByte(if (message.keyframe) 1 else 0)
+                        output.writeShort(message.chunkIndex)
+                        output.writeShort(message.chunkCount)
+                        output.writeInt(message.totalFrameBytes.toInt())
+                        output.writeInt(message.generationMicros.toInt())
+                        output.writeInt(message.encodeMicros.toInt())
+                        output.write(message.data)
+                    }
+                    is BridgeMessage.MediaFeedback -> {
+                        output.writeInt(message.lastPresentedFrameId.toInt())
+                        output.writeInt(message.lostFrames.toInt())
+                        output.writeInt(message.receiveBitrateBitsPerSecond.toInt())
+                        output.writeInt(message.decodeMicros.toInt())
+                        output.writeInt(message.presentationMicros.toInt())
+                        output.writeInt(message.requestedBitrateBitsPerSecond.toInt())
+                        output.writeByte(if (message.keyframeRequested) 1 else 0)
+                    }
+                    is BridgeMessage.MediaStop -> output.writeByte(message.reason.code)
                 }
             }
             bytes.toByteArray()
@@ -241,6 +278,45 @@ object BridgePacketCodec {
                         lowFrequency = input.readUnsignedShort().fromUnsignedNormalized(),
                         highFrequency = input.readUnsignedShort().fromUnsignedNormalized(),
                         durationMillis = input.readUnsignedShort(),
+                    )
+                    BridgeMessageType.MEDIA_OFFER -> BridgeMessage.MediaOffer(
+                        requestedCapabilities = BridgeCapabilities(input.readInt()),
+                        maxWidth = input.readUnsignedShort(),
+                        maxHeight = input.readUnsignedShort(),
+                        maxFramesPerSecond = input.readUnsignedShort(),
+                        maxBitrateBitsPerSecond = input.readInt().toLong() and 0xffff_ffffL,
+                    )
+                    BridgeMessageType.MEDIA_ANSWER -> BridgeMessage.MediaAnswer(
+                        enabledCapabilities = BridgeCapabilities(input.readInt()),
+                        codec = BridgeVideoCodec.fromCode(input.readUnsignedByte()),
+                        width = input.readUnsignedShort(),
+                        height = input.readUnsignedShort(),
+                        framesPerSecond = input.readUnsignedShort(),
+                        targetBitrateBitsPerSecond = input.readInt().toLong() and 0xffff_ffffL,
+                        keyframeIntervalMillis = input.readUnsignedShort(),
+                    )
+                    BridgeMessageType.VIDEO_CHUNK -> BridgeMessage.VideoChunk(
+                        frameId = input.readInt().toLong() and 0xffff_ffffL,
+                        presentationTimestampMicros = input.readLong(),
+                        keyframe = input.readBooleanByte(),
+                        chunkIndex = input.readUnsignedShort(),
+                        chunkCount = input.readUnsignedShort(),
+                        totalFrameBytes = input.readInt().toLong() and 0xffff_ffffL,
+                        generationMicros = input.readInt().toLong() and 0xffff_ffffL,
+                        encodeMicros = input.readInt().toLong() and 0xffff_ffffL,
+                        data = input.readSizedBytes(input.available()),
+                    )
+                    BridgeMessageType.MEDIA_FEEDBACK -> BridgeMessage.MediaFeedback(
+                        lastPresentedFrameId = input.readInt().toLong() and 0xffff_ffffL,
+                        lostFrames = input.readInt().toLong() and 0xffff_ffffL,
+                        receiveBitrateBitsPerSecond = input.readInt().toLong() and 0xffff_ffffL,
+                        decodeMicros = input.readInt().toLong() and 0xffff_ffffL,
+                        presentationMicros = input.readInt().toLong() and 0xffff_ffffL,
+                        requestedBitrateBitsPerSecond = input.readInt().toLong() and 0xffff_ffffL,
+                        keyframeRequested = input.readBooleanByte(),
+                    )
+                    BridgeMessageType.MEDIA_STOP -> BridgeMessage.MediaStop(
+                        BridgeMediaStopReason.fromCode(input.readUnsignedByte()),
                     )
                 }
                 if (input.available() != 0) {

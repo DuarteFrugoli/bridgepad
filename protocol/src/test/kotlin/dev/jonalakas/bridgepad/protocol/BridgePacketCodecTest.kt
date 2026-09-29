@@ -190,6 +190,53 @@ class BridgePacketCodecTest {
     }
 
     @Test
+    fun mediaMessages_roundTripWithoutChangingInputMessages() {
+        val capabilities = BridgeCapabilities.of(BridgeCapability.VIDEO, BridgeCapability.AUDIO)
+        val messages = listOf(
+            BridgeMessage.MediaOffer(capabilities, 1280, 720, 60, 8_000_000),
+            BridgeMessage.MediaAnswer(
+                capabilities,
+                BridgeVideoCodec.RAW_RGB565,
+                320,
+                180,
+                20,
+                18_432_000,
+                1_000,
+            ),
+            BridgeMessage.MediaFeedback(8, 2, 5_000_000, 300, 700, 4_000_000, true),
+            BridgeMessage.MediaStop(BridgeMediaStopReason.USER_REQUEST),
+        )
+        messages.forEachIndexed { index, message ->
+            val packet = BridgePacket(12, index.toLong(), 99, message)
+            assertEquals(packet, BridgePacketCodec.decode(BridgePacketCodec.encode(packet)))
+        }
+
+        val chunk = BridgeMessage.VideoChunk(
+            frameId = 42,
+            presentationTimestampMicros = 123_456,
+            keyframe = true,
+            chunkIndex = 0,
+            chunkCount = 1,
+            totalFrameBytes = 4,
+            generationMicros = 120,
+            encodeMicros = 80,
+            data = byteArrayOf(1, 2, 3, 4),
+        )
+        val decoded = BridgePacketCodec.decode(
+            BridgePacketCodec.encode(BridgePacket(12, 5, 99, chunk)),
+        ).message as BridgeMessage.VideoChunk
+        assertEquals(chunk.frameId, decoded.frameId)
+        assertEquals(chunk.presentationTimestampMicros, decoded.presentationTimestampMicros)
+        assertEquals(chunk.keyframe, decoded.keyframe)
+        assertEquals(chunk.chunkIndex, decoded.chunkIndex)
+        assertEquals(chunk.chunkCount, decoded.chunkCount)
+        assertEquals(chunk.totalFrameBytes, decoded.totalFrameBytes)
+        assertEquals(chunk.generationMicros, decoded.generationMicros)
+        assertEquals(chunk.encodeMicros, decoded.encodeMicros)
+        assertArrayEquals(chunk.data, decoded.data)
+    }
+
+    @Test
     fun capabilities_supportNegotiationAndPreserveFutureBits() {
         val local = BridgeCapabilities.of(BridgeCapability.GAMEPAD, BridgeCapability.POINTER)
         val remote = BridgeCapabilities((1 shl BridgeCapability.POINTER.bit) or (1 shl 20))

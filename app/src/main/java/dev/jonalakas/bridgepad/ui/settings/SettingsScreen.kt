@@ -63,6 +63,7 @@ fun SettingsScreen(
     onOpenUsbNetworkDiagnostic: () -> Unit,
     onOpenBluetoothDesktopDiagnostic: () -> Unit,
     onOpenUsbAccessoryDiagnostic: () -> Unit,
+    onOpenSyntheticStreaming: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
@@ -211,6 +212,17 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.usb_accessory_test_open))
+                    }
+                }
+            }
+            item {
+                SettingsCard(title = stringResource(R.string.synthetic_stream_title)) {
+                    Text(stringResource(R.string.synthetic_stream_settings_description))
+                    OutlinedButton(
+                        onClick = onOpenSyntheticStreaming,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.synthetic_stream_open))
                     }
                 }
             }

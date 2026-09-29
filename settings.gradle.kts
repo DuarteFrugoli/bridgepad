@@ -25,6 +25,7 @@ dependencyResolutionManagement {
 rootProject.name = "BridgePad"
 include(":domain")
 include(":protocol")
+include(":streaming-core")
 include(":transport-bluetooth-hid")
 include(":transport-bluetooth-desktop")
 include(":transport-network")

@@ -181,4 +181,92 @@ sealed interface BridgeMessage {
             }
         }
     }
+
+    data class MediaOffer(
+        val requestedCapabilities: BridgeCapabilities,
+        val maxWidth: Int,
+        val maxHeight: Int,
+        val maxFramesPerSecond: Int,
+        val maxBitrateBitsPerSecond: Long,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.MEDIA_OFFER
+
+        init {
+            require(maxWidth in 1..0xffff)
+            require(maxHeight in 1..0xffff)
+            require(maxFramesPerSecond in 1..0xffff)
+            require(maxBitrateBitsPerSecond in 1..0xffff_ffffL)
+        }
+    }
+
+    data class MediaAnswer(
+        val enabledCapabilities: BridgeCapabilities,
+        val codec: BridgeVideoCodec,
+        val width: Int,
+        val height: Int,
+        val framesPerSecond: Int,
+        val targetBitrateBitsPerSecond: Long,
+        val keyframeIntervalMillis: Int,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.MEDIA_ANSWER
+
+        init {
+            require(width in 1..0xffff)
+            require(height in 1..0xffff)
+            require(framesPerSecond in 1..0xffff)
+            require(targetBitrateBitsPerSecond in 1..0xffff_ffffL)
+            require(keyframeIntervalMillis in 1..0xffff)
+        }
+    }
+
+    data class VideoChunk(
+        val frameId: Long,
+        val presentationTimestampMicros: Long,
+        val keyframe: Boolean,
+        val chunkIndex: Int,
+        val chunkCount: Int,
+        val totalFrameBytes: Long,
+        val generationMicros: Long,
+        val encodeMicros: Long,
+        val data: ByteArray,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.VIDEO_CHUNK
+
+        init {
+            require(frameId in 0..0xffff_ffffL)
+            require(presentationTimestampMicros >= 0)
+            require(chunkIndex in 0..0xffff)
+            require(chunkCount in 1..0xffff)
+            require(chunkIndex < chunkCount)
+            require(totalFrameBytes in 1..0xffff_ffffL)
+            require(generationMicros in 0..0xffff_ffffL)
+            require(encodeMicros in 0..0xffff_ffffL)
+            require(data.isNotEmpty())
+        }
+    }
+
+    data class MediaFeedback(
+        val lastPresentedFrameId: Long,
+        val lostFrames: Long,
+        val receiveBitrateBitsPerSecond: Long,
+        val decodeMicros: Long,
+        val presentationMicros: Long,
+        val requestedBitrateBitsPerSecond: Long,
+        val keyframeRequested: Boolean,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.MEDIA_FEEDBACK
+
+        init {
+            require(lastPresentedFrameId in 0..0xffff_ffffL)
+            require(lostFrames in 0..0xffff_ffffL)
+            require(receiveBitrateBitsPerSecond in 0..0xffff_ffffL)
+            require(decodeMicros in 0..0xffff_ffffL)
+            require(presentationMicros in 0..0xffff_ffffL)
+            require(requestedBitrateBitsPerSecond in 0..0xffff_ffffL)
+        }
+    }
+
+    data class MediaStop(val reason: BridgeMediaStopReason) : BridgeMessage {
+        override val type = BridgeMessageType.MEDIA_STOP
+    }
 }
