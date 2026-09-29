@@ -26,6 +26,11 @@ class NetworkDiscoveryEndpointTest {
         )
     }
 
+    @Test
+    fun legacyDiscoveryDefaultsMediaToThePortAfterControl() {
+        assertEquals(39_394, desktop("192.168.15.3").mediaPort)
+    }
+
     private fun desktop(host: String, alternates: List<String> = emptyList()) = DiscoveredDesktop(
         peerId = PeerId(1, 2),
         peerIdHex = "00000000000000010000000000000002",

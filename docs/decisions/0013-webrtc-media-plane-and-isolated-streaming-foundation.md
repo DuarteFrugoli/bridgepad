@@ -26,9 +26,10 @@ signalling is carried by the authenticated control plane.
 
 The current synthetic milestone deliberately does **not** pretend its TLS
 stream is the production media transport. It uses a second authenticated TLS
-connection only to validate contracts, framing, bounded queues, decoding,
-rendering and measurements before native WebRTC is integrated. No video bytes
-share the gameplay connection.
+connection on a separately advertised media port (`39394`; control/input
+remains on `39393`) only to validate contracts, framing, bounded queues,
+decoding, rendering and measurements before native WebRTC is integrated. No
+video bytes share the gameplay connection or its port.
 
 The following boundaries are stable:
 
@@ -41,8 +42,13 @@ The following boundaries are stable:
 - input and media always have different sockets, workers and bounded queues.
 
 Video queues are intentionally short. When downstream work is late, stale
-video is discarded instead of accumulating latency. Input queues and threads
-are never shared with media and therefore retain priority.
+video is discarded instead of accumulating latency. The synthetic sender drains
+to the newest encoded frame, abandons a frame after its deadline and bounds
+socket write stalls. Input queues, ports and threads are never shared with media
+and therefore retain priority. Full gamepad snapshots are refreshed at 125 Hz;
+the Desktop treats them as a short lease and neutralizes the virtual device
+after 150 ms without a valid refresh, preventing a lost connection from holding
+an axis or button indefinitely.
 
 ## Timing and feedback
 
@@ -67,6 +73,8 @@ expected to use Opus.
 - Starting or stopping video cannot create, stop or duplicate a virtual input
   device.
 - A blocked video writer can consume only its own connection worker.
+- A media-only QoS rule can exercise congestion without throttling the control
+  port and invalidating the priority test.
 - Screen capture, encoder and WebRTC dependencies can be replaced per desktop
   platform without changing the Android input stack.
 - The synthetic stream is intentionally bandwidth-heavy and must not ship as a

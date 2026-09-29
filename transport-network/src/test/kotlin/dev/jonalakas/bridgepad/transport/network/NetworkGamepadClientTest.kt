@@ -1,5 +1,8 @@
 package dev.jonalakas.bridgepad.transport.network
 
+import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
+import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
+import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.ports.PointerReport
 import org.junit.Assert.assertEquals
@@ -8,6 +11,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NetworkGamepadClientTest {
+    @Test
+    fun discreteTransitionsPreserveButtonsDpadAndTriggerEdges() {
+        val neutral = VirtualGamepadState()
+
+        assertTrue(
+            hasDiscreteTransition(
+                neutral,
+                neutral.copy(pressedButtons = setOf(VirtualControl.FACE_SOUTH)),
+            ),
+        )
+        assertTrue(
+            hasDiscreteTransition(
+                neutral,
+                neutral.copy(dpad = DpadDirection.NORTH),
+            ),
+        )
+        assertTrue(hasDiscreteTransition(neutral, neutral.copy(leftTrigger = 1f)))
+        assertFalse(hasDiscreteTransition(neutral, neutral.copy(leftStickX = 0.75f)))
+    }
+
     @Test
     fun fullPointerQueueAppliesBackpressureWithoutDiscardingAcceptedReports() {
         val client = newClient()

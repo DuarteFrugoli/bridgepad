@@ -24,7 +24,7 @@ import javax.net.ssl.SSLSocket
 data class NetworkMediaRequest(
     val host: String,
     val alternateHosts: List<String> = emptyList(),
-    val port: Int = 39_393,
+    val port: Int = 39_394,
     val certificateSha256: String,
     val credentials: NetworkCredentials,
     val maxWidth: Int = 320,

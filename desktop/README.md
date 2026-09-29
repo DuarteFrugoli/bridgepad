@@ -70,9 +70,10 @@ cargo run --release --manifest-path desktop/Cargo.toml \
   -p bridgepad-daemon
 ```
 
-It listens on TCP port `39393`, creates a persistent identity and trust store in
-`.bridgepad-dev/`, announces `_bridgepad._tcp` through DNS-SD/mDNS and prints a
-12-digit pairing code. Keep the process open, choose **PC > Wi-Fi** in the
+It listens for control/input on TCP port `39393` and diagnostic media on TCP
+port `39394`, creates a persistent identity and trust store in `.bridgepad-dev/`,
+announces both ports through `_bridgepad._tcp` DNS-SD/mDNS and prints a 12-digit
+pairing code. Keep the process open, choose **PC > Wi-Fi** in the
 Android Home and select the discovered desktop. The code is required only for
 the first pairing; following sessions mutually authenticate with the saved
 device secret. The Android copy is encrypted by Android Keystore.
@@ -81,6 +82,8 @@ Gameplay requires a paired client by default. The daemon rejects untrusted
 `SessionStart`, gamepad and pointer messages. Transient disconnects trigger
 bounded automatic reconnection in Android, and the UI distinguishes an offline
 desktop, changed identity, rejected authentication and a lost connection.
+Gamepad snapshots are renewed at 125 Hz; if they stop for 150 ms, Desktop
+neutralizes the virtual controller until a fresh snapshot arrives.
 
 List or revoke the desktop's trusted phones while the receiver is stopped:
 

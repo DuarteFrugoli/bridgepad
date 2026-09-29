@@ -85,7 +85,8 @@ class NetworkGamepadClient(
     private val stopping = AtomicBoolean(false)
     private val hasBeenActive = AtomicBoolean(false)
     private val latestState = AtomicReference(VirtualGamepadState())
-    private val pendingState = AtomicReference<VirtualGamepadState?>(VirtualGamepadState())
+    private val pendingGamepadTransitions =
+        ArrayBlockingQueue<PendingGamepadTransition>(GAMEPAD_TRANSITION_QUEUE_CAPACITY)
     private val pendingPointers = ArrayBlockingQueue<PointerReport>(POINTER_QUEUE_CAPACITY)
     private val pendingKeyboard = ArrayBlockingQueue<KeyboardInput>(KEYBOARD_QUEUE_CAPACITY)
     private val acceptedPointerReports = AtomicLong(0)
@@ -108,10 +109,19 @@ class NetworkGamepadClient(
         }
     }
 
+    @Synchronized
     fun send(state: VirtualGamepadState) {
         if (!stopping.get()) {
-            latestState.set(state)
-            pendingState.set(state)
+            val previous = latestState.getAndSet(state)
+            if (hasDiscreteTransition(previous, state)) {
+                val transition = PendingGamepadTransition(state, System.nanoTime())
+                if (!pendingGamepadTransitions.offer(transition)) {
+                    // Never build a delayed command replay. The periodic full
+                    // snapshot below will still converge to the newest state.
+                    pendingGamepadTransitions.clear()
+                    pendingGamepadTransitions.offer(transition)
+                }
+            }
         }
     }
 
@@ -193,7 +203,7 @@ class NetworkGamepadClient(
                         maximumAttempts = maximumAttempts,
                     ),
                 )
-                pendingState.set(latestState.get())
+                pendingGamepadTransitions.clear()
                 pendingPointers.clear()
                 pendingKeyboard.clear()
                 waitBeforeReconnect(
@@ -224,7 +234,7 @@ class NetworkGamepadClient(
             } catch (failure: Exception) {
                 if (stopping.get()) throw failure
                 lastFailure = failure
-                pendingState.set(latestState.get())
+                pendingGamepadTransitions.clear()
                 pendingPointers.clear()
                 pendingKeyboard.clear()
             }
@@ -278,18 +288,21 @@ class NetworkGamepadClient(
             hasBeenActive.set(true)
             onStatus(NetworkGamepadStatus.Active)
 
-            var lastSent: VirtualGamepadState? = null
+            var nextGamepadReportAt = 0L
             var lastHeartbeatAt = System.nanoTime()
             while (!stopping.get()) {
-                val next = pendingState.getAndSet(null)
-                if (next != null && next != lastSent) {
+                val loopStartedAt = System.nanoTime()
+                var sentInput = false
+                if (loopStartedAt >= nextGamepadReportAt) {
+                    val next = pollFreshGamepadTransition(loopStartedAt) ?: latestState.get()
                     sequence = writeBridgePacket(
                         connected,
                         sessionId,
                         sequence,
                         BridgeMessage.GamepadSnapshot(next),
                     )
-                    lastSent = next
+                    nextGamepadReportAt = loopStartedAt + GAMEPAD_REPORT_INTERVAL_NANOS
+                    sentInput = true
                 }
                 pendingPointers.poll()?.let { pointer ->
                     sequence = writeBridgePacket(
@@ -298,6 +311,7 @@ class NetworkGamepadClient(
                         sequence,
                         BridgeMessage.PointerFrame(pointer),
                     )
+                    sentInput = true
                 }
                 pendingKeyboard.poll()?.let { keyboard ->
                     sequence = writeBridgePacket(
@@ -306,6 +320,7 @@ class NetworkGamepadClient(
                         sequence,
                         BridgeMessage.KeyboardFrame(keyboard),
                     )
+                    sentInput = true
                 }
                 val now = System.nanoTime()
                 if (now - lastHeartbeatAt >= HEARTBEAT_INTERVAL_NANOS) {
@@ -326,7 +341,7 @@ class NetworkGamepadClient(
                     check(pong.nonce == nonce) { "Desktop changed the heartbeat nonce" }
                     lastHeartbeatAt = System.nanoTime()
                 }
-                if (next == null) Thread.sleep(IDLE_POLL_MILLIS)
+                if (!sentInput) Thread.sleep(IDLE_POLL_MILLIS)
             }
 
             sequence = writeBridgePacket(
@@ -367,8 +382,20 @@ class NetworkGamepadClient(
         )
     }
 
+    private fun pollFreshGamepadTransition(nowNanos: Long): VirtualGamepadState? {
+        while (true) {
+            val transition = pendingGamepadTransitions.poll() ?: return null
+            if (nowNanos - transition.createdAtNanos <= GAMEPAD_TRANSITION_TTL_NANOS) {
+                return transition.state
+            }
+        }
+    }
+
     private companion object {
         const val HEARTBEAT_INTERVAL_NANOS = 500_000_000L
+        const val GAMEPAD_REPORT_INTERVAL_NANOS = 8_000_000L
+        const val GAMEPAD_TRANSITION_TTL_NANOS = 100_000_000L
+        const val GAMEPAD_TRANSITION_QUEUE_CAPACITY = 64
         const val IDLE_POLL_MILLIS = 4L
         // Keep at most a short burst. A large relative-pointer backlog feels
         // like input lag after a temporary Wi-Fi stall.
@@ -378,6 +405,21 @@ class NetworkGamepadClient(
         val RECONNECT_DELAYS_MILLIS = longArrayOf(250, 500, 1_000, 1_500, 2_000)
     }
 }
+
+private data class PendingGamepadTransition(
+    val state: VirtualGamepadState,
+    val createdAtNanos: Long,
+)
+
+internal fun hasDiscreteTransition(
+    previous: VirtualGamepadState,
+    current: VirtualGamepadState,
+): Boolean = previous.pressedButtons != current.pressedButtons ||
+    previous.dpad != current.dpad ||
+    previous.leftTrigger.isPressed() != current.leftTrigger.isPressed() ||
+    previous.rightTrigger.isPressed() != current.rightTrigger.isPressed()
+
+private fun Float.isPressed(): Boolean = this > 0.01f
 
 internal fun normalizeFailureAfterActiveSession(
     failure: NetworkGamepadStatus.Failed,

@@ -797,7 +797,8 @@ This gate validates isolation and scheduling, not final image quality. RGB565
 over TLS is intentionally temporary; production media will use WebRTC.
 
 1. Pair the Android app with the graphical BridgePad Desktop and leave the
-   desktop receiver running.
+   desktop receiver running. The development build must be allowed through
+   Windows Firewall on both control TCP `39393` and media TCP `39394`.
 2. Install the current debug APK, open **Settings > Streaming foundation**,
    select the paired computer and start synthetic video.
 3. Confirm that animated color bars appear at `320 x 180`, remain fluid for at
@@ -811,6 +812,31 @@ over TLS is intentionally temporary; production media will use WebRTC.
    color bars are running. Input must remain responsive.
 7. Stop only video and confirm the existing controller remains present and
    responsive. Restart video and confirm no second controller appears.
-8. Deliberately constrain or congest the network. Frames may be discarded, but
-   input must stay responsive and video latency must recover instead of replaying
-   a stale backlog.
+8. In an elevated PowerShell, remove the obsolete process-wide policy if it was
+   used by an earlier build, then constrain only the dedicated media port:
+
+   ```powershell
+   Remove-NetQosPolicy -Name "BridgePadSyntheticCongestion" `
+     -PolicyStore ActiveStore -Confirm:$false -ErrorAction SilentlyContinue
+   New-NetQosPolicy -Name "BridgePadMediaCongestion" `
+     -IPProtocolMatchCondition TCP `
+     -IPSrcPortMatchCondition 39394 `
+     -ThrottleRateActionBitsPerSecond 2000000 `
+     -PolicyStore ActiveStore
+   ```
+
+9. Restart BridgePad Desktop after creating the policy. Start gameplay and the
+   synthetic stream together. Video may skip or pause, but every short button
+   press must arrive, axes must return to neutral and input must remain
+   responsive. Removing the rule must recover current video rather than replay a
+   stale backlog:
+
+   ```powershell
+   Remove-NetQosPolicy -Name "BridgePadMediaCongestion" `
+     -PolicyStore ActiveStore -Confirm:$false
+   ```
+
+10. While holding an axis or button, interrupt the Android network path. The
+    virtual controller must return to neutral within approximately 150 ms; it
+    must resume from the current Android state after reconnection, without
+    replaying old taps.

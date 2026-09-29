@@ -6,6 +6,7 @@ pub const SERVICE_TYPE: &str = "_bridgepad._tcp.local.";
 pub fn advertise(
     desktop_name: &str,
     port: u16,
+    media_port: u16,
     peer_id: &str,
     fingerprint: &str,
 ) -> Result<ServiceDaemon, Box<dyn std::error::Error + Send + Sync>> {
@@ -15,6 +16,7 @@ pub fn advertise(
     properties.insert("fp".to_owned(), fingerprint.to_owned());
     properties.insert("v".to_owned(), "1".to_owned());
     properties.insert("pair".to_owned(), "1".to_owned());
+    properties.insert("mp".to_owned(), media_port.to_string());
     let host_name = format!("bridgepad-{}.local.", &peer_id[..12]);
     let service = ServiceInfo::new(SERVICE_TYPE, desktop_name, &host_name, "", port, properties)?
         .enable_addr_auto();

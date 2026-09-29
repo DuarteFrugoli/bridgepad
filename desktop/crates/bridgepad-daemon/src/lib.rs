@@ -43,13 +43,20 @@ use std::time::{Duration, Instant};
 use trust::{PEER_ID_SIZE, SHARED_SECRET_SIZE, TrustStore, TrustedPeer, decode_array, encode_hex};
 
 pub const DEFAULT_ADDRESS: &str = "0.0.0.0:39393";
+pub const DEFAULT_MEDIA_ADDRESS: &str = "0.0.0.0:39394";
 pub const DEFAULT_IDENTITY_DIRECTORY: &str = ".bridgepad-dev";
+
+const GAMEPAD_WATCHDOG_TIMEOUT: Duration = Duration::from_millis(150);
+const GAMEPAD_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_millis(20);
+const MEDIA_WRITE_TIMEOUT: Duration = Duration::from_millis(100);
+const MEDIA_FRAME_DEADLINE: Duration = Duration::from_millis(150);
 
 pub type AnyError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Clone, Debug)]
 pub struct DaemonOptions {
     pub address: String,
+    pub media_address: String,
     pub identity_directory: PathBuf,
     pub desktop_name: String,
     pub allow_unpaired: bool,
@@ -59,6 +66,7 @@ impl Default for DaemonOptions {
     fn default() -> Self {
         Self {
             address: DEFAULT_ADDRESS.to_owned(),
+            media_address: DEFAULT_MEDIA_ADDRESS.to_owned(),
             identity_directory: PathBuf::from(DEFAULT_IDENTITY_DIRECTORY),
             desktop_name: default_desktop_name(),
             allow_unpaired: false,
@@ -78,6 +86,7 @@ pub struct DaemonSnapshot {
     pub desktop_id: String,
     pub certificate_fingerprint: String,
     pub listen_address: String,
+    pub media_listen_address: String,
     pub pairing_code: String,
     pub pairing_expires_in_seconds: u16,
     pub trusted_devices: Vec<TrustedDevice>,
@@ -90,6 +99,12 @@ pub struct DesktopServer {
     state: Arc<ServerState>,
     stop: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ConnectionPlane {
+    Control,
+    Media,
 }
 
 impl DesktopServer {
@@ -113,11 +128,15 @@ impl DesktopServer {
         let listener = TcpListener::bind(&options.address)?;
         listener.set_nonblocking(true)?;
         let local_address = listener.local_addr()?;
+        let media_listener = TcpListener::bind(&options.media_address)?;
+        media_listener.set_nonblocking(true)?;
+        let media_local_address = media_listener.local_addr()?;
         let state = Arc::new(ServerState {
             peer_id,
             certificate_fingerprint,
             desktop_name: options.desktop_name.clone(),
             listen_address: local_address.to_string(),
+            media_listen_address: media_local_address.to_string(),
             trust_store: Mutex::new(TrustStore::load(&options.identity_directory)?),
             pairing: Mutex::new(PairingWindow::new()?),
             allow_unpaired: options.allow_unpaired,
@@ -132,6 +151,7 @@ impl DesktopServer {
         let discovery = discovery::advertise(
             &options.desktop_name,
             local_address.port(),
+            media_local_address.port(),
             &peer_id_hex,
             &fingerprint_mdns,
         )?;
@@ -142,39 +162,27 @@ impl DesktopServer {
         let worker = thread::spawn(move || {
             let _discovery = discovery;
             while !worker_stop.load(Ordering::Relaxed) {
-                match listener.accept() {
-                    Ok((socket, _)) => {
-                        if let Ok(mut last_error) = worker_state.last_error.lock() {
-                            *last_error = None;
+                let mut accepted = false;
+                for (current_listener, plane) in [
+                    (&listener, ConnectionPlane::Control),
+                    (&media_listener, ConnectionPlane::Media),
+                ] {
+                    match current_listener.accept() {
+                        Ok((socket, _)) => {
+                            accepted = true;
+                            spawn_connection(
+                                socket,
+                                Arc::clone(&config),
+                                Arc::clone(&worker_state),
+                                plane,
+                            );
                         }
-                        let config = Arc::clone(&config);
-                        let state = Arc::clone(&worker_state);
-                        let connection_id =
-                            state.next_connection_id.fetch_add(1, Ordering::Relaxed);
-                        if let Ok(tracked_socket) = socket.try_clone()
-                            && let Ok(mut active_sockets) = state.active_sockets.lock()
-                        {
-                            active_sockets.insert(connection_id, tracked_socket);
-                        }
-                        thread::spawn(move || {
-                            let _connection = ConnectionLease::new(&state, connection_id);
-                            if let Err(error) = serve(socket, config, Arc::clone(&state)) {
-                                let message = error.to_string();
-                                eprintln!("Connection ended: {message}");
-                            }
-                        });
+                        Err(error) if error.kind() == io::ErrorKind::WouldBlock => {}
+                        Err(error) => record_accept_error(&worker_state, plane, &error),
                     }
-                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(50));
-                    }
-                    Err(error) => {
-                        let message = format!("Accept failed: {error}");
-                        eprintln!("{message}");
-                        if let Ok(mut last_error) = worker_state.last_error.lock() {
-                            *last_error = Some(message);
-                        }
-                        thread::sleep(Duration::from_millis(250));
-                    }
+                }
+                if !accepted {
+                    thread::sleep(Duration::from_millis(10));
                 }
             }
         });
@@ -205,6 +213,7 @@ impl DesktopServer {
             desktop_id: encode_hex(&self.state.peer_id),
             certificate_fingerprint: encode_fingerprint(&self.state.certificate_fingerprint),
             listen_address: self.state.listen_address.clone(),
+            media_listen_address: self.state.media_listen_address.clone(),
             pairing_code,
             pairing_expires_in_seconds,
             trusted_devices,
@@ -258,6 +267,7 @@ struct ServerState {
     certificate_fingerprint: [u8; 32],
     desktop_name: String,
     listen_address: String,
+    media_listen_address: String,
     trust_store: Mutex<TrustStore>,
     pairing: Mutex<PairingWindow>,
     allow_unpaired: bool,
@@ -295,6 +305,8 @@ struct AuthAttempt {
 pub fn run_cli() -> Result<(), AnyError> {
     install_crypto_provider();
     let address = argument("--listen").unwrap_or_else(|| DEFAULT_ADDRESS.to_owned());
+    let media_address =
+        argument("--media-listen").unwrap_or_else(|| DEFAULT_MEDIA_ADDRESS.to_owned());
     let identity_directory = argument("--identity-dir")
         .map_or_else(|| PathBuf::from(DEFAULT_IDENTITY_DIRECTORY), PathBuf::from);
     let desktop_name = argument("--name").unwrap_or_else(default_desktop_name);
@@ -326,6 +338,7 @@ pub fn run_cli() -> Result<(), AnyError> {
     drop(trust_store);
     let server = DesktopServer::start(DaemonOptions {
         address,
+        media_address,
         identity_directory,
         desktop_name,
         allow_unpaired: argument_flag("--allow-unpaired"),
@@ -336,6 +349,7 @@ pub fn run_cli() -> Result<(), AnyError> {
     println!("Desktop name: {}", snapshot.desktop_name);
     println!("Desktop ID: {}", snapshot.desktop_id);
     println!("Listening on {}", snapshot.listen_address);
+    println!("Media listening on {}", snapshot.media_listen_address);
     println!("Certificate SHA-256: {}", snapshot.certificate_fingerprint);
     println!(
         "Pairing code: {} (valid for 10 minutes)",
@@ -356,10 +370,43 @@ fn install_crypto_provider() {
     let _ = rustls::crypto::ring::default_provider().install_default();
 }
 
+fn spawn_connection(
+    socket: TcpStream,
+    config: Arc<ServerConfig>,
+    state: Arc<ServerState>,
+    plane: ConnectionPlane,
+) {
+    if let Ok(mut last_error) = state.last_error.lock() {
+        *last_error = None;
+    }
+    let connection_id = state.next_connection_id.fetch_add(1, Ordering::Relaxed);
+    if let Ok(tracked_socket) = socket.try_clone()
+        && let Ok(mut active_sockets) = state.active_sockets.lock()
+    {
+        active_sockets.insert(connection_id, tracked_socket);
+    }
+    thread::spawn(move || {
+        let _connection = ConnectionLease::new(&state, connection_id);
+        if let Err(error) = serve(socket, config, Arc::clone(&state), plane) {
+            let message = error.to_string();
+            eprintln!("{plane:?} connection ended: {message}");
+        }
+    });
+}
+
+fn record_accept_error(state: &ServerState, plane: ConnectionPlane, error: &io::Error) {
+    let message = format!("{plane:?} accept failed: {error}");
+    eprintln!("{message}");
+    if let Ok(mut last_error) = state.last_error.lock() {
+        *last_error = Some(message);
+    }
+}
+
 fn serve(
     socket: TcpStream,
     config: Arc<ServerConfig>,
     state: Arc<ServerState>,
+    plane: ConnectionPlane,
 ) -> Result<(), AnyError> {
     let peer = socket.peer_addr()?;
     // On Windows an accepted socket can inherit the listener's nonblocking
@@ -370,7 +417,7 @@ fn serve(
     socket.set_read_timeout(Some(Duration::from_secs(10)))?;
     let connection = ServerConnection::new(config)?;
     let mut stream = StreamOwned::new(connection, socket);
-    println!("TCP client connected from {peer}");
+    println!("{plane:?} TCP client connected from {peer}");
     stream.conn.complete_io(&mut stream.sock)?;
     if stream.conn.is_handshaking() {
         return Err("TLS handshake did not finish".into());
@@ -405,6 +452,9 @@ fn serve(
                 )?;
             }
             MessageType::PairRequest => {
+                if plane != ConnectionPlane::Control {
+                    return Err("pairing is only available on the control port".into());
+                }
                 println!("Pairing request received from {peer}");
                 if gamepad.is_some() || authenticated_peer.is_some() {
                     return Err("pairing is unavailable during an active session".into());
@@ -554,6 +604,9 @@ fn serve(
                 )?;
             }
             MessageType::SessionStart => {
+                if plane != ConnectionPlane::Control {
+                    return Err("gameplay is only available on the control port".into());
+                }
                 if authenticated_peer.is_none() && !state.allow_unpaired {
                     return Err("authentication is required before gameplay".into());
                 }
@@ -583,6 +636,9 @@ fn serve(
                 println!("Playable gamepad session started for {peer}");
             }
             MessageType::MediaOffer => {
+                if plane != ConnectionPlane::Media {
+                    return Err("media is only available on the media port".into());
+                }
                 if authenticated_peer.is_none() && !state.allow_unpaired {
                     return Err("authentication is required before streaming".into());
                 }
@@ -629,6 +685,7 @@ fn serve(
                     MessageType::MediaAnswer,
                     &answer,
                 )?;
+                stream.sock.set_write_timeout(Some(MEDIA_WRITE_TIMEOUT))?;
                 println!("Synthetic video stream started for {peer}");
                 return stream_synthetic_video(
                     &mut stream,
@@ -741,11 +798,22 @@ fn stream_synthetic_video(
     let pipeline = MediaPipeline::start_synthetic(format);
     let max_chunk_data = MAX_PAYLOAD_SIZE - VIDEO_CHUNK_HEADER_SIZE;
     let mut sequence = request.sequence.wrapping_add(1);
-    while let Ok(frame) = pipeline.frames.recv() {
+    while let Ok(mut frame) = pipeline.frames.recv() {
+        // A rendered stream needs the newest frame, not every historical
+        // frame. Drain producer backlog before writing to the network.
+        while let Ok(newer) = pipeline.frames.try_recv() {
+            frame = newer;
+        }
+        let frame_started = Instant::now();
         let chunk_count = frame.payload.len().div_ceil(max_chunk_data);
         let chunk_count = u16::try_from(chunk_count)?;
         let total_frame_bytes = u32::try_from(frame.payload.len())?;
         for (chunk_index, data) in frame.payload.chunks(max_chunk_data).enumerate() {
+            if frame_started.elapsed() > MEDIA_FRAME_DEADLINE {
+                // The next frame id makes the Android assembler discard this
+                // incomplete frame. Never replay stale video after congestion.
+                break;
+            }
             let payload = encode_video_chunk(VideoChunk {
                 frame_id: frame.frame_id,
                 presentation_timestamp_micros: frame.presentation_timestamp_micros,
@@ -882,7 +950,15 @@ fn to_gamepad_report(
 }
 
 struct GamepadLease {
+    shared: Arc<Mutex<GamepadWatchdogState>>,
+    stop: Arc<AtomicBool>,
+    watchdog: Option<thread::JoinHandle<()>>,
+}
+
+struct GamepadWatchdogState {
     device: Box<dyn VirtualGamepadDevice>,
+    last_update: Instant,
+    neutral: bool,
 }
 
 struct ConnectionLease<'a> {
@@ -927,20 +1003,69 @@ impl Drop for SessionLease<'_> {
 }
 
 impl GamepadLease {
-    fn new(mut device: Box<dyn VirtualGamepadDevice>) -> Result<Self, AnyError> {
+    fn new(device: Box<dyn VirtualGamepadDevice>) -> Result<Self, AnyError> {
+        Self::new_with_watchdog(
+            device,
+            GAMEPAD_WATCHDOG_TIMEOUT,
+            GAMEPAD_WATCHDOG_POLL_INTERVAL,
+        )
+    }
+
+    fn new_with_watchdog(
+        mut device: Box<dyn VirtualGamepadDevice>,
+        timeout: Duration,
+        poll_interval: Duration,
+    ) -> Result<Self, AnyError> {
         device.neutralize()?;
-        Ok(Self { device })
+        let shared = Arc::new(Mutex::new(GamepadWatchdogState {
+            device,
+            last_update: Instant::now(),
+            neutral: true,
+        }));
+        let stop = Arc::new(AtomicBool::new(false));
+        let worker_shared = Arc::clone(&shared);
+        let worker_stop = Arc::clone(&stop);
+        let watchdog = thread::spawn(move || {
+            while !worker_stop.load(Ordering::Relaxed) {
+                thread::sleep(poll_interval);
+                let Ok(mut current) = worker_shared.lock() else {
+                    return;
+                };
+                if !current.neutral && current.last_update.elapsed() >= timeout {
+                    match current.device.neutralize() {
+                        Ok(()) => current.neutral = true,
+                        Err(error) => {
+                            eprintln!("Could not neutralize stale gamepad state: {error}")
+                        }
+                    }
+                }
+            }
+        });
+        Ok(Self {
+            shared,
+            stop,
+            watchdog: Some(watchdog),
+        })
     }
 
     fn update(&mut self, report: GamepadReport) -> Result<(), AnyError> {
-        self.device.update(report)?;
+        let mut current = lock(&self.shared)?;
+        current.device.update(report)?;
+        current.last_update = Instant::now();
+        current.neutral = report == GamepadReport::default();
         Ok(())
     }
 }
 
 impl Drop for GamepadLease {
     fn drop(&mut self) {
-        if let Err(error) = self.device.shutdown() {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(watchdog) = self.watchdog.take() {
+            let _ = watchdog.join();
+        }
+        if let Ok(mut current) = self.shared.lock()
+            && let Err(error) = current.device.shutdown()
+        {
             eprintln!("Could not safely stop virtual gamepad: {error}");
         }
     }
@@ -1122,6 +1247,18 @@ fn lock<T>(mutex: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>, AnyError> {
 mod tests {
     use super::*;
     use bridgepad_protocol::GamepadSnapshot;
+    use bridgepad_virtual_device::VirtualDeviceError;
+
+    struct RecordingGamepad {
+        reports: Arc<Mutex<Vec<GamepadReport>>>,
+    }
+
+    impl VirtualGamepadDevice for RecordingGamepad {
+        fn update(&mut self, report: GamepadReport) -> Result<(), VirtualDeviceError> {
+            self.reports.lock().expect("report lock").push(report);
+            Ok(())
+        }
+    }
 
     #[test]
     fn maps_wire_snapshot_without_transport_specific_changes() {
@@ -1170,5 +1307,38 @@ mod tests {
         assert!(!is_expected_disconnect(&io::Error::from(
             io::ErrorKind::InvalidData,
         )));
+    }
+
+    #[test]
+    fn watchdog_neutralizes_a_stale_gamepad_snapshot() {
+        let reports = Arc::new(Mutex::new(Vec::new()));
+        let mut lease = GamepadLease::new_with_watchdog(
+            Box::new(RecordingGamepad {
+                reports: Arc::clone(&reports),
+            }),
+            Duration::from_millis(20),
+            Duration::from_millis(2),
+        )
+        .expect("watchdog lease");
+        lease
+            .update(GamepadReport {
+                left_x: i16::MAX,
+                ..GamepadReport::default()
+            })
+            .expect("non-neutral update");
+
+        let deadline = Instant::now() + Duration::from_millis(250);
+        loop {
+            let neutralized = reports
+                .lock()
+                .expect("report lock")
+                .last()
+                .is_some_and(|report| *report == GamepadReport::default());
+            if neutralized {
+                break;
+            }
+            assert!(Instant::now() < deadline, "watchdog did not neutralize");
+            thread::sleep(Duration::from_millis(2));
+        }
     }
 }

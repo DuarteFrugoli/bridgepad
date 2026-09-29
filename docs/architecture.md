@@ -112,8 +112,15 @@ unchanged gamepad state continuously. Session notices and foreground-notificatio
 updates occur only when slow lifecycle or capture state changes, never for each
 controller event.
 
-Wi-Fi pointer and keyboard delivery uses the same transactional producer
-contract: an input is consumed only after the bounded network queue accepts it.
+Wi-Fi gamepad delivery refreshes a complete snapshot every 8 ms (125 Hz) and
+briefly retains discrete button, D-pad and trigger transitions so a fast tap is
+not collapsed before its next report. Stale transitions are discarded rather
+than replayed after congestion. On Desktop, each snapshot renews a short input
+lease; 150 ms without a valid refresh neutralizes the virtual gamepad, and the
+next snapshot resumes it normally.
+
+Wi-Fi pointer and keyboard delivery uses a transactional producer contract: an
+input is consumed only after the bounded network queue accepts it.
 Backpressure therefore coalesces relative movement at the source while retaining
 button press/release and keyboard ordering. The pointer queue intentionally holds
 only a short burst so a temporary network stall cannot turn into a long trail of
@@ -137,10 +144,13 @@ Streaming follows the same separation rule at a stricter boundary. The
 `streaming-core` module defines capture, encode, media transport, decode,
 rendering metrics and audio contracts without depending on Android UI or a
 desktop operating system. The Rust `bridgepad-media` crate mirrors the desktop
-side and provides the bounded synthetic pipeline. Media uses a connection and
-workers separate from `NetworkGamepadClient`; bounded two-frame queues discard
-stale video under pressure, so a blocked stream cannot delay or recreate input
-devices. ADR 0013 selects WebRTC for the production media plane.
+side and provides the bounded synthetic pipeline. Control/input uses TCP
+`39393`; diagnostic media uses a separately advertised TCP `39394`, its own
+connection and its own workers. Bounded two-frame queues, newest-frame draining,
+frame deadlines and bounded socket write stalls discard stale video under
+pressure. A stress test can therefore constrain only media instead of
+artificially throttling input. ADR 0013 selects WebRTC for the production media
+plane.
 
 The setup model is a progressive dependency chain:
 

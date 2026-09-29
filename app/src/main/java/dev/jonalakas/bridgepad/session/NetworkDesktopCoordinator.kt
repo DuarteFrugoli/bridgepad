@@ -216,7 +216,7 @@ class NetworkDesktopCoordinator(
         return NetworkMediaRequest(
             host = hosts.first(),
             alternateHosts = hosts.drop(1),
-            port = discovered?.port ?: trusted.port,
+            port = discovered?.mediaPort ?: (trusted.port + 1).coerceAtMost(65_535),
             certificateSha256 = trusted.certificateSha256,
             credentials = NetworkCredentials(
                 clientPeerId = trustedStore.clientPeerId,

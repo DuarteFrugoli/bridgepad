@@ -18,6 +18,7 @@ data class DiscoveredDesktop(
     val name: String,
     val host: String,
     val port: Int,
+    val mediaPort: Int = (port + 1).coerceAtMost(65_535),
     val certificateSha256: String,
     val serviceName: String,
     val alternateHosts: List<String> = emptyList(),
@@ -227,6 +228,9 @@ class NetworkDiscoveryManager(context: Context) {
             name = service.serviceName,
             host = host,
             port = service.port,
+            mediaPort = service.optionalAttribute("mp")?.toIntOrNull()
+                ?.takeIf { it in 1..65_535 }
+                ?: (service.port + 1).coerceAtMost(65_535),
             certificateSha256 = fingerprint,
             serviceName = service.serviceName,
             alternateHosts = resolvedHosts.filterNot { it == host },
@@ -235,6 +239,9 @@ class NetworkDiscoveryManager(context: Context) {
 
     private fun NsdServiceInfo.attribute(name: String): String =
         attributes[name]?.toString(Charsets.UTF_8) ?: error("missing $name")
+
+    private fun NsdServiceInfo.optionalAttribute(name: String): String? =
+        attributes[name]?.toString(Charsets.UTF_8)
 
     private fun String.toPeerId(): PeerId {
         val bytes = chunked(2).map { it.toInt(16).toByte() }.toByteArray()
