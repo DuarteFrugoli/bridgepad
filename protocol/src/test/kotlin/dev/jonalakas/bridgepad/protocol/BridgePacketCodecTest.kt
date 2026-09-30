@@ -205,6 +205,8 @@ class BridgePacketCodecTest {
             ),
             BridgeMessage.MediaFeedback(8, 2, 5_000_000, 300, 700, 4_000_000, true),
             BridgeMessage.MediaStop(BridgeMediaStopReason.USER_REQUEST),
+            BridgeMessage.WebRtcOffer("v=0\r\n" + "a=candidate:test\r\n".repeat(300)),
+            BridgeMessage.WebRtcAnswer("v=0\r\na=sendonly\r\n"),
         )
         messages.forEachIndexed { index, message ->
             val packet = BridgePacket(12, index.toLong(), 99, message)

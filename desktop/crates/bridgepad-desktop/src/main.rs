@@ -158,7 +158,9 @@ fn main() {
             let bluetooth_server = match BluetoothDesktopServer::start() {
                 Ok(server) => Some(server),
                 Err(error) => {
-                    eprintln!("Bluetooth Desktop receiver unavailable: {error}");
+                    eprintln!(
+                        "Bluetooth Desktop receiver unavailable; Wi-Fi and USB remain available: {error}"
+                    );
                     None
                 }
             };

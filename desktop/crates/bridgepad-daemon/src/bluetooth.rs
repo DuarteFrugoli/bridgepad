@@ -54,9 +54,16 @@ mod platform {
 
     impl BluetoothDesktopServer {
         pub fn start() -> Result<Self, AnyError> {
-            let service_id = RfcommServiceId::FromUuid(RFCOMM_SERVICE_UUID)?;
-            let provider = wait(RfcommServiceProvider::CreateAsync(&service_id)?)?;
-            let listener = StreamSocketListener::new()?;
+            let service_id = RfcommServiceId::FromUuid(RFCOMM_SERVICE_UUID)
+                .map_err(|error| format!("could not create the RFCOMM service id: {error}"))?;
+            let provider_operation =
+                RfcommServiceProvider::CreateAsync(&service_id).map_err(|error| {
+                    format!("could not request the RFCOMM service provider: {error}")
+                })?;
+            let provider = wait(provider_operation)
+                .map_err(|error| format!("RFCOMM service provider is unavailable: {error}"))?;
+            let listener = StreamSocketListener::new()
+                .map_err(|error| format!("could not create the RFCOMM listener: {error}"))?;
             listener
                 .Control()?
                 .SetQualityOfService(SocketQualityOfService::LowLatency)?;
@@ -92,8 +99,18 @@ mod platform {
                     });
                     Ok(())
                 }))?;
-            wait(listener.BindServiceNameAsync(&provider.ServiceId()?.AsString()?)?)?;
-            provider.StartAdvertisingWithRadioDiscoverability(&listener, false)?;
+            let service_name = provider
+                .ServiceId()
+                .and_then(|id| id.AsString())
+                .map_err(|error| format!("could not read the RFCOMM service name: {error}"))?;
+            let bind_operation = listener
+                .BindServiceNameAsync(&service_name)
+                .map_err(|error| format!("could not bind the RFCOMM listener: {error}"))?;
+            wait(bind_operation)
+                .map_err(|error| format!("RFCOMM listener binding failed: {error}"))?;
+            provider
+                .StartAdvertisingWithRadioDiscoverability(&listener, false)
+                .map_err(|error| format!("RFCOMM advertising could not start: {error}"))?;
             println!("Bluetooth RFCOMM receiver ready");
             Ok(Self {
                 provider,

@@ -29,8 +29,8 @@ new connection methods and destinations do not change existing input adapters.
 - `:streaming-core` owns transport- and platform-independent video/audio
   contracts, frame models, decoder boundaries and pipeline metrics.
 - `:transport-network` owns the platform-independent encrypted socket client,
-  pairing/authentication exchange, bounded input sender, isolated synthetic
-  media client and reconnect policy.
+  pairing/authentication exchange, bounded input sender, authenticated WebRTC
+  signalling and reconnect policy.
   Discovery and persistence remain above it and never enter input code.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
@@ -141,16 +141,45 @@ generic Bluetooth HID profile and future Wi-Fi or USB desktop receivers can all
 target a PC while retaining independent protocol behavior.
 
 Streaming follows the same separation rule at a stricter boundary. The
-`streaming-core` module defines capture, encode, media transport, decode,
-rendering metrics and audio contracts without depending on Android UI or a
-desktop operating system. The Rust `bridgepad-media` crate mirrors the desktop
-side and provides the bounded synthetic pipeline. Control/input uses TCP
-`39393`; diagnostic media uses a separately advertised TCP `39394`, its own
-connection and its own workers. Bounded two-frame queues, newest-frame draining,
-frame deadlines and bounded socket write stalls discard stale video under
-pressure. A stress test can therefore constrain only media instead of
-artificially throttling input. ADR 0013 selects WebRTC for the production media
-plane.
+`streaming-core` module defines platform-independent media contracts. On
+Windows, `bridgepad-windows-capture` captures the primary monitor with Windows
+Graphics Capture. `bridgepad-windows-media` is the isolated safe Rust boundary
+for BridgePad's own C++ Media Foundation backend. The native backend enumerates
+only hardware H.264 MFTs, requires an asynchronous D3D11-aware transform,
+converts and scales BGRA capture textures to NV12 on the GPU, and processes the
+MFT through `METransformNeedInput`/`METransformHaveOutput`. No software fallback
+is allowed silently. This replaces the unfinished `win-native-media` allocator
+path that failed with `E_UNEXPECTED`; its end-to-end smoke and multi-GPU gates
+remain open. `bridgepad-webrtc` packetizes the Annex-B access units and sends
+them through ICE/DTLS/SRTP; RTCP receiver reports adjust the encoder bitrate
+between 500 kbps and the negotiated limit. On Android, the native WebRTC stack
+selects a MediaCodec decoder and renders directly into a `SurfaceViewRenderer`,
+without a Bitmap/CPU frame path.
+
+Control/input currently remains on TCP/TLS `39393`. TCP/TLS `39394`
+authenticates the independent media session and exchanges the complete SDP
+offer/answer, but no video frame crosses that socket. Media uses its own UDP
+sockets and workers. Capture queues are bounded and drop stale frames instead
+of accumulating delay, so congestion or stopping video cannot block, recreate
+or neutralize the input session.
+
+Media teardown is also bounded. The capture callback releases its Media
+Foundation/D3D resources before stopping Windows Graphics Capture, the WebRTC
+runtime cannot hold a daemon connection lease indefinitely, and removing a
+Wi-Fi or USB interface is classified as a normal route loss. A completed media
+session must release its connection count before another route is selected.
+
+After the real streaming path has been validated, Desktop input carried over an
+IP network will move to a separate WebRTC peer connection with purpose-specific
+data channels. Time-sensitive replaceable state (gamepad snapshots and pointer
+movement) will use unordered delivery without retransmission, while keyboard,
+text and session/control operations will remain reliable and ordered. The
+authenticated TCP/TLS plane remains responsible for pairing, authorization,
+capability negotiation and WebRTC signalling. This is not raw unauthenticated
+UDP, and it does not replace Bluetooth HID or RFCOMM. Input and media continue
+to use independent peer connections, queues and workers so media congestion
+cannot cause input head-of-line blocking. ADR 0013 records this staged
+transport decision.
 
 The setup model is a progressive dependency chain:
 

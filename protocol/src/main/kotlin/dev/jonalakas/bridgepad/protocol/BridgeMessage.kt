@@ -269,4 +269,22 @@ sealed interface BridgeMessage {
     data class MediaStop(val reason: BridgeMediaStopReason) : BridgeMessage {
         override val type = BridgeMessageType.MEDIA_STOP
     }
+
+    data class WebRtcOffer(val sdp: String) : BridgeMessage {
+        override val type = BridgeMessageType.WEBRTC_OFFER
+
+        init {
+            require(sdp.isNotEmpty())
+            require(sdp.toByteArray(Charsets.UTF_8).size <= BridgeProtocol.MAX_PAYLOAD_SIZE)
+        }
+    }
+
+    data class WebRtcAnswer(val sdp: String) : BridgeMessage {
+        override val type = BridgeMessageType.WEBRTC_ANSWER
+
+        init {
+            require(sdp.isNotEmpty())
+            require(sdp.toByteArray(Charsets.UTF_8).size <= BridgeProtocol.MAX_PAYLOAD_SIZE)
+        }
+    }
 }

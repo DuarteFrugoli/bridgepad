@@ -6,7 +6,9 @@ pub const MAGIC: u32 = 0x4250_4431;
 pub const MAJOR_VERSION: u8 = 1;
 pub const MINOR_VERSION: u8 = 0;
 pub const HEADER_SIZE: usize = 32;
-pub const MAX_PAYLOAD_SIZE: usize = 4_096;
+// Trickle ICE is intentionally avoided for the first local-network streaming
+// milestone, so a complete SDP offer/answer must fit in one protocol packet.
+pub const MAX_PAYLOAD_SIZE: usize = 16_384;
 pub const MAX_PEER_NAME_SIZE: usize = 64;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -38,6 +40,8 @@ pub enum MessageType {
     VideoChunk = 0x52,
     MediaFeedback = 0x53,
     MediaStop = 0x54,
+    WebRtcOffer = 0x55,
+    WebRtcAnswer = 0x56,
 }
 
 impl TryFrom<u8> for MessageType {
@@ -71,6 +75,8 @@ impl TryFrom<u8> for MessageType {
             0x52 => Ok(Self::VideoChunk),
             0x53 => Ok(Self::MediaFeedback),
             0x54 => Ok(Self::MediaStop),
+            0x55 => Ok(Self::WebRtcOffer),
+            0x56 => Ok(Self::WebRtcAnswer),
             _ => Err(ProtocolError::UnknownMessageType(value)),
         }
     }
@@ -247,6 +253,29 @@ pub fn encode_media_answer(
     payload.extend_from_slice(&target_bitrate_bits_per_second.to_be_bytes());
     payload.extend_from_slice(&keyframe_interval_millis.to_be_bytes());
     payload
+}
+
+pub fn decode_session_description(packet: Packet<'_>) -> Result<&str, ProtocolError> {
+    if packet.payload.is_empty() {
+        return Err(ProtocolError::InvalidPayloadLength {
+            expected: 1,
+            actual: 0,
+        });
+    }
+    std::str::from_utf8(packet.payload).map_err(|_| ProtocolError::InvalidUtf8)
+}
+
+pub fn encode_session_description(sdp: &str) -> Result<Vec<u8>, ProtocolError> {
+    if sdp.is_empty() {
+        return Err(ProtocolError::InvalidPayloadLength {
+            expected: 1,
+            actual: 0,
+        });
+    }
+    if sdp.len() > MAX_PAYLOAD_SIZE {
+        return Err(ProtocolError::PayloadTooLarge(sdp.len()));
+    }
+    Ok(sdp.as_bytes().to_vec())
 }
 
 pub const VIDEO_CHUNK_HEADER_SIZE: usize = 29;
@@ -807,6 +836,26 @@ mod tests {
         .unwrap();
         assert_eq!(payload.len(), VIDEO_CHUNK_HEADER_SIZE + 4);
         assert_eq!(&payload[VIDEO_CHUNK_HEADER_SIZE..], &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn session_description_round_trips_as_one_packet() {
+        let sdp = format!("v=0\r\n{}", "a=candidate:test\r\n".repeat(300));
+        let payload = encode_session_description(&sdp).unwrap();
+        let bytes = encode_packet(
+            PacketHeader {
+                session_id: 9,
+                sequence: 2,
+                timestamp_micros: 3,
+                message_type: MessageType::WebRtcOffer,
+            },
+            &payload,
+        )
+        .unwrap();
+
+        let packet = decode_packet(&bytes).unwrap();
+        assert_eq!(packet.header.message_type, MessageType::WebRtcOffer);
+        assert_eq!(decode_session_description(packet).unwrap(), sdp);
     }
 
     fn vector(name: &str) -> Vec<u8> {

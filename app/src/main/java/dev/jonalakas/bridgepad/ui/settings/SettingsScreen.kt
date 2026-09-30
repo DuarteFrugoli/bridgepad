@@ -63,7 +63,7 @@ fun SettingsScreen(
     onOpenUsbNetworkDiagnostic: () -> Unit,
     onOpenBluetoothDesktopDiagnostic: () -> Unit,
     onOpenUsbAccessoryDiagnostic: () -> Unit,
-    onOpenSyntheticStreaming: () -> Unit,
+    onOpenDesktopStreaming: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
@@ -219,7 +219,7 @@ fun SettingsScreen(
                 SettingsCard(title = stringResource(R.string.synthetic_stream_title)) {
                     Text(stringResource(R.string.synthetic_stream_settings_description))
                     OutlinedButton(
-                        onClick = onOpenSyntheticStreaming,
+                        onClick = onOpenDesktopStreaming,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(stringResource(R.string.synthetic_stream_open))

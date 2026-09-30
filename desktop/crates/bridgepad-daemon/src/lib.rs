@@ -10,21 +10,22 @@ use auth::{
     create_proof, derive_pairing_key, pairing_transcript, role_transcript, secure_array,
     verify_proof,
 };
-use bridgepad_media::{MediaPipeline, VideoCodec, VideoFormat};
 use bridgepad_protocol::{
     CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, CAPABILITY_VIDEO, HEADER_SIZE,
     KEYBOARD_MODIFIER_ALT, KEYBOARD_MODIFIER_CONTROL, KEYBOARD_MODIFIER_META,
     KEYBOARD_MODIFIER_SHIFT, KeyboardInput as ProtocolKeyboardInput,
     KeyboardKey as ProtocolKeyboardKey, MAX_PAYLOAD_SIZE, MAX_PEER_NAME_SIZE, MessageType,
-    PacketHeader, VIDEO_CHUNK_HEADER_SIZE, VideoChunk, decode_auth_proof, decode_auth_request,
-    decode_gamepad_snapshot, decode_keyboard, decode_media_offer, decode_packet,
-    decode_pair_request, decode_pointer, decode_session_start, encode_media_answer, encode_packet,
-    encode_video_chunk,
+    PacketHeader, decode_auth_proof, decode_auth_request, decode_gamepad_snapshot, decode_keyboard,
+    decode_media_offer, decode_packet, decode_pair_request, decode_pointer,
+    decode_session_description, decode_session_start, encode_media_answer, encode_packet,
+    encode_session_description,
 };
 use bridgepad_virtual_device::{
     DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, KeyboardModifiers, PointerReport,
     VirtualGamepadDevice, VirtualKeyboardDevice, VirtualPointerDevice,
 };
+use bridgepad_webrtc::{H264SendError, H264WebRtcSession};
+use bridgepad_windows_capture::{CaptureConfig, CaptureError, WindowsCapturePipeline};
 use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
 use bridgepad_windows_vigem::VigemGamepad;
 use rcgen::{CertifiedKey, generate_simple_self_signed};
@@ -48,8 +49,8 @@ pub const DEFAULT_IDENTITY_DIRECTORY: &str = ".bridgepad-dev";
 
 const GAMEPAD_WATCHDOG_TIMEOUT: Duration = Duration::from_millis(150);
 const GAMEPAD_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_millis(20);
-const MEDIA_WRITE_TIMEOUT: Duration = Duration::from_millis(100);
-const MEDIA_FRAME_DEADLINE: Duration = Duration::from_millis(150);
+const WEBRTC_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+const STREAM_BITRATE_UPDATE_INTERVAL: Duration = Duration::from_secs(1);
 
 pub type AnyError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -143,6 +144,7 @@ impl DesktopServer {
             connected_clients: AtomicUsize::new(0),
             active_sessions: AtomicUsize::new(0),
             active_sockets: Mutex::new(HashMap::new()),
+            active_media: Mutex::new(None),
             next_connection_id: AtomicUsize::new(1),
             last_error: Mutex::new(None),
         });
@@ -274,12 +276,18 @@ struct ServerState {
     connected_clients: AtomicUsize,
     active_sessions: AtomicUsize,
     active_sockets: Mutex<HashMap<usize, TcpStream>>,
+    active_media: Mutex<Option<ActiveMediaSession>>,
     next_connection_id: AtomicUsize,
     last_error: Mutex<Option<String>>,
 }
 
 impl ServerState {
     fn close_active_connections(&self) {
+        if let Ok(active_media) = self.active_media.lock()
+            && let Some(session) = active_media.as_ref()
+        {
+            session.cancel.store(true, Ordering::Relaxed);
+        }
         if let Ok(sockets) = self.active_sockets.lock() {
             for socket in sockets.values() {
                 let _ = socket.shutdown(Shutdown::Both);
@@ -386,8 +394,8 @@ fn spawn_connection(
         active_sockets.insert(connection_id, tracked_socket);
     }
     thread::spawn(move || {
-        let _connection = ConnectionLease::new(&state, connection_id);
-        if let Err(error) = serve(socket, config, Arc::clone(&state), plane) {
+        let _connection = ConnectionLease::new(&state, connection_id, plane);
+        if let Err(error) = serve(socket, config, Arc::clone(&state), plane, connection_id) {
             let message = error.to_string();
             eprintln!("{plane:?} connection ended: {message}");
         }
@@ -407,6 +415,7 @@ fn serve(
     config: Arc<ServerConfig>,
     state: Arc<ServerState>,
     plane: ConnectionPlane,
+    connection_id: usize,
 ) -> Result<(), AnyError> {
     let peer = socket.peer_addr()?;
     // On Windows an accepted socket can inherit the listener's nonblocking
@@ -649,30 +658,17 @@ fn serve(
                 if offer.requested_capabilities & CAPABILITY_VIDEO == 0 {
                     return Err("the client did not request the video capability".into());
                 }
-                let mut width = offer.max_width.min(320);
-                let mut height = offer.max_height.min(180);
-                let mut frames_per_second = offer.max_frames_per_second.min(20);
+                let width = offer.max_width.min(1_280);
+                let height = offer.max_height.min(720);
+                let frames_per_second = offer.max_frames_per_second.min(60);
                 if width == 0 || height == 0 || frames_per_second == 0 {
                     return Err("invalid media limits".into());
                 }
-                let maximum_bitrate = u64::from(offer.max_bitrate_bits_per_second);
-                while raw_rgb565_bitrate(width, height, frames_per_second) > maximum_bitrate
-                    && (width > 16 || height > 9)
-                {
-                    width = (width.saturating_mul(3) / 4).max(16).min(width);
-                    height = (height.saturating_mul(3) / 4).max(9).min(height);
-                }
-                let maximum_fps = maximum_bitrate / (u64::from(width) * u64::from(height) * 16);
-                frames_per_second = frames_per_second
-                    .min(u16::try_from(maximum_fps.min(u64::from(u16::MAX))).unwrap_or(u16::MAX));
-                if frames_per_second == 0 {
-                    return Err("offered bitrate is too low for diagnostic video".into());
-                }
-                let raw_bitrate = raw_rgb565_bitrate(width, height, frames_per_second);
-                let target_bitrate = u32::try_from(raw_bitrate.min(u64::from(u32::MAX)))?;
+                let maximum_bitrate = offer.max_bitrate_bits_per_second.max(500_000);
+                let target_bitrate = maximum_bitrate.min(8_000_000);
                 let answer = encode_media_answer(
                     CAPABILITY_VIDEO,
-                    0,
+                    1,
                     width,
                     height,
                     frames_per_second,
@@ -685,19 +681,24 @@ fn serve(
                     MessageType::MediaAnswer,
                     &answer,
                 )?;
-                stream.sock.set_write_timeout(Some(MEDIA_WRITE_TIMEOUT))?;
-                println!("Synthetic video stream started for {peer}");
-                return stream_synthetic_video(
+                stream
+                    .sock
+                    .set_read_timeout(Some(Duration::from_secs(20)))?;
+                let media_session = MediaSessionLease::replace(&state, connection_id)?;
+                return negotiate_and_stream_webrtc(
                     &mut stream,
                     packet.header,
-                    VideoFormat {
-                        codec: VideoCodec::RawRgb565,
-                        width,
-                        height,
-                        frames_per_second,
-                        target_bitrate_bits_per_second: target_bitrate,
+                    CaptureConfig {
+                        width: u32::from(width),
+                        height: u32::from(height),
+                        frames_per_second: u32::from(frames_per_second),
+                        bitrate_bits_per_second: target_bitrate,
+                        keyframe_interval_frames: u32::from(frames_per_second) * 2,
+                        capture_cursor: true,
                     },
+                    maximum_bitrate,
                     peer,
+                    media_session.cancel_token(),
                 );
             }
             MessageType::GamepadSnapshot => {
@@ -785,74 +786,101 @@ fn serve(
     }
 }
 
-fn raw_rgb565_bitrate(width: u16, height: u16, frames_per_second: u16) -> u64 {
-    u64::from(width) * u64::from(height) * u64::from(frames_per_second) * 16
-}
-
-fn stream_synthetic_video(
+fn negotiate_and_stream_webrtc(
     stream: &mut StreamOwned<ServerConnection, TcpStream>,
     request: PacketHeader,
-    format: VideoFormat,
+    capture_config: CaptureConfig,
+    maximum_bitrate: u32,
     peer: std::net::SocketAddr,
+    cancelled: &AtomicBool,
 ) -> Result<(), AnyError> {
-    let pipeline = MediaPipeline::start_synthetic(format);
-    let max_chunk_data = MAX_PAYLOAD_SIZE - VIDEO_CHUNK_HEADER_SIZE;
-    let mut sequence = request.sequence.wrapping_add(1);
-    while let Ok(mut frame) = pipeline.frames.recv() {
-        // A rendered stream needs the newest frame, not every historical
-        // frame. Drain producer backlog before writing to the network.
-        while let Ok(newer) = pipeline.frames.try_recv() {
-            frame = newer;
-        }
-        let frame_started = Instant::now();
-        let chunk_count = frame.payload.len().div_ceil(max_chunk_data);
-        let chunk_count = u16::try_from(chunk_count)?;
-        let total_frame_bytes = u32::try_from(frame.payload.len())?;
-        for (chunk_index, data) in frame.payload.chunks(max_chunk_data).enumerate() {
-            if frame_started.elapsed() > MEDIA_FRAME_DEADLINE {
-                // The next frame id makes the Android assembler discard this
-                // incomplete frame. Never replay stale video after congestion.
-                break;
-            }
-            let payload = encode_video_chunk(VideoChunk {
-                frame_id: frame.frame_id,
-                presentation_timestamp_micros: frame.presentation_timestamp_micros,
-                keyframe: frame.keyframe,
-                chunk_index: u16::try_from(chunk_index)?,
-                chunk_count,
-                total_frame_bytes,
-                generation_micros: frame.generation_micros,
-                encode_micros: frame.encode_micros,
-                data,
-            })?;
-            let packet = encode_packet(
-                PacketHeader {
-                    session_id: request.session_id,
-                    sequence,
-                    timestamp_micros: monotonic_micros(),
-                    message_type: MessageType::VideoChunk,
-                },
-                &payload,
-            )?;
-            if let Err(error) = stream.write_all(&packet) {
-                if is_expected_disconnect(&error) {
-                    println!("Synthetic video stream stopped for {peer}");
-                    return Ok(());
+    let Some(bytes) = read_packet(stream)? else {
+        return Err("client disconnected before sending its WebRTC offer".into());
+    };
+    let offer_packet = decode_packet(&bytes)?;
+    if offer_packet.header.session_id != request.session_id
+        || offer_packet.header.message_type != MessageType::WebRtcOffer
+    {
+        return Err("expected a WebRTC offer for the active media session".into());
+    }
+    let offer_sdp = decode_session_description(offer_packet)?;
+    let (mut webrtc, answer_sdp) = H264WebRtcSession::answer_offer(
+        offer_sdp,
+        capture_config.bitrate_bits_per_second,
+        maximum_bitrate,
+    )?;
+    write_response(
+        stream,
+        offer_packet.header,
+        MessageType::WebRtcAnswer,
+        &encode_session_description(&answer_sdp)?,
+    )?;
+    webrtc.wait_connected(WEBRTC_CONNECT_TIMEOUT)?;
+    if cancelled.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+
+    let capture = WindowsCapturePipeline::start_primary(capture_config)?;
+    let frame_duration = Duration::from_secs_f64(1.0 / f64::from(capture_config.frames_per_second));
+    let mut applied_bitrate = capture_config.bitrate_bits_per_second;
+    let mut last_bitrate_update = Instant::now();
+    println!(
+        "WebRTC stream started for {peer}: {}x{}@{} H.264, target {} kbps",
+        capture_config.width,
+        capture_config.height,
+        capture_config.frames_per_second,
+        applied_bitrate / 1_000,
+    );
+    while !webrtc.is_closed() && !cancelled.load(Ordering::Relaxed) {
+        match capture.recv_timeout(Duration::from_millis(100)) {
+            Ok(frame) => match webrtc.send_h264(frame.data, frame_duration) {
+                Ok(()) => {}
+                Err(H264SendError::NotActive) => break,
+                Err(H264SendError::Transport(error))
+                    if is_expected_media_route_disconnect(error.as_ref()) =>
+                {
+                    println!("WebRTC media route disconnected for {peer}");
+                    break;
                 }
-                return Err(error.into());
-            }
-            sequence = sequence.wrapping_add(1);
+                Err(error) => return Err(error.into()),
+            },
+            Err(CaptureError::Timeout) => {}
+            Err(error) => return Err(error.into()),
         }
-        if let Err(error) = stream.flush() {
-            if is_expected_disconnect(&error) {
-                println!("Synthetic video stream stopped for {peer}");
-                return Ok(());
+        if last_bitrate_update.elapsed() >= STREAM_BITRATE_UPDATE_INTERVAL {
+            let target = webrtc.target_bitrate_bits_per_second();
+            let difference = target.abs_diff(applied_bitrate);
+            if difference >= applied_bitrate / 10 {
+                if capture.set_target_bitrate(target).is_ok() {
+                    applied_bitrate = target;
+                    println!("WebRTC bitrate adjusted to {} kbps", target / 1_000);
+                }
             }
-            return Err(error.into());
+            last_bitrate_update = Instant::now();
         }
     }
-    println!("Synthetic video stream stopped for {peer}");
+    println!("WebRTC stream stopped for {peer}");
     Ok(())
+}
+
+fn is_expected_media_route_disconnect(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = Some(error);
+    while let Some(candidate) = current {
+        if let Some(io_error) = candidate.downcast_ref::<io::Error>()
+            && (matches!(
+                io_error.kind(),
+                io::ErrorKind::AddrNotAvailable
+                    | io::ErrorKind::BrokenPipe
+                    | io::ErrorKind::ConnectionAborted
+                    | io::ErrorKind::ConnectionReset
+                    | io::ErrorKind::NotConnected
+            ) || matches!(io_error.raw_os_error(), Some(10049 | 10053 | 10054 | 10058)))
+        {
+            return true;
+        }
+        current = candidate.source();
+    }
+    false
 }
 
 fn pair_result_payload(
@@ -964,14 +992,62 @@ struct GamepadWatchdogState {
 struct ConnectionLease<'a> {
     state: &'a ServerState,
     connection_id: usize,
+    plane: ConnectionPlane,
+}
+
+struct ActiveMediaSession {
+    connection_id: usize,
+    cancel: Arc<AtomicBool>,
+}
+
+struct MediaSessionLease {
+    state: Arc<ServerState>,
+    connection_id: usize,
+    cancel: Arc<AtomicBool>,
+}
+
+impl MediaSessionLease {
+    fn replace(state: &Arc<ServerState>, connection_id: usize) -> Result<Self, AnyError> {
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mut active = lock(&state.active_media)?;
+        if let Some(previous) = active.replace(ActiveMediaSession {
+            connection_id,
+            cancel: Arc::clone(&cancel),
+        }) {
+            previous.cancel.store(true, Ordering::Relaxed);
+        }
+        drop(active);
+        Ok(Self {
+            state: Arc::clone(state),
+            connection_id,
+            cancel,
+        })
+    }
+
+    fn cancel_token(&self) -> &AtomicBool {
+        &self.cancel
+    }
+}
+
+impl Drop for MediaSessionLease {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.state.active_media.lock()
+            && active
+                .as_ref()
+                .is_some_and(|session| session.connection_id == self.connection_id)
+        {
+            active.take();
+        }
+    }
 }
 
 impl<'a> ConnectionLease<'a> {
-    fn new(state: &'a ServerState, connection_id: usize) -> Self {
+    fn new(state: &'a ServerState, connection_id: usize, plane: ConnectionPlane) -> Self {
         state.connected_clients.fetch_add(1, Ordering::Relaxed);
         Self {
             state,
             connection_id,
+            plane,
         }
     }
 }
@@ -981,7 +1057,12 @@ impl Drop for ConnectionLease<'_> {
         if let Ok(mut sockets) = self.state.active_sockets.lock() {
             sockets.remove(&self.connection_id);
         }
-        self.state.connected_clients.fetch_sub(1, Ordering::Relaxed);
+        let previous = self.state.connected_clients.fetch_sub(1, Ordering::Relaxed);
+        println!(
+            "{:?} client disconnected ({} connection(s) remaining)",
+            self.plane,
+            previous.saturating_sub(1),
+        );
     }
 }
 
@@ -1306,6 +1387,15 @@ mod tests {
         }
         assert!(!is_expected_disconnect(&io::Error::from(
             io::ErrorKind::InvalidData,
+        )));
+    }
+
+    #[test]
+    fn removed_windows_route_is_a_normal_media_disconnect() {
+        let removed_route = io::Error::from_raw_os_error(10049);
+        assert!(is_expected_media_route_disconnect(&removed_route));
+        assert!(!is_expected_media_route_disconnect(&io::Error::from(
+            io::ErrorKind::PermissionDenied,
         )));
     }
 

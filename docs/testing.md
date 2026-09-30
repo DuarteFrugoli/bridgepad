@@ -791,52 +791,65 @@ accessory mode.
 10. Compare loss, latency, reconnection and setup steps against Wi-Fi and the
     recorded AOA attempt before closing Gate D4.
 
-### Synthetic streaming foundation
+### Windows WebRTC streaming
 
-This gate validates isolation and scheduling, not final image quality. RGB565
-over TLS is intentionally temporary; production media will use WebRTC.
-
-1. Pair the Android app with the graphical BridgePad Desktop and leave the
-   desktop receiver running. The development build must be allowed through
-   Windows Firewall on both control TCP `39393` and media TCP `39394`.
-2. Install the current debug APK, open **Settings > Streaming foundation**,
-   select the paired computer and start synthetic video.
-3. Confirm that animated color bars appear at `320 x 180`, remain fluid for at
-   least five minutes and do not build an ever-growing delay.
-4. Confirm that generation, encode, network/assembly, decode and presentation
-   metrics update independently and that received frames/bytes increase.
-5. Stop and start video ten times. The Desktop must log a clean media stop and
-   must not create an Xbox controller for a media-only connection.
-6. Start a normal Wi-Fi or USB gameplay session, return to Home without ending
-   it, open the synthetic stream from Settings and exercise `joy.cpl` while the
-   color bars are running. Input must remain responsive.
-7. Stop only video and confirm the existing controller remains present and
-   responsive. Restart video and confirm no second controller appears.
-8. In an elevated PowerShell, remove the obsolete process-wide policy if it was
-   used by an earlier build, then constrain only the dedicated media port:
+1. Pair Android with the graphical BridgePad Desktop. Allow the executable
+   through Windows Firewall for private networks; control/signalling uses TCP
+   `39393`/`39394`, while WebRTC media uses dynamically selected UDP ports.
+2. Before the end-to-end test, run from `desktop/`:
 
    ```powershell
-   Remove-NetQosPolicy -Name "BridgePadSyntheticCongestion" `
-     -PolicyStore ActiveStore -Confirm:$false -ErrorAction SilentlyContinue
-   New-NetQosPolicy -Name "BridgePadMediaCongestion" `
-     -IPProtocolMatchCondition TCP `
-     -IPSrcPortMatchCondition 39394 `
-     -ThrottleRateActionBitsPerSecond 2000000 `
-     -PolicyStore ActiveStore
+   cargo run -p bridgepad-windows-media --example encoder_probe
+   cargo run -p bridgepad-windows-media --example encode_smoke
+   cargo run -p bridgepad-windows-capture --example capture_smoke
    ```
 
-9. Restart BridgePad Desktop after creating the policy. Start gameplay and the
-   synthetic stream together. Video may skip or pause, but every short button
-   press must arrive, axes must return to neutral and input must remain
-   responsive. Removing the rule must recover current video rather than replay a
-   stale backlog:
+   The probe reports the selected MFT and whether it is asynchronous and
+   D3D11-aware. `encode_smoke` validates GPU BGRA-to-NV12 conversion, asynchronous
+   input/output events, Annex-B output, dynamic bitrate and a forced keyframe
+   without depending on screen capture. `capture_smoke` then exercises the real
+   WGC path and must report at least 180 Annex-B H.264 frames and one keyframe;
+   keep changing visible content while it runs because WGC may suppress
+   unchanged frames. Passing on one machine validates the local integration but
+   does not close the 720p60 or multi-GPU production gates.
+3. Install the debug APK, open **Settings > Desktop streaming**, select the
+   paired PC and start streaming. Confirm that the primary monitor appears at
+   `1280 x 720`, remains fluid for at least five minutes and uses the expected
+   orientation/aspect ratio.
+4. Exercise a game so the source continuously changes. Confirm approximately
+   60 fps, no steadily growing delay and no corrupted frames after scene cuts.
+5. Stop/start video ten times. No extra virtual controller may appear and a
+   media-only connection must never start or stop the input lease.
+6. Keep a Wi-Fi gameplay session active, stream video and exercise `joy.cpl` or
+   a game. Short taps must arrive, held axes must return to neutral and video
+   congestion must not make input sticky.
+7. Degrade Wi-Fi bandwidth and verify that RTCP loss reduces H.264 bitrate and
+   recovers it gradually. Stale frames must be dropped instead of replayed.
+8. Disable/re-enable Wi-Fi and close/reopen streaming. The UI must leave the
+   active state, report a useful error and recover without restarting gameplay.
+9. Repeat over USB tethering. Verify the selected ICE candidate pair uses the
+   USB subnet when Wi-Fi is also enabled; otherwise record USB streaming as not
+   yet approved.
+10. Repeat on a second Windows GPU and a second Android codec implementation
+    before closing the hardware and 720p60 gates.
 
-   ```powershell
-   Remove-NetQosPolicy -Name "BridgePadMediaCongestion" `
-     -PolicyStore ActiveStore -Confirm:$false
-   ```
+#### Reference-device result — 2026-09-30
 
-10. While holding an axis or button, interrupt the Android network path. The
-    virtual controller must return to neutral within approximately 150 ms; it
-    must resume from the current Android state after reconnection, without
-    replaying old taps.
+The current hardware-only path was validated at `1280x720@60` on the reference
+Windows PC and Samsung SM-A356E Android device. The following scenarios passed:
+
+- repeated Wi-Fi start, stop and immediate restart;
+- repeated USB-tethered start, stop and immediate restart with Wi-Fi disabled;
+- Wi-Fi to USB and USB to Wi-Fi transitions without restarting either app;
+- ICE selected the expected `192.168.15.x` Wi-Fi or `10.145.116.x` USB subnet;
+- Windows Graphics Capture and Media Foundation released cleanly between runs;
+- every completed media connection reached
+  `Media client disconnected (0 connection(s) remaining)`;
+- a subsequent session captured and streamed normally instead of inheriting a
+  stale WebRTC, encoder or UI connection state.
+
+Removing an active route can surface Windows socket errors such as `10049` while
+ICE is being torn down. These are expected route-loss events and must produce a
+normal stopped session, not a persistent Desktop error. This validation is a
+single-device milestone only; it does not replace the five-minute/soak, degraded
+network, second-GPU, second-decoder or audio checks above.

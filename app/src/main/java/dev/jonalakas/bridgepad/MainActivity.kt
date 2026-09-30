@@ -84,7 +84,7 @@ import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.UsbAccessoryDiagnosticScreen
-import dev.jonalakas.bridgepad.ui.settings.SyntheticStreamingScreen
+import dev.jonalakas.bridgepad.ui.settings.DesktopStreamingScreen
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbe
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
 import dev.jonalakas.bridgepad.transport.usb.accessory.UsbAccessoryProbe
@@ -126,7 +126,7 @@ class MainActivity : ComponentActivity() {
                 var showUsbNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showBluetoothDesktopDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showUsbAccessoryDiagnostic by rememberSaveable { mutableStateOf(false) }
-                var showSyntheticStreaming by rememberSaveable { mutableStateOf(false) }
+                var showDesktopStreaming by rememberSaveable { mutableStateOf(false) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
@@ -635,12 +635,12 @@ class MainActivity : ComponentActivity() {
                             showSettings = true
                         },
                     )
-                } else if (showSyntheticStreaming) {
-                    SyntheticStreamingScreen(
+                } else if (showDesktopStreaming) {
+                    DesktopStreamingScreen(
                         desktops = trustedDesktops,
                         requestFor = networkDesktopCoordinator::mediaRequest,
                         onBack = {
-                            showSyntheticStreaming = false
+                            showDesktopStreaming = false
                             showSettings = true
                         },
                     )
@@ -711,9 +711,9 @@ class MainActivity : ComponentActivity() {
                             showSettings = false
                             showUsbAccessoryDiagnostic = true
                         },
-                        onOpenSyntheticStreaming = {
+                        onOpenDesktopStreaming = {
                             showSettings = false
-                            showSyntheticStreaming = true
+                            showDesktopStreaming = true
                         },
                         onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
                             runCatching {

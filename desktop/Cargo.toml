@@ -9,6 +9,9 @@ members = [
     "crates/bridgepad-transport-spike",
     "crates/bridgepad-usb-spike",
     "crates/bridgepad-virtual-device",
+    "crates/bridgepad-webrtc",
+    "crates/bridgepad-windows-capture",
+    "crates/bridgepad-windows-media",
     "crates/bridgepad-windows-vigem",
     "crates/bridgepad-windows-pointer",
 ]
@@ -21,6 +24,9 @@ default-members = [
     "crates/bridgepad-transport-spike",
     "crates/bridgepad-usb-spike",
     "crates/bridgepad-virtual-device",
+    "crates/bridgepad-webrtc",
+    "crates/bridgepad-windows-capture",
+    "crates/bridgepad-windows-media",
     "crates/bridgepad-windows-vigem",
     "crates/bridgepad-windows-pointer",
 ]

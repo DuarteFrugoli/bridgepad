@@ -24,12 +24,12 @@ browser UI is not part of this decision. The existing BridgePad trust exchange
 remains the application identity and authorization boundary, while WebRTC
 signalling is carried by the authenticated control plane.
 
-The current synthetic milestone deliberately does **not** pretend its TLS
-stream is the production media transport. It uses a second authenticated TLS
-connection on a separately advertised media port (`39394`; control/input
-remains on `39393`) only to validate contracts, framing, bounded queues,
-decoding, rendering and measurements before native WebRTC is integrated. No
-video bytes share the gameplay connection or its port.
+The completed synthetic milestone deliberately did **not** pretend its TLS
+stream was the production media transport. The production Windows path now uses
+the second authenticated TLS port (`39394`; control/input remains on `39393`)
+only for authorization, capability negotiation and SDP exchange. Captured H.264
+video travels over WebRTC ICE/DTLS/SRTP UDP sockets. No video bytes share the
+gameplay connection or its port.
 
 The following boundaries are stable:
 
@@ -41,10 +41,33 @@ The following boundaries are stable:
 - audio capture, encoder, decoder and renderer are independent contracts;
 - input and media always have different sockets, workers and bounded queues.
 
+The input data plane is intentionally migrated only after the first real
+streaming implementation has been exercised. Until that gate, Desktop input on
+Wi-Fi and USB tethering continues to use authenticated TLS/TCP on `39393`, which
+keeps failures in the new capture, codec and media path separate from an input
+transport change.
+
+After that validation, IP-based Desktop input will move to its own WebRTC peer
+connection and data channels. Replaceable, latency-sensitive state such as full
+gamepad snapshots and pointer movement uses an unordered channel without
+retransmission; a newer snapshot supersedes an older one. Keyboard/text,
+non-idempotent actions and session control use a reliable ordered channel. The
+existing short gamepad lease and explicit neutral reports remain mandatory.
+Pairing, authorization, capability negotiation and WebRTC signalling stay on
+authenticated TLS/TCP. Therefore “UDP input” means authenticated WebRTC
+DataChannels over ICE/DTLS/SCTP, normally carried by UDP, not a new raw UDP
+protocol.
+
+This migration applies to Desktop connections over IP: Wi-Fi, USB tethering and
+future remote sessions. Bluetooth HID continues to send HID reports directly,
+and Bluetooth via Desktop continues to use RFCOMM unless a separate Bluetooth
+transport decision replaces it. Both Bluetooth paths must still be included in
+the regression run after the IP migration.
+
 Video queues are intentionally short. When downstream work is late, stale
-video is discarded instead of accumulating latency. The synthetic sender drains
-to the newest encoded frame, abandons a frame after its deadline and bounds
-socket write stalls. Input queues, ports and threads are never shared with media
+video is discarded instead of accumulating latency. The Windows capture adapter
+keeps at most two encoded frames and drops new stale work under backpressure.
+Input queues, ports and threads are never shared with media
 and therefore retain priority. Full gamepad snapshots are refreshed at 125 Hz;
 the Desktop treats them as a short lease and neutralizes the virtual device
 after 150 ms without a valid refresh, preventing a lost connection from holding
@@ -52,10 +75,11 @@ an axis or button indefinitely.
 
 ## Timing and feedback
 
-Capture timestamps use a monotonic clock and are relative to the stream. Wall
-clock time is never used to compare peers. The synthetic probe measures an RTT
-before starting and reports half of it as a network estimate; production WebRTC
-will use its RTP clock mapping and RTCP statistics.
+Capture timestamps use the monotonic Windows Graphics Capture clock and are
+relative to the stream. Wall clock time is never used to compare peers. WebRTC
+uses its RTP clock mapping and RTCP receiver reports. The first adaptive policy
+reduces bitrate rapidly above approximately 10% reported loss and recovers it
+slowly below approximately 2%, bounded by the negotiated 720p60 profile.
 
 Every encoded frame carries a frame identifier, presentation timestamp,
 generation duration, encode duration and keyframe flag. Receiver feedback is
@@ -64,9 +88,19 @@ presentation durations, requested bitrate and a keyframe request. Under WebRTC,
 these concepts map to RTCP loss/congestion feedback and PLI/FIR-style keyframe
 requests rather than a second proprietary feedback loop.
 
-The synthetic RGB565 source is a diagnostic format only. Production video is
-H.264 initially, decoded to an Android `Surface` with `MediaCodec`; audio is
-expected to use Opus.
+The synthetic RGB565 source remains a historical diagnostic only. Production
+video is H.264 Main profile, captured with Windows Graphics Capture and decoded
+through Android WebRTC's MediaCodec path directly to a rendering surface. The
+initial `win-native-media` hardware MFT path proved unsuitable: its own source
+marks that allocator path unfinished and it returns `E_UNEXPECTED`
+(`0x8000FFFF`) on the first frame on tested hardware. BridgePad therefore owns a
+small C++ Media Foundation backend behind a versioned C ABI and a safe Rust
+wrapper instead of migrating the whole Desktop to native libwebrtc. It requires
+an asynchronous D3D11-aware hardware MFT, performs BGRA-to-NV12 conversion on
+the GPU and follows the MFT event protocol. There is no silent software fallback.
+The implementation still must pass its end-to-end and multi-GPU gates before
+the hardware encoding and 720p60 requirements are approved. Audio is expected
+to use Opus.
 
 ## Consequences
 
@@ -77,10 +111,25 @@ expected to use Opus.
   port and invalidating the priority test.
 - Screen capture, encoder and WebRTC dependencies can be replaced per desktop
   platform without changing the Android input stack.
-- The synthetic stream is intentionally bandwidth-heavy and must not ship as a
-  user-facing streaming mode.
-- Native WebRTC integration and signalling remain required before real screen
-  streaming.
+- TLS port `39394` remains independently firewallable, but allowing that TCP
+  port alone is insufficient: local WebRTC UDP traffic must also be permitted.
+- Linux capture/encode and audio remain separate platform increments and do not
+  change the input or signalling protocol.
+- The initial TCP input implementation remains a temporary compatibility path
+  until the independent WebRTC input connection passes the complete Wi-Fi and
+  USB regression matrix.
+
+## Delivery order
+
+1. Validate the real Windows capture, H.264 and Android rendering path without
+   simultaneously changing input transport.
+2. Introduce the independent WebRTC input peer connection and its reliable and
+   time-sensitive data channels.
+3. Run the complete Bluetooth HID, Bluetooth RFCOMM, Wi-Fi, USB tethering,
+   Wi-Fi streaming and USB streaming matrix.
+4. Only after this functional baseline is stable, perform the production UX
+   redesign and remove or hide spikes, diagnostics and other development-only
+   surfaces.
 
 ## Sources
 

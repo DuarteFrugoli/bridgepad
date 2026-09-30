@@ -1,10 +1,8 @@
 package dev.jonalakas.bridgepad.ui.settings
 
-import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,7 +28,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,44 +35,54 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.session.TrustedDesktop
-import dev.jonalakas.bridgepad.streaming.DecodedVideoFrame
+import dev.jonalakas.bridgepad.streaming.AndroidWebRtcMediaClient
 import dev.jonalakas.bridgepad.streaming.MediaPipelineMetrics
-import dev.jonalakas.bridgepad.transport.network.NetworkMediaClient
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaStatus
+import org.webrtc.EglBase
+import org.webrtc.RendererCommon
+import org.webrtc.SurfaceViewRenderer
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SyntheticStreamingScreen(
+fun DesktopStreamingScreen(
     desktops: List<TrustedDesktop>,
     requestFor: (String) -> NetworkMediaRequest?,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val eglBase = remember { EglBase.create() }
+    var renderer by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(desktops.firstOrNull()?.peerIdHex) }
     var status by remember { mutableStateOf<NetworkMediaStatus>(NetworkMediaStatus.Idle) }
-    var frame by remember { mutableStateOf<DecodedVideoFrame?>(null) }
     var metrics by remember { mutableStateOf(MediaPipelineMetrics()) }
-    var client by remember { mutableStateOf<NetworkMediaClient?>(null) }
-    val image = remember(frame?.frameId) { frame?.toImageBitmap() }
+    var client by remember { mutableStateOf<AndroidWebRtcMediaClient?>(null) }
+    var sessionGeneration by remember { mutableStateOf(0L) }
+
+    fun stop() {
+        sessionGeneration += 1
+        client?.close()
+        client = null
+    }
 
     DisposableEffect(Unit) {
-        onDispose { client?.stop() }
-    }
-    LaunchedEffect(frame?.frameId) {
-        frame?.let { client?.markPresented(it.frameId) }
+        onDispose {
+            stop()
+            renderer?.release()
+            eglBase.release()
+        }
     }
     BackHandler {
-        client?.stop()
+        stop()
         onBack()
     }
     Scaffold(
@@ -85,7 +92,7 @@ fun SyntheticStreamingScreen(
                 title = { Text(stringResource(R.string.synthetic_stream_title)) },
                 navigationIcon = {
                     IconButton(onClick = {
-                        client?.stop()
+                        stop()
                         onBack()
                     }) {
                         Icon(
@@ -135,26 +142,39 @@ fun SyntheticStreamingScreen(
                 Button(
                     onClick = {
                         if (active) {
-                            client?.stop()
-                            client = null
+                            stop()
                             status = NetworkMediaStatus.Stopped
                         } else {
                             val request = selectedId?.let(requestFor)
-                            if (request == null) {
+                            val sink = renderer
+                            if (request == null || sink == null) {
                                 status = NetworkMediaStatus.Failed("trusted_desktop_unavailable")
                             } else {
-                                frame = null
                                 metrics = MediaPipelineMetrics()
-                                client = NetworkMediaClient(
-                                    request = request,
-                                    onStatus = { update -> mainHandler.post { status = update } },
-                                    onFrame = { update -> mainHandler.post { frame = update } },
-                                    onMetrics = { update -> mainHandler.post { metrics = update } },
-                                ).also(NetworkMediaClient::start)
+                                val peerId = checkNotNull(selectedId)
+                                val generation = ++sessionGeneration
+                                val created = AndroidWebRtcMediaClient(
+                                    context = context,
+                                    eglContext = eglBase.eglBaseContext,
+                                    requestProvider = { requestFor(peerId) },
+                                    videoSink = sink,
+                                    onStatus = { update ->
+                                        mainHandler.post {
+                                            if (sessionGeneration == generation) status = update
+                                        }
+                                    },
+                                    onMetrics = { update ->
+                                        mainHandler.post {
+                                            if (sessionGeneration == generation) metrics = update
+                                        }
+                                    },
+                                )
+                                client = created
+                                created.start()
                             }
                         }
                     },
-                    enabled = selectedId != null,
+                    enabled = selectedId != null && renderer != null,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(
@@ -173,14 +193,18 @@ fun SyntheticStreamingScreen(
                         .background(Color.Black),
                     contentAlignment = Alignment.Center,
                 ) {
-                    if (image != null) {
-                        Image(
-                            bitmap = image,
-                            contentDescription = stringResource(R.string.synthetic_stream_frame),
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit,
-                        )
-                    } else {
+                    AndroidView(
+                        factory = { viewContext ->
+                            SurfaceViewRenderer(viewContext).apply {
+                                init(eglBase.eglBaseContext, null)
+                                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
+                                setEnableHardwareScaler(true)
+                                renderer = this
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    if (status !is NetworkMediaStatus.Active) {
                         Text(
                             text = status.label(),
                             color = Color.White,
@@ -196,19 +220,7 @@ fun SyntheticStreamingScreen(
                             stringResource(R.string.synthetic_stream_metrics),
                             style = MaterialTheme.typography.titleMedium,
                         )
-                        Text(stringResource(R.string.synthetic_stream_generation, metrics.generationMicros))
-                        Text(stringResource(R.string.synthetic_stream_encode, metrics.encodeMicros))
                         Text(stringResource(R.string.synthetic_stream_network, metrics.networkEstimateMicros))
-                        Text(stringResource(R.string.synthetic_stream_decode, metrics.decodeMicros))
-                        Text(stringResource(R.string.synthetic_stream_present, metrics.presentationMicros))
-                        Text(
-                            stringResource(
-                                R.string.synthetic_stream_totals,
-                                metrics.receivedFrames,
-                                metrics.droppedFrames,
-                                metrics.receivedBytes,
-                            ),
-                        )
                     }
                 }
             }
@@ -228,22 +240,4 @@ private fun NetworkMediaStatus.label(): String = when (this) {
     )
     NetworkMediaStatus.Stopped -> stringResource(R.string.synthetic_stream_stopped)
     is NetworkMediaStatus.Failed -> stringResource(R.string.synthetic_stream_failed, detail)
-}
-
-private fun DecodedVideoFrame.toImageBitmap(): ImageBitmap {
-    val pixels = IntArray(width * height)
-    var source = 0
-    for (index in pixels.indices) {
-        val value = ((rgb565[source].toInt() and 0xff) shl 8) or
-            (rgb565[source + 1].toInt() and 0xff)
-        source += 2
-        val red5 = value ushr 11 and 0x1f
-        val green6 = value ushr 5 and 0x3f
-        val blue5 = value and 0x1f
-        pixels[index] = (0xff shl 24) or
-            ((red5 * 255 / 31) shl 16) or
-            ((green6 * 255 / 63) shl 8) or
-            (blue5 * 255 / 31)
-    }
-    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()
 }

@@ -223,6 +223,10 @@ class NetworkDesktopCoordinator(
                 serverPeerId = trusted.peerId,
                 sharedSecret = trusted.sharedSecret,
             ),
+            // Media startup re-resolves the discovered endpoints while routes
+            // settle. A short attempt prevents an old Wi-Fi address from
+            // blocking discovery of a newly-created USB tethering route.
+            connectTimeoutMillis = 1_000,
         )
     }
 
