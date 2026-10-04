@@ -107,7 +107,10 @@ class NetworkMediaSignalingClient(private val request: NetworkMediaRequest) : Au
             sessionId,
             sequence,
             BridgeMessage.MediaOffer(
-                requestedCapabilities = BridgeCapabilities.of(BridgeCapability.VIDEO),
+                requestedCapabilities = BridgeCapabilities.of(
+                    BridgeCapability.VIDEO,
+                    BridgeCapability.AUDIO,
+                ),
                 maxWidth = request.maxWidth,
                 maxHeight = request.maxHeight,
                 maxFramesPerSecond = request.maxFramesPerSecond,
@@ -117,6 +120,9 @@ class NetworkMediaSignalingClient(private val request: NetworkMediaRequest) : Au
         val answer = readBridgePacket(input).message as? BridgeMessage.MediaAnswer
             ?: error("Desktop did not negotiate a media stream")
         check(BridgeCapability.VIDEO in answer.enabledCapabilities)
+        check(BridgeCapability.AUDIO in answer.enabledCapabilities) {
+            "Desktop did not enable system audio"
+        }
         check(answer.codec == BridgeVideoCodec.H264) { "Desktop did not select H.264" }
 
         val preparation = NetworkMediaPreparation(

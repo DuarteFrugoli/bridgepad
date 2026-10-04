@@ -36,8 +36,8 @@ Present in the current build:
   trusted-phone revocation and system-tray behavior;
 - guided pairing, reconnection, session notices and safe shutdown;
 - live metrics and privacy-conscious diagnostic report export;
-- an isolated synthetic-video streaming foundation with per-stage metrics
-  (diagnostic only; real screen/audio streaming is not implemented yet);
+- experimental low-latency Windows-to-Android streaming with hardware H.264
+  video, WebRTC transport and Opus system audio over Wi-Fi or USB tethering;
 - English and Brazilian Portuguese interfaces;
 - unit tests, Android lint and independent debug APK builds in CI.
 
@@ -226,7 +226,7 @@ The intended order is:
 4. automate Windows installation, firewall rules and desktop credential protection;
 5. implement phone-to-PC USB without root or ADB in the normal user flow;
 6. add the Linux virtual-controller backend and packaging;
-7. add optional low-latency PC-to-phone video streaming, followed by audio.
+7. harden optional low-latency PC-to-phone video and audio streaming.
 
 Wi-Fi, Bluetooth XInput and USB require BridgePad Desktop because the computer
 must receive normalized state and create a native virtual controller. Bluetooth
@@ -244,7 +244,6 @@ public release.
 - gyroscope or accelerometer control;
 - named user layout presets;
 - analog touchscreen triggers;
-- PC-to-phone video or audio streaming;
 - multi-phone local co-op with one independent virtual-controller slot per player;
 - advanced per-game controller profiles;
 - macros or guided calibration.

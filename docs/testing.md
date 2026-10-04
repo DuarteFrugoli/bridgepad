@@ -802,6 +802,7 @@ accessory mode.
    cargo run -p bridgepad-windows-media --example encoder_probe
    cargo run -p bridgepad-windows-media --example encode_smoke
    cargo run -p bridgepad-windows-capture --example capture_smoke
+   cargo run -p bridgepad-windows-audio --example loopback_smoke
    ```
 
    The probe reports the selected MFT and whether it is asynchronous and
@@ -811,27 +812,39 @@ accessory mode.
    WGC path and must report at least 180 Annex-B H.264 frames and one keyframe;
    keep changing visible content while it runs because WGC may suppress
    unchanged frames. Passing on one machine validates the local integration but
-   does not close the 720p60 or multi-GPU production gates.
+   does not close the 720p60 or multi-GPU production gates. While
+   `loopback_smoke` runs, play audible content through the default Windows
+   output; it must capture roughly 250 Opus packets in five seconds. A silent
+   Windows endpoint may legitimately produce no loopback packets.
 3. Install the debug APK, open **Settings > Desktop streaming**, select the
    paired PC and start streaming. Confirm that the primary monitor appears at
    `1280 x 720`, remains fluid for at least five minutes and uses the expected
    orientation/aspect ratio.
 4. Exercise a game so the source continuously changes. Confirm approximately
    60 fps, no steadily growing delay and no corrupted frames after scene cuts.
-5. Stop/start video ten times. No extra virtual controller may appear and a
+   Confirm that the same game's system audio is reproduced by Android, that
+   BridgePad does not request microphone access and that changing the phone's
+   media volume controls playback normally.
+5. Compare a visible impact/menu sound with its audio for at least five minutes.
+   There must be no progressively growing audio/video offset, repeating packet,
+   audible backlog after network congestion, or audio continuing after stop.
+6. Stop/start streaming ten times. No extra virtual controller may appear and a
    media-only connection must never start or stop the input lease.
-6. Keep a Wi-Fi gameplay session active, stream video and exercise `joy.cpl` or
-   a game. Short taps must arrive, held axes must return to neutral and video
-   congestion must not make input sticky.
-7. Degrade Wi-Fi bandwidth and verify that RTCP loss reduces H.264 bitrate and
+7. Keep a Wi-Fi gameplay session active, stream video/audio and exercise
+   `joy.cpl` or a game. Short taps must arrive, held axes must return to neutral
+   and video congestion must not make input sticky.
+8. Degrade Wi-Fi bandwidth and verify that RTCP loss reduces H.264 bitrate and
    recovers it gradually. Stale frames must be dropped instead of replayed.
-8. Disable/re-enable Wi-Fi and close/reopen streaming. The UI must leave the
+9. Disable/re-enable Wi-Fi and close/reopen streaming. The UI must leave the
    active state, report a useful error and recover without restarting gameplay.
-9. Repeat over USB tethering. Verify the selected ICE candidate pair uses the
+10. Repeat over USB tethering. Verify the selected ICE candidate pair uses the
    USB subnet when Wi-Fi is also enabled; otherwise record USB streaming as not
    yet approved.
-10. Repeat on a second Windows GPU and a second Android codec implementation
-    before closing the hardware and 720p60 gates.
+11. Connect Bluetooth headphones after playback starts and then return to the
+    phone speaker. Audio must follow the Android media route without restarting
+    the Desktop or leaving an old route playing.
+12. Repeat on a second Windows GPU, playback endpoint and Android codec/audio
+    implementation before closing the hardware and 720p60 gates.
 
 #### Reference-device result — 2026-09-30
 
@@ -846,10 +859,15 @@ Windows PC and Samsung SM-A356E Android device. The following scenarios passed:
 - every completed media connection reached
   `Media client disconnected (0 connection(s) remaining)`;
 - a subsequent session captured and streamed normally instead of inheriting a
-  stale WebRTC, encoder or UI connection state.
+  stale WebRTC, encoder or UI connection state;
+- Windows system audio was captured through WASAPI loopback, encoded as stereo
+  Opus and reproduced clearly on Android alongside the real-time video on
+  04/10/2026, with no perceptible synchronization problem during the manual
+  reference-device test.
 
 Removing an active route can surface Windows socket errors such as `10049` while
 ICE is being torn down. These are expected route-loss events and must produce a
 normal stopped session, not a persistent Desktop error. This validation is a
 single-device milestone only; it does not replace the five-minute/soak, degraded
-network, second-GPU, second-decoder or audio checks above.
+network, long-duration audio/video synchronization, second-GPU, second-decoder
+or second-playback-endpoint checks above.

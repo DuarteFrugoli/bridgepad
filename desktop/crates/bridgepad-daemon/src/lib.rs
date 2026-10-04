@@ -11,9 +11,9 @@ use auth::{
     verify_proof,
 };
 use bridgepad_protocol::{
-    CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, CAPABILITY_VIDEO, HEADER_SIZE,
-    KEYBOARD_MODIFIER_ALT, KEYBOARD_MODIFIER_CONTROL, KEYBOARD_MODIFIER_META,
-    KEYBOARD_MODIFIER_SHIFT, KeyboardInput as ProtocolKeyboardInput,
+    CAPABILITY_AUDIO, CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER,
+    CAPABILITY_VIDEO, HEADER_SIZE, KEYBOARD_MODIFIER_ALT, KEYBOARD_MODIFIER_CONTROL,
+    KEYBOARD_MODIFIER_META, KEYBOARD_MODIFIER_SHIFT, KeyboardInput as ProtocolKeyboardInput,
     KeyboardKey as ProtocolKeyboardKey, MAX_PAYLOAD_SIZE, MAX_PEER_NAME_SIZE, MessageType,
     PacketHeader, decode_auth_proof, decode_auth_request, decode_gamepad_snapshot, decode_keyboard,
     decode_media_offer, decode_packet, decode_pair_request, decode_pointer,
@@ -24,7 +24,8 @@ use bridgepad_virtual_device::{
     DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, KeyboardModifiers, PointerReport,
     VirtualGamepadDevice, VirtualKeyboardDevice, VirtualPointerDevice,
 };
-use bridgepad_webrtc::{H264SendError, H264WebRtcSession};
+use bridgepad_webrtc::{MediaSendError, MediaWebRtcSession};
+use bridgepad_windows_audio::{AudioCaptureError, AudioConfig, WindowsAudioLoopback};
 use bridgepad_windows_capture::{CaptureConfig, CaptureError, WindowsCapturePipeline};
 use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
 use bridgepad_windows_vigem::VigemGamepad;
@@ -658,6 +659,9 @@ fn serve(
                 if offer.requested_capabilities & CAPABILITY_VIDEO == 0 {
                     return Err("the client did not request the video capability".into());
                 }
+                if offer.requested_capabilities & CAPABILITY_AUDIO == 0 {
+                    return Err("the client did not request the audio capability".into());
+                }
                 let width = offer.max_width.min(1_280);
                 let height = offer.max_height.min(720);
                 let frames_per_second = offer.max_frames_per_second.min(60);
@@ -667,7 +671,7 @@ fn serve(
                 let maximum_bitrate = offer.max_bitrate_bits_per_second.max(500_000);
                 let target_bitrate = maximum_bitrate.min(8_000_000);
                 let answer = encode_media_answer(
-                    CAPABILITY_VIDEO,
+                    CAPABILITY_VIDEO | CAPABILITY_AUDIO,
                     1,
                     width,
                     height,
@@ -804,7 +808,7 @@ fn negotiate_and_stream_webrtc(
         return Err("expected a WebRTC offer for the active media session".into());
     }
     let offer_sdp = decode_session_description(offer_packet)?;
-    let (mut webrtc, answer_sdp) = H264WebRtcSession::answer_offer(
+    let (mut webrtc, answer_sdp) = MediaWebRtcSession::answer_offer(
         offer_sdp,
         capture_config.bitrate_bits_per_second,
         maximum_bitrate,
@@ -821,22 +825,43 @@ fn negotiate_and_stream_webrtc(
     }
 
     let capture = WindowsCapturePipeline::start_primary(capture_config)?;
+    let audio = WindowsAudioLoopback::start(AudioConfig::default())?;
     let frame_duration = Duration::from_secs_f64(1.0 / f64::from(capture_config.frames_per_second));
     let mut applied_bitrate = capture_config.bitrate_bits_per_second;
     let mut last_bitrate_update = Instant::now();
     println!(
-        "WebRTC stream started for {peer}: {}x{}@{} H.264, target {} kbps",
+        "WebRTC stream started for {peer}: {}x{}@{} H.264 at {} kbps + 48 kHz stereo Opus",
         capture_config.width,
         capture_config.height,
         capture_config.frames_per_second,
         applied_bitrate / 1_000,
     );
-    while !webrtc.is_closed() && !cancelled.load(Ordering::Relaxed) {
-        match capture.recv_timeout(Duration::from_millis(100)) {
+    'streaming: while !webrtc.is_closed() && !cancelled.load(Ordering::Relaxed) {
+        loop {
+            match audio.try_recv() {
+                Ok(Some(frame)) => match webrtc.send_opus(frame.data, frame.duration) {
+                    Ok(()) => {}
+                    Err(MediaSendError::NotActive) => break 'streaming,
+                    Err(MediaSendError::Transport(error))
+                        if is_expected_media_route_disconnect(error.as_ref()) =>
+                    {
+                        println!("WebRTC media route disconnected for {peer}");
+                        return Ok(());
+                    }
+                    Err(error) => return Err(error.into()),
+                },
+                Ok(None) => break,
+                Err(AudioCaptureError::Disconnected) => {
+                    return Err("Windows system audio capture stopped unexpectedly".into());
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        match capture.recv_timeout(Duration::from_millis(5)) {
             Ok(frame) => match webrtc.send_h264(frame.data, frame_duration) {
                 Ok(()) => {}
-                Err(H264SendError::NotActive) => break,
-                Err(H264SendError::Transport(error))
+                Err(MediaSendError::NotActive) => break,
+                Err(MediaSendError::Transport(error))
                     if is_expected_media_route_disconnect(error.as_ref()) =>
                 {
                     println!("WebRTC media route disconnected for {peer}");

@@ -1,6 +1,7 @@
 package dev.jonalakas.bridgepad.streaming
 
 import android.content.Context
+import android.media.AudioAttributes
 import dev.jonalakas.bridgepad.streaming.MediaPipelineMetrics
 import dev.jonalakas.bridgepad.streaming.VideoFormat
 import dev.jonalakas.bridgepad.transport.network.NetworkAuthenticationException
@@ -8,6 +9,9 @@ import dev.jonalakas.bridgepad.transport.network.NetworkMediaRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaSignalingClient
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaStatus
 import org.webrtc.DataChannel
+import org.webrtc.AudioTrack
+import org.webrtc.audio.AudioDeviceModule
+import org.webrtc.audio.JavaAudioDeviceModule
 import org.webrtc.EglBase
 import org.webrtc.HardwareVideoDecoderFactory
 import org.webrtc.IceCandidate
@@ -29,7 +33,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
-/** Hardware-decoded WebRTC video rendered directly into a native Surface. */
+/** Hardware-decoded WebRTC video and system audio received from the Desktop. */
 class AndroidWebRtcMediaClient(
     context: Context,
     private val eglContext: EglBase.Context,
@@ -43,9 +47,11 @@ class AndroidWebRtcMediaClient(
     private val ended = CountDownLatch(1)
     private val iceGathered = CountDownLatch(1)
     private val attachedTrack = AtomicReference<VideoTrack?>(null)
+    private val attachedAudioTrack = AtomicReference<AudioTrack?>(null)
     @Volatile private var signaling: NetworkMediaSignalingClient? = null
     @Volatile private var peer: PeerConnection? = null
     @Volatile private var factory: PeerConnectionFactory? = null
+    @Volatile private var audioDeviceModule: AudioDeviceModule? = null
     @Volatile private var negotiatedFormat: VideoFormat? = null
 
     fun start() {
@@ -74,9 +80,19 @@ class AndroidWebRtcMediaClient(
                 // while also making that directly routable USB interface usable.
                 disableNetworkMonitor = true
             }
+            val localAudioDevice = JavaAudioDeviceModule.builder(applicationContext)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE)
+                        .build(),
+                )
+                .createAudioDeviceModule()
+            audioDeviceModule = localAudioDevice
             val localFactory = PeerConnectionFactory.builder()
                 .setOptions(factoryOptions)
                 .setVideoDecoderFactory(HardwareVideoDecoderFactory(eglContext))
+                .setAudioDeviceModule(localAudioDevice)
                 .createPeerConnectionFactory()
             factory = localFactory
             val localPeer = checkNotNull(
@@ -88,6 +104,12 @@ class AndroidWebRtcMediaClient(
             peer = localPeer
             localPeer.addTransceiver(
                 MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO,
+                RtpTransceiver.RtpTransceiverInit(
+                    RtpTransceiver.RtpTransceiverDirection.RECV_ONLY,
+                ),
+            )
+            localPeer.addTransceiver(
+                MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
                 RtpTransceiver.RtpTransceiverInit(
                     RtpTransceiver.RtpTransceiverDirection.RECV_ONLY,
                 ),
@@ -208,9 +230,17 @@ class AndroidWebRtcMediaClient(
     }
 
     private fun attach(track: MediaStreamTrack?) {
-        val video = track as? VideoTrack ?: return
-        attachedTrack.getAndSet(video)?.removeSink(videoSink)
-        video.addSink(videoSink)
+        when (track) {
+            is VideoTrack -> {
+                attachedTrack.getAndSet(track)?.removeSink(videoSink)
+                track.addSink(videoSink)
+            }
+            is AudioTrack -> {
+                attachedAudioTrack.getAndSet(track)?.setEnabled(false)
+                track.setEnabled(true)
+                track.setVolume(1.0)
+            }
+        }
     }
 
     private fun createOffer(peer: PeerConnection): SessionDescription {
@@ -239,12 +269,15 @@ class AndroidWebRtcMediaClient(
 
     private fun releaseNativeObjects() {
         attachedTrack.getAndSet(null)?.removeSink(videoSink)
+        attachedAudioTrack.getAndSet(null)?.setEnabled(false)
         signaling?.close()
         signaling = null
         peer?.dispose()
         peer = null
         factory?.dispose()
         factory = null
+        audioDeviceModule?.release()
+        audioDeviceModule = null
     }
 
     private class SdpOperation : SdpObserver {

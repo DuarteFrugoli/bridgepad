@@ -154,7 +154,13 @@ remain open. `bridgepad-webrtc` packetizes the Annex-B access units and sends
 them through ICE/DTLS/SRTP; RTCP receiver reports adjust the encoder bitrate
 between 500 kbps and the negotiated limit. On Android, the native WebRTC stack
 selects a MediaCodec decoder and renders directly into a `SurfaceViewRenderer`,
-without a Bitmap/CPU frame path.
+without a Bitmap/CPU frame path. `bridgepad-windows-audio` independently opens
+the default Windows playback endpoint through WASAPI loopback, converts it to
+48 kHz stereo float in shared mode and encodes 20 ms Opus packets at 128 kbps.
+Its bounded queue feeds a separate WebRTC audio track, so audio capture and
+encoding cannot block the H.264 capture callback or the input session. Android
+receives that track through WebRTC's audio device module using media playback
+attributes; BridgePad never opens the phone microphone for desktop streaming.
 
 Control/input currently remains on TCP/TLS `39393`. TCP/TLS `39394`
 authenticates the independent media session and exchanges the complete SDP

@@ -99,8 +99,11 @@ wrapper instead of migrating the whole Desktop to native libwebrtc. It requires
 an asynchronous D3D11-aware hardware MFT, performs BGRA-to-NV12 conversion on
 the GPU and follows the MFT event protocol. There is no silent software fallback.
 The implementation still must pass its end-to-end and multi-GPU gates before
-the hardware encoding and 720p60 requirements are approved. Audio is expected
-to use Opus.
+the hardware encoding and 720p60 requirements are approved. Windows system
+audio is captured independently through WASAPI loopback and encoded as 48 kHz
+stereo Opus in 20 ms packets. It travels as a second track in the same media
+peer connection and is reproduced through Android's media audio route. Audio
+and video share neither capture workers nor queues with input.
 
 ## Consequences
 

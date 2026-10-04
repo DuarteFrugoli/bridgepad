@@ -1,4 +1,4 @@
-//! H.264 WebRTC sender for `BridgePad`.
+//! H.264 and Opus WebRTC sender for `BridgePad`.
 //!
 //! Media uses ICE/DTLS/SRTP over UDP. Signalling and input intentionally stay
 //! outside this crate so video congestion cannot block controller reports.
@@ -12,7 +12,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::mpsc::{Receiver, channel};
 use webrtc::api::APIBuilder;
 use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MIME_TYPE_H264, MediaEngine};
+use webrtc::api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MediaEngine};
 use webrtc::ice_transport::ice_connection_state::RTCIceConnectionState;
 use webrtc::ice_transport::ice_gathering_state::RTCIceGatheringState;
 use webrtc::media::Sample;
@@ -29,6 +29,9 @@ use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSampl
 
 const H264_CLOCK_RATE: u32 = 90_000;
 const H264_PAYLOAD_TYPE: u8 = 102;
+const OPUS_CLOCK_RATE: u32 = 48_000;
+const OPUS_CHANNELS: u16 = 2;
+const OPUS_PAYLOAD_TYPE: u8 = 111;
 const MIN_BITRATE_BITS_PER_SECOND: u32 = 500_000;
 const PEER_CLOSE_TIMEOUT: Duration = Duration::from_secs(2);
 const RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
@@ -36,12 +39,12 @@ const RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(500);
 pub type AnyError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug)]
-pub enum H264SendError {
+pub enum MediaSendError {
     NotActive,
     Transport(AnyError),
 }
 
-impl std::fmt::Display for H264SendError {
+impl std::fmt::Display for MediaSendError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotActive => formatter.write_str("WebRTC connection is not active"),
@@ -50,7 +53,7 @@ impl std::fmt::Display for H264SendError {
     }
 }
 
-impl std::error::Error for H264SendError {
+impl std::error::Error for MediaSendError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             Self::NotActive => None,
@@ -59,13 +62,14 @@ impl std::error::Error for H264SendError {
     }
 }
 
-pub struct H264WebRtcSession {
+pub struct MediaWebRtcSession {
     // Tokio's ordinary Runtime::drop waits forever for blocking work. WebRTC
     // dependencies may leave such work behind while a route disappears, so
     // session teardown must consume the runtime with a bounded shutdown.
     runtime: Option<Runtime>,
     peer: Arc<RTCPeerConnection>,
-    track: Arc<TrackLocalStaticSample>,
+    video_track: Arc<TrackLocalStaticSample>,
+    audio_track: Arc<TrackLocalStaticSample>,
     connected: Arc<AtomicBool>,
     closed: Arc<AtomicBool>,
     ice_state: Arc<AtomicU8>,
@@ -73,7 +77,7 @@ pub struct H264WebRtcSession {
     connected_rx: Receiver<()>,
 }
 
-impl H264WebRtcSession {
+impl MediaWebRtcSession {
     /// Creates an answerer for a complete, non-trickle ICE offer.
     ///
     /// # Errors
@@ -93,26 +97,26 @@ impl H264WebRtcSession {
         let maximum = maximum_bitrate_bits_per_second.max(MIN_BITRATE_BITS_PER_SECOND);
         let initial = initial_bitrate_bits_per_second.clamp(MIN_BITRATE_BITS_PER_SECOND, maximum);
         let parts = runtime.block_on(Self::answer_offer_async(offer_sdp, initial, maximum));
-        let (peer, track, connected, closed, ice_state, target_bitrate, connected_rx, answer_sdp) =
-            match parts {
-                Ok(parts) => parts,
-                Err(error) => {
-                    runtime.shutdown_timeout(RUNTIME_SHUTDOWN_TIMEOUT);
-                    return Err(error);
-                }
-            };
+        let parts = match parts {
+            Ok(parts) => parts,
+            Err(error) => {
+                runtime.shutdown_timeout(RUNTIME_SHUTDOWN_TIMEOUT);
+                return Err(error);
+            }
+        };
         Ok((
             Self {
                 runtime: Some(runtime),
-                peer,
-                track,
-                connected,
-                closed,
-                ice_state,
-                target_bitrate,
-                connected_rx,
+                peer: parts.peer,
+                video_track: parts.video_track,
+                audio_track: parts.audio_track,
+                connected: parts.connected,
+                closed: parts.closed,
+                ice_state: parts.ice_state,
+                target_bitrate: parts.target_bitrate,
+                connected_rx: parts.connected_rx,
             },
-            answer_sdp,
+            parts.answer_sdp,
         ))
     }
 
@@ -129,6 +133,14 @@ impl H264WebRtcSession {
                 ..Default::default()
             },
             RTPCodecType::Video,
+        )?;
+        media_engine.register_codec(
+            RTCRtpCodecParameters {
+                capability: opus_capability(),
+                payload_type: OPUS_PAYLOAD_TYPE,
+                ..Default::default()
+            },
+            RTPCodecType::Audio,
         )?;
         let registry = register_default_interceptors(
             webrtc::interceptor::registry::Registry::new(),
@@ -173,24 +185,36 @@ impl H264WebRtcSession {
             Box::pin(async {})
         }));
 
-        let track = Arc::new(TrackLocalStaticSample::new(
+        let video_track = Arc::new(TrackLocalStaticSample::new(
             h264_capability(),
             "bridgepad-primary-monitor".to_owned(),
             "bridgepad-stream".to_owned(),
         ));
-        let sender = peer
-            .add_track(Arc::clone(&track) as Arc<dyn TrackLocal + Send + Sync>)
+        let video_sender = peer
+            .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
             .await?;
-        sender
+        video_sender
             .transport()
             .ice_transport()
             .on_selected_candidate_pair_change(Box::new(move |pair| {
                 println!("WebRTC selected ICE candidate pair: {pair}");
                 Box::pin(async {})
             }));
+        let audio_track = Arc::new(TrackLocalStaticSample::new(
+            opus_capability(),
+            "bridgepad-system-audio".to_owned(),
+            "bridgepad-stream".to_owned(),
+        ));
+        let audio_sender = peer
+            .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
+            .await?;
+        tokio::spawn(async move {
+            let mut rtcp = vec![0_u8; 1_500];
+            while audio_sender.read(&mut rtcp).await.is_ok() {}
+        });
         let target_bitrate = Arc::new(AtomicU32::new(initial_bitrate));
         tokio::spawn(adapt_bitrate_from_receiver_reports(
-            sender,
+            video_sender,
             Arc::clone(&target_bitrate),
             maximum_bitrate,
         ));
@@ -211,16 +235,17 @@ impl H264WebRtcSession {
             .sdp;
         print_ice_candidates("Desktop answer", &answer_sdp);
 
-        Ok((
+        Ok(SessionParts {
             peer,
-            track,
+            video_track,
+            audio_track,
             connected,
             closed,
             ice_state,
             target_bitrate,
             connected_rx,
             answer_sdp,
-        ))
+        })
     }
 
     /// Waits until ICE/DTLS reaches the connected state.
@@ -249,19 +274,41 @@ impl H264WebRtcSession {
     ///
     /// Returns an error when the peer is not connected or RTP packetization
     /// cannot accept the sample.
-    pub fn send_h264(&self, data: Vec<u8>, duration: Duration) -> Result<(), H264SendError> {
+    pub fn send_h264(&self, data: Vec<u8>, duration: Duration) -> Result<(), MediaSendError> {
         if !self.connected.load(Ordering::Relaxed) || self.closed.load(Ordering::Relaxed) {
-            return Err(H264SendError::NotActive);
+            return Err(MediaSendError::NotActive);
         }
         self.runtime
             .as_ref()
             .expect("WebRTC runtime is active")
-            .block_on(self.track.write_sample(&Sample {
+            .block_on(self.video_track.write_sample(&Sample {
                 data: Bytes::from(data),
                 duration,
                 ..Default::default()
             }))
-            .map_err(|error| H264SendError::Transport(Box::new(error)))?;
+            .map_err(|error| MediaSendError::Transport(Box::new(error)))?;
+        Ok(())
+    }
+
+    /// Writes one encoded 48 kHz stereo Opus packet to the WebRTC audio track.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the peer is not connected or RTP packetization
+    /// cannot accept the sample.
+    pub fn send_opus(&self, data: Vec<u8>, duration: Duration) -> Result<(), MediaSendError> {
+        if !self.connected.load(Ordering::Relaxed) || self.closed.load(Ordering::Relaxed) {
+            return Err(MediaSendError::NotActive);
+        }
+        self.runtime
+            .as_ref()
+            .expect("WebRTC runtime is active")
+            .block_on(self.audio_track.write_sample(&Sample {
+                data: Bytes::from(data),
+                duration,
+                ..Default::default()
+            }))
+            .map_err(|error| MediaSendError::Transport(Box::new(error)))?;
         Ok(())
     }
 
@@ -287,7 +334,7 @@ fn wait_for_connection(
     }
 }
 
-impl Drop for H264WebRtcSession {
+impl Drop for MediaWebRtcSession {
     fn drop(&mut self) {
         let Some(runtime) = self.runtime.take() else {
             return;
@@ -324,16 +371,27 @@ fn h264_capability() -> RTCRtpCodecCapability {
     }
 }
 
-type SessionParts = (
-    Arc<RTCPeerConnection>,
-    Arc<TrackLocalStaticSample>,
-    Arc<AtomicBool>,
-    Arc<AtomicBool>,
-    Arc<AtomicU8>,
-    Arc<AtomicU32>,
-    Receiver<()>,
-    String,
-);
+fn opus_capability() -> RTCRtpCodecCapability {
+    RTCRtpCodecCapability {
+        mime_type: MIME_TYPE_OPUS.to_owned(),
+        clock_rate: OPUS_CLOCK_RATE,
+        channels: OPUS_CHANNELS,
+        sdp_fmtp_line: "minptime=10;useinbandfec=1;stereo=1;sprop-stereo=1".to_owned(),
+        rtcp_feedback: vec![],
+    }
+}
+
+struct SessionParts {
+    peer: Arc<RTCPeerConnection>,
+    video_track: Arc<TrackLocalStaticSample>,
+    audio_track: Arc<TrackLocalStaticSample>,
+    connected: Arc<AtomicBool>,
+    closed: Arc<AtomicBool>,
+    ice_state: Arc<AtomicU8>,
+    target_bitrate: Arc<AtomicU32>,
+    connected_rx: Receiver<()>,
+    answer_sdp: String,
+}
 
 fn print_ice_candidates(label: &str, sdp: &str) {
     let candidates = ice_candidate_summaries(sdp);
@@ -455,5 +513,13 @@ mod tests {
             ice_candidate_summaries(sdp),
             vec!["UDP host [10.145.116.81]:39061"]
         );
+    }
+
+    #[test]
+    fn opus_profile_matches_android_webrtc() {
+        let capability = opus_capability();
+        assert_eq!(capability.mime_type, MIME_TYPE_OPUS);
+        assert_eq!(capability.clock_rate, 48_000);
+        assert_eq!(capability.channels, 2);
     }
 }
