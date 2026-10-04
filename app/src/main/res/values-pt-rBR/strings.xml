@@ -1,5 +1,5 @@
 <resources>
-    <string name="complete_session_setup">Escolha destino, conexão, dispositivo e entrada para liberar Conectar e jogar.</string>
+    <string name="complete_session_setup">Conclua as escolhas acima para liberar a sessão.</string>
     <string name="enable_bluetooth">Ligar Bluetooth</string>
     <string name="bluetooth_destination_off">Ligue o Bluetooth para ver os PCs pareados e escolher onde conectar.</string>
     <string name="bluetooth_destination_permission">Permita o acesso ao Bluetooth para carregar os PCs pareados antes de escolher um destino.</string>
@@ -89,9 +89,21 @@
     <string name="session_active">Sessão em andamento</string>
     <string name="home_title">Vamos jogar?</string>
     <string name="home_description">Escolha onde jogar, como conectar e quais controles usar.</string>
-    <string name="step_input">Controles</string>
-    <string name="step_transport">2 · Conexão</string>
-    <string name="step_destination">1 · Destino</string>
+    <string name="step_play_mode">1 · Modo de jogo</string>
+    <string name="step_destination">2 · Destino</string>
+    <string name="step_transport">3 · Conexão</string>
+    <string name="step_input">4 · Controles</string>
+    <string name="step_streaming_transport">2 · Conexão</string>
+    <string name="step_streaming_input">3 · Controle</string>
+    <string name="play_mode_controller">Usar o celular como controle</string>
+    <string name="play_mode_streaming">Fazer streaming e jogar no celular</string>
+    <string name="play_mode_description">O streaming envia a tela e o áudio do PC ao celular enquanto os inputs usam uma conexão independente.</string>
+    <string name="streaming_physical_controller_required">Conecte um controle físico para continuar.</string>
+    <string name="streaming_virtual_controller_later">Controle virtual — próxima etapa</string>
+    <string name="start_streaming_session">Iniciar sessão com streaming</string>
+    <string name="open_streaming_session">Abrir streaming em tela cheia</string>
+    <string name="streaming_gameplay_connecting">Conectando vídeo e áudio…</string>
+    <string name="streaming_gameplay_stopped">Streaming encerrado. Use Voltar do Android para retornar.</string>
     <string name="destination_pc">PC · Windows ou Linux</string>
     <string name="wifi_label">Wi-Fi</string>
     <string name="usb_connection_label">Cabo USB</string>
@@ -394,9 +406,9 @@
     <string name="synthetic_stream_metrics">Métricas do pipeline</string>
     <string name="synthetic_stream_generation">Geração: %1$d µs</string>
     <string name="synthetic_stream_encode">Encode: %1$d µs</string>
-    <string name="synthetic_stream_network">Estimativa do RTT de sinalização: %1$d µs em um sentido</string>
-    <string name="synthetic_stream_decode">Decode: %1$d µs</string>
-    <string name="synthetic_stream_present">Apresentação: %1$d µs</string>
+    <string name="synthetic_stream_network">Rede WebRTC estimada: %1$d µs em um sentido</string>
+    <string name="synthetic_stream_decode">Decodificação por hardware média: %1$d µs</string>
+    <string name="synthetic_stream_present">Buffer de jitter médio: %1$d µs</string>
     <string name="synthetic_stream_totals">Quadros: %1$d recebidos, %2$d descartados · %3$d bytes</string>
     <string name="synthetic_stream_idle">Pronto para iniciar</string>
     <string name="synthetic_stream_connecting">Conectando ao BridgePad Desktop…</string>

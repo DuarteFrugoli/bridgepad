@@ -10,6 +10,7 @@ repository.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 bridgepad-windows-media = { path = "../bridgepad-windows-media" }
+windows = { version = "0.62.2", features = ["Graphics_Capture"] }
 windows-capture = "=2.0.1"
 
 [lints]

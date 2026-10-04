@@ -4,11 +4,13 @@
 //! outside this crate so video congestion cannot block controller reports.
 
 use bytes::Bytes;
+use rtcp::payload_feedbacks::full_intra_request::FullIntraRequest;
+use rtcp::payload_feedbacks::picture_loss_indication::PictureLossIndication;
 use rtcp::receiver_report::ReceiverReport;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering};
-use std::time::Duration;
-use tokio::runtime::Runtime;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::runtime::{Handle, Runtime};
 use tokio::sync::mpsc::{Receiver, channel};
 use webrtc::api::APIBuilder;
 use webrtc::api::interceptor_registry::register_default_interceptors;
@@ -74,7 +76,41 @@ pub struct MediaWebRtcSession {
     closed: Arc<AtomicBool>,
     ice_state: Arc<AtomicU8>,
     target_bitrate: Arc<AtomicU32>,
+    receiver_feedback: Arc<ReceiverFeedback>,
     connected_rx: Receiver<()>,
+}
+
+#[derive(Debug, Default)]
+struct ReceiverFeedback {
+    keyframe_requested: AtomicBool,
+    fraction_lost: AtomicU8,
+    rtt_micros: AtomicU32,
+    jitter_micros: AtomicU32,
+    sender_queue_micros: AtomicU32,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct MediaTransportMetrics {
+    pub fraction_lost: u8,
+    pub round_trip_micros: u32,
+    pub jitter_micros: u32,
+    pub sender_queue_micros: u32,
+}
+
+#[derive(Clone)]
+pub struct MediaVideoSender {
+    runtime: Handle,
+    track: Arc<TrackLocalStaticSample>,
+    connected: Arc<AtomicBool>,
+    closed: Arc<AtomicBool>,
+}
+
+#[derive(Clone)]
+pub struct MediaAudioSender {
+    runtime: Handle,
+    track: Arc<TrackLocalStaticSample>,
+    connected: Arc<AtomicBool>,
+    closed: Arc<AtomicBool>,
 }
 
 impl MediaWebRtcSession {
@@ -114,6 +150,7 @@ impl MediaWebRtcSession {
                 closed: parts.closed,
                 ice_state: parts.ice_state,
                 target_bitrate: parts.target_bitrate,
+                receiver_feedback: parts.receiver_feedback,
                 connected_rx: parts.connected_rx,
             },
             parts.answer_sdp,
@@ -185,38 +222,14 @@ impl MediaWebRtcSession {
             Box::pin(async {})
         }));
 
-        let video_track = Arc::new(TrackLocalStaticSample::new(
-            h264_capability(),
-            "bridgepad-primary-monitor".to_owned(),
-            "bridgepad-stream".to_owned(),
-        ));
-        let video_sender = peer
-            .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
-            .await?;
-        video_sender
-            .transport()
-            .ice_transport()
-            .on_selected_candidate_pair_change(Box::new(move |pair| {
-                println!("WebRTC selected ICE candidate pair: {pair}");
-                Box::pin(async {})
-            }));
-        let audio_track = Arc::new(TrackLocalStaticSample::new(
-            opus_capability(),
-            "bridgepad-system-audio".to_owned(),
-            "bridgepad-stream".to_owned(),
-        ));
-        let audio_sender = peer
-            .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
-            .await?;
-        tokio::spawn(async move {
-            let mut rtcp = vec![0_u8; 1_500];
-            while audio_sender.read(&mut rtcp).await.is_ok() {}
-        });
+        let (video_track, audio_track, video_sender) = add_media_tracks(&peer).await?;
         let target_bitrate = Arc::new(AtomicU32::new(initial_bitrate));
-        tokio::spawn(adapt_bitrate_from_receiver_reports(
+        let receiver_feedback = Arc::new(ReceiverFeedback::default());
+        tokio::spawn(observe_receiver_feedback(
             video_sender,
             Arc::clone(&target_bitrate),
             maximum_bitrate,
+            Arc::clone(&receiver_feedback),
         ));
 
         print_ice_candidates("Android offer", offer_sdp);
@@ -243,6 +256,7 @@ impl MediaWebRtcSession {
             closed,
             ice_state,
             target_bitrate,
+            receiver_feedback,
             connected_rx,
             answer_sdp,
         })
@@ -253,6 +267,10 @@ impl MediaWebRtcSession {
     /// # Errors
     ///
     /// Returns an error when the peer closes or the supplied timeout expires.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if called after this session has already been dropped.
     pub fn wait_connected(&mut self, timeout: Duration) -> Result<(), AnyError> {
         if self.connected.load(Ordering::Relaxed) {
             return Ok(());
@@ -275,19 +293,7 @@ impl MediaWebRtcSession {
     /// Returns an error when the peer is not connected or RTP packetization
     /// cannot accept the sample.
     pub fn send_h264(&self, data: Vec<u8>, duration: Duration) -> Result<(), MediaSendError> {
-        if !self.connected.load(Ordering::Relaxed) || self.closed.load(Ordering::Relaxed) {
-            return Err(MediaSendError::NotActive);
-        }
-        self.runtime
-            .as_ref()
-            .expect("WebRTC runtime is active")
-            .block_on(self.video_track.write_sample(&Sample {
-                data: Bytes::from(data),
-                duration,
-                ..Default::default()
-            }))
-            .map_err(|error| MediaSendError::Transport(Box::new(error)))?;
-        Ok(())
+        self.video_sender().send_h264(data, duration)
     }
 
     /// Writes one encoded 48 kHz stereo Opus packet to the WebRTC audio track.
@@ -297,19 +303,47 @@ impl MediaWebRtcSession {
     /// Returns an error when the peer is not connected or RTP packetization
     /// cannot accept the sample.
     pub fn send_opus(&self, data: Vec<u8>, duration: Duration) -> Result<(), MediaSendError> {
-        if !self.connected.load(Ordering::Relaxed) || self.closed.load(Ordering::Relaxed) {
-            return Err(MediaSendError::NotActive);
+        self.audio_sender().send_opus(data, duration)
+    }
+
+    #[must_use]
+    /// Creates an independently usable sender for the video RTP track.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if called after this session has already been dropped.
+    pub fn video_sender(&self) -> MediaVideoSender {
+        MediaVideoSender {
+            runtime: self
+                .runtime
+                .as_ref()
+                .expect("WebRTC runtime is active")
+                .handle()
+                .clone(),
+            track: Arc::clone(&self.video_track),
+            connected: Arc::clone(&self.connected),
+            closed: Arc::clone(&self.closed),
         }
-        self.runtime
-            .as_ref()
-            .expect("WebRTC runtime is active")
-            .block_on(self.audio_track.write_sample(&Sample {
-                data: Bytes::from(data),
-                duration,
-                ..Default::default()
-            }))
-            .map_err(|error| MediaSendError::Transport(Box::new(error)))?;
-        Ok(())
+    }
+
+    #[must_use]
+    /// Creates an independently usable sender for the audio RTP track.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if called after this session has already been dropped.
+    pub fn audio_sender(&self) -> MediaAudioSender {
+        MediaAudioSender {
+            runtime: self
+                .runtime
+                .as_ref()
+                .expect("WebRTC runtime is active")
+                .handle()
+                .clone(),
+            track: Arc::clone(&self.audio_track),
+            connected: Arc::clone(&self.connected),
+            closed: Arc::clone(&self.closed),
+        }
     }
 
     #[must_use]
@@ -317,9 +351,120 @@ impl MediaWebRtcSession {
         self.target_bitrate.load(Ordering::Relaxed)
     }
 
+    pub fn observe_sender_queue_delay(&self, delay: Duration) {
+        self.receiver_feedback.sender_queue_micros.store(
+            u32::try_from(delay.as_micros()).unwrap_or(u32::MAX),
+            Ordering::Relaxed,
+        );
+    }
+
+    #[must_use]
+    pub fn take_keyframe_request(&self) -> bool {
+        self.receiver_feedback
+            .keyframe_requested
+            .swap(false, Ordering::AcqRel)
+    }
+
+    #[must_use]
+    pub fn transport_metrics(&self) -> MediaTransportMetrics {
+        MediaTransportMetrics {
+            fraction_lost: self.receiver_feedback.fraction_lost.load(Ordering::Relaxed),
+            round_trip_micros: self.receiver_feedback.rtt_micros.load(Ordering::Relaxed),
+            jitter_micros: self.receiver_feedback.jitter_micros.load(Ordering::Relaxed),
+            sender_queue_micros: self
+                .receiver_feedback
+                .sender_queue_micros
+                .load(Ordering::Relaxed),
+        }
+    }
+
     #[must_use]
     pub fn is_closed(&self) -> bool {
         self.closed.load(Ordering::Relaxed)
+    }
+}
+
+async fn add_media_tracks(
+    peer: &Arc<RTCPeerConnection>,
+) -> Result<
+    (
+        Arc<TrackLocalStaticSample>,
+        Arc<TrackLocalStaticSample>,
+        Arc<webrtc::rtp_transceiver::rtp_sender::RTCRtpSender>,
+    ),
+    AnyError,
+> {
+    let video_track = Arc::new(TrackLocalStaticSample::new(
+        h264_capability(),
+        "bridgepad-primary-monitor".to_owned(),
+        "bridgepad-stream".to_owned(),
+    ));
+    let video_sender = peer
+        .add_track(Arc::clone(&video_track) as Arc<dyn TrackLocal + Send + Sync>)
+        .await?;
+    video_sender
+        .transport()
+        .ice_transport()
+        .on_selected_candidate_pair_change(Box::new(move |pair| {
+            println!("WebRTC selected ICE candidate pair: {pair}");
+            Box::pin(async {})
+        }));
+    let audio_track = Arc::new(TrackLocalStaticSample::new(
+        opus_capability(),
+        "bridgepad-system-audio".to_owned(),
+        "bridgepad-stream".to_owned(),
+    ));
+    let audio_sender = peer
+        .add_track(Arc::clone(&audio_track) as Arc<dyn TrackLocal + Send + Sync>)
+        .await?;
+    tokio::spawn(async move {
+        let mut rtcp = vec![0_u8; 1_500];
+        while audio_sender.read(&mut rtcp).await.is_ok() {}
+    });
+    Ok((video_track, audio_track, video_sender))
+}
+
+impl MediaVideoSender {
+    /// Packetizes and sends one complete Annex-B H.264 access unit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the peer is inactive or RTP packetization fails.
+    pub fn send_h264(&self, data: Vec<u8>, duration: Duration) -> Result<(), MediaSendError> {
+        ensure_active(&self.connected, &self.closed)?;
+        self.runtime
+            .block_on(self.track.write_sample(&Sample {
+                data: Bytes::from(data),
+                duration,
+                ..Default::default()
+            }))
+            .map_err(|error| MediaSendError::Transport(Box::new(error)))
+    }
+}
+
+impl MediaAudioSender {
+    /// Packetizes and sends one complete Opus frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the peer is inactive or RTP packetization fails.
+    pub fn send_opus(&self, data: Vec<u8>, duration: Duration) -> Result<(), MediaSendError> {
+        ensure_active(&self.connected, &self.closed)?;
+        self.runtime
+            .block_on(self.track.write_sample(&Sample {
+                data: Bytes::from(data),
+                duration,
+                ..Default::default()
+            }))
+            .map_err(|error| MediaSendError::Transport(Box::new(error)))
+    }
+}
+
+fn ensure_active(connected: &AtomicBool, closed: &AtomicBool) -> Result<(), MediaSendError> {
+    if !connected.load(Ordering::Relaxed) || closed.load(Ordering::Relaxed) {
+        Err(MediaSendError::NotActive)
+    } else {
+        Ok(())
     }
 }
 
@@ -389,6 +534,7 @@ struct SessionParts {
     closed: Arc<AtomicBool>,
     ice_state: Arc<AtomicU8>,
     target_bitrate: Arc<AtomicU32>,
+    receiver_feedback: Arc<ReceiverFeedback>,
     connected_rx: Receiver<()>,
     answer_sdp: String,
 }
@@ -428,32 +574,86 @@ fn ice_candidate_summaries(sdp: &str) -> Vec<String> {
         .collect()
 }
 
-async fn adapt_bitrate_from_receiver_reports(
+async fn observe_receiver_feedback(
     sender: Arc<webrtc::rtp_transceiver::rtp_sender::RTCRtpSender>,
     target: Arc<AtomicU32>,
     maximum: u32,
+    feedback: Arc<ReceiverFeedback>,
 ) {
     while let Ok((packets, _)) = sender.read_rtcp().await {
         for packet in packets {
-            let Some(report) = packet.as_any().downcast_ref::<ReceiverReport>() else {
-                continue;
-            };
-            let fraction_lost = report
-                .reports
-                .iter()
-                .map(|entry| entry.fraction_lost)
-                .max()
-                .unwrap_or(0);
-            update_bitrate(&target, maximum, fraction_lost);
+            if packet.as_any().is::<PictureLossIndication>()
+                || packet.as_any().is::<FullIntraRequest>()
+            {
+                feedback.keyframe_requested.store(true, Ordering::Release);
+            }
+            if let Some(report) = packet.as_any().downcast_ref::<ReceiverReport>() {
+                let fraction_lost = report
+                    .reports
+                    .iter()
+                    .map(|entry| entry.fraction_lost)
+                    .max()
+                    .unwrap_or(0);
+                let jitter_micros = report
+                    .reports
+                    .iter()
+                    .map(|entry| rtp_jitter_micros(entry.jitter))
+                    .max()
+                    .unwrap_or(0);
+                let rtt_micros = report
+                    .reports
+                    .iter()
+                    .filter_map(|entry| {
+                        receiver_report_rtt_micros(entry.last_sender_report, entry.delay)
+                    })
+                    .max()
+                    .unwrap_or(0);
+                feedback
+                    .fraction_lost
+                    .store(fraction_lost, Ordering::Relaxed);
+                feedback
+                    .jitter_micros
+                    .store(jitter_micros, Ordering::Relaxed);
+                feedback.rtt_micros.store(rtt_micros, Ordering::Relaxed);
+                update_bitrate(
+                    &target,
+                    maximum,
+                    fraction_lost,
+                    rtt_micros,
+                    jitter_micros,
+                    feedback.sender_queue_micros.load(Ordering::Relaxed),
+                );
+            }
         }
     }
 }
 
-fn update_bitrate(target: &AtomicU32, maximum: u32, fraction_lost: u8) {
+fn update_bitrate(
+    target: &AtomicU32,
+    maximum: u32,
+    fraction_lost: u8,
+    rtt_micros: u32,
+    jitter_micros: u32,
+    sender_queue_micros: u32,
+) {
     let current = target.load(Ordering::Relaxed);
-    let next = if fraction_lost >= 26 {
+    let next = if fraction_lost >= 26
+        || rtt_micros >= 200_000
+        || jitter_micros >= 50_000
+        || sender_queue_micros >= 50_000
+    {
         current.saturating_mul(3) / 4
-    } else if fraction_lost <= 5 {
+    } else if fraction_lost >= 13
+        || rtt_micros >= 100_000
+        || jitter_micros >= 30_000
+        || sender_queue_micros >= 25_000
+    {
+        current.saturating_mul(17) / 20
+    } else if fraction_lost <= 5
+        && (rtt_micros == 0 || rtt_micros < 60_000)
+        && jitter_micros < 15_000
+        && sender_queue_micros < 10_000
+    {
         current.saturating_add((current / 20).max(50_000))
     } else {
         current
@@ -464,6 +664,31 @@ fn update_bitrate(target: &AtomicU32, maximum: u32, fraction_lost: u8) {
     );
 }
 
+fn rtp_jitter_micros(jitter: u32) -> u32 {
+    u32::try_from(u64::from(jitter).saturating_mul(1_000_000) / u64::from(H264_CLOCK_RATE))
+        .unwrap_or(u32::MAX)
+}
+
+fn receiver_report_rtt_micros(last_sender_report: u32, delay: u32) -> Option<u32> {
+    if last_sender_report == 0 {
+        return None;
+    }
+    let arrival = ntp_middle_32(SystemTime::now().duration_since(UNIX_EPOCH).ok()?);
+    let rtt_units = arrival.wrapping_sub(last_sender_report).wrapping_sub(delay);
+    Some(u32::try_from(u64::from(rtt_units).saturating_mul(1_000_000) / 65_536).unwrap_or(u32::MAX))
+}
+
+fn ntp_middle_32(unix_duration: Duration) -> u32 {
+    const NTP_UNIX_EPOCH_OFFSET: u64 = 2_208_988_800;
+    let ntp_seconds = unix_duration
+        .as_secs()
+        .saturating_add(NTP_UNIX_EPOCH_OFFSET);
+    let fractional = (u64::from(unix_duration.subsec_nanos()) << 32) / 1_000_000_000;
+    let seconds_middle = u32::try_from(ntp_seconds & 0xffff).unwrap_or_default();
+    let fractional_middle = u32::try_from(fractional >> 16).unwrap_or_default();
+    (seconds_middle << 16) | fractional_middle
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -471,20 +696,36 @@ mod tests {
     #[test]
     fn bitrate_drops_quickly_on_loss_and_recovers_slowly() {
         let bitrate = AtomicU32::new(4_000_000);
-        update_bitrate(&bitrate, 8_000_000, 40);
+        update_bitrate(&bitrate, 8_000_000, 40, 0, 0, 0);
         assert_eq!(bitrate.load(Ordering::Relaxed), 3_000_000);
-        update_bitrate(&bitrate, 8_000_000, 0);
+        update_bitrate(&bitrate, 8_000_000, 0, 10_000, 2_000, 1_000);
         assert_eq!(bitrate.load(Ordering::Relaxed), 3_150_000);
     }
 
     #[test]
     fn bitrate_stays_inside_profile_bounds() {
         let bitrate = AtomicU32::new(MIN_BITRATE_BITS_PER_SECOND);
-        update_bitrate(&bitrate, 8_000_000, u8::MAX);
+        update_bitrate(&bitrate, 8_000_000, u8::MAX, 0, 0, 0);
         assert_eq!(bitrate.load(Ordering::Relaxed), MIN_BITRATE_BITS_PER_SECOND);
         bitrate.store(8_000_000, Ordering::Relaxed);
-        update_bitrate(&bitrate, 8_000_000, 0);
+        update_bitrate(&bitrate, 8_000_000, 0, 0, 0, 0);
         assert_eq!(bitrate.load(Ordering::Relaxed), 8_000_000);
+    }
+
+    #[test]
+    fn bitrate_reacts_to_latency_before_packet_loss() {
+        let bitrate = AtomicU32::new(4_000_000);
+        update_bitrate(&bitrate, 8_000_000, 0, 120_000, 5_000, 2_000);
+        assert_eq!(bitrate.load(Ordering::Relaxed), 3_400_000);
+
+        bitrate.store(4_000_000, Ordering::Relaxed);
+        update_bitrate(&bitrate, 8_000_000, 0, 20_000, 5_000, 55_000);
+        assert_eq!(bitrate.load(Ordering::Relaxed), 3_000_000);
+    }
+
+    #[test]
+    fn converts_video_jitter_ticks_to_microseconds() {
+        assert_eq!(rtp_jitter_micros(9_000), 100_000);
     }
 
     #[test]

@@ -30,11 +30,13 @@ Disponível na build atual:
 - saída Bluetooth pelo Desktop reconhecida como XInput no Windows;
 - touchpad de mouse integrado e touchpad grande para controle físico;
 - uso simultâneo das entradas virtual e física durante uma sessão;
-- descoberta Wi-Fi automática e sessão autenticada pelo BridgePad Desktop no Windows;
+- descoberta Wi-Fi automática e sessões autenticadas por Wi-Fi ou tethering USB
+  pelo BridgePad Desktop no Windows;
 - pareamento guiado, reconexão, avisos e encerramento seguro;
 - métricas ao vivo e exportação de diagnóstico com foco em privacidade;
-- fundação isolada de streaming com vídeo sintético e métricas por etapa
-  (somente diagnóstico; streaming real de tela e áudio ainda não foi implementado);
+- streaming experimental Windows → Android com vídeo H.264 por hardware e áudio
+  Opus por Wi-Fi ou tethering USB. O caminho WebRTC funcional é o baseline
+  mensurável enquanto o backend local dedicado é desenvolvido;
 - interface em inglês e português brasileiro;
 - janela mínima bilíngue do BridgePad Desktop com status, PIN, revogação de
   celulares confiáveis e funcionamento pela bandeja do sistema;
@@ -101,8 +103,7 @@ controle Bluetooth atual.
 A Home monta a sessão nesta ordem:
 
 1. **Destino** — atualmente um PC Windows ou, futuramente, Linux.
-2. **Conexão** — Bluetooth e Wi-Fi estão disponíveis; USB entre celular e PC
-   aparece como futuro.
+2. **Conexão** — Bluetooth, Wi-Fi e tethering USB estão disponíveis.
 3. **Computador** — no Bluetooth, escolher um PC pareado; no Wi-Fi, descobrir o
    BridgePad Desktop automaticamente e digitar o PIN apenas no primeiro pareamento.
 
@@ -219,10 +220,10 @@ A ordem pretendida é:
 2. substituir o backend experimental por um backend sustentável no Windows;
 3. validar e endurecer descoberta, pareamento seguro e sessões por Wi-Fi;
 4. automatizar instalação, Firewall, credenciais e atualização no Windows;
-5. implementar USB entre celular e PC sem root ou ADB no uso normal;
+5. endurecer o tethering USB entre celular e PC sem root ou ADB no uso normal;
 6. adicionar backend de controle virtual e empacotamento para Linux;
-7. adicionar streaming opcional e de baixa latência do PC para o celular,
-   começando por vídeo e depois áudio.
+7. substituir o baseline WebRTC local pelo caminho de baixa latência dedicado
+   BridgePad Media v1 e então endurecer vídeo e áudio para lançamento.
 
 Wi-Fi, Bluetooth XInput e USB precisam do BridgePad Desktop porque o computador
 deve receber o estado normalizado e criar um controle virtual nativo. Bluetooth
@@ -233,14 +234,12 @@ antes de uma versão pública.
 
 ## Ainda não implementado
 
-- saída USB entre celular e computador;
 - backend e instalador de produção do controle virtual no Windows;
 - receptor Linux;
 - retorno de vibração/force feedback;
 - controles por giroscópio ou acelerômetro;
 - presets pessoais de layout com nome;
 - gatilhos analógicos na tela;
-- streaming de vídeo ou áudio do PC;
 - modo cooperativo local em vários celulares, com um slot de controle virtual
   independente para cada pessoa;
 - perfis avançados por jogo;

@@ -31,13 +31,16 @@ Present in the current build:
 - Bluetooth Desktop gamepad output that is recognized as XInput on Windows;
 - integrated and full-screen mouse touchpads;
 - simultaneous virtual and physical input during an active session;
-- automatic Wi-Fi discovery and authenticated gameplay through BridgePad Desktop on Windows;
+- automatic Wi-Fi discovery plus authenticated Wi-Fi and USB-tethered gameplay
+  through BridgePad Desktop on Windows;
 - a minimal bilingual BridgePad Desktop window with live status, pairing code,
   trusted-phone revocation and system-tray behavior;
 - guided pairing, reconnection, session notices and safe shutdown;
 - live metrics and privacy-conscious diagnostic report export;
 - experimental low-latency Windows-to-Android streaming with hardware H.264
-  video, WebRTC transport and Opus system audio over Wi-Fi or USB tethering;
+  video and Opus system audio over Wi-Fi or USB tethering. The working WebRTC
+  path is the measured reference while a dedicated local media backend is
+  developed;
 - English and Brazilian Portuguese interfaces;
 - unit tests, Android lint and independent debug APK builds in CI.
 
@@ -102,8 +105,7 @@ the current Bluetooth controller directly.
 The Home screen builds a session in dependency order:
 
 1. **Destination** — currently a Windows or future Linux PC.
-2. **Connection** — Bluetooth and Wi-Fi are available; phone-to-PC USB is shown
-   as upcoming.
+2. **Connection** — Bluetooth, Wi-Fi and USB tethering are available.
 3. **Computer** — Bluetooth lists Android-paired PCs. Wi-Fi discovers BridgePad
    Desktop automatically and asks for its one-time code only on first pairing.
 
@@ -224,9 +226,10 @@ The intended order is:
 2. create a sustainable Windows virtual-controller backend;
 3. validate and harden automatic discovery, secure pairing and Wi-Fi sessions;
 4. automate Windows installation, firewall rules and desktop credential protection;
-5. implement phone-to-PC USB without root or ADB in the normal user flow;
+5. harden phone-to-PC USB tethering without root or ADB in the normal user flow;
 6. add the Linux virtual-controller backend and packaging;
-7. harden optional low-latency PC-to-phone video and audio streaming.
+7. replace the local WebRTC reference with the dedicated BridgePad Media v1
+   low-latency video/audio path, then harden it for release.
 
 Wi-Fi, Bluetooth XInput and USB require BridgePad Desktop because the computer
 must receive normalized state and create a native virtual controller. Bluetooth
@@ -237,7 +240,6 @@ public release.
 
 ## Not implemented yet
 
-- phone-to-PC USB output;
 - a production Windows virtual-controller backend and installer;
 - Linux receiver support;
 - rumble/force-feedback return;

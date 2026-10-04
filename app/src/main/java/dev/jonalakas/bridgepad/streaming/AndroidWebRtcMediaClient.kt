@@ -22,6 +22,7 @@ import org.webrtc.PeerConnection
 import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpReceiver
 import org.webrtc.RtpTransceiver
+import org.webrtc.RTCStatsReport
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import org.webrtc.VideoSink
@@ -129,7 +130,13 @@ class AndroidWebRtcMediaClient(
                 SessionDescription(SessionDescription.Type.ANSWER, negotiation.answerSdp),
                 local = false,
             )
-            ended.await()
+            while (!ended.await(STATS_INTERVAL_SECONDS, TimeUnit.SECONDS)) {
+                localPeer.getStats { report ->
+                    if (!stopping.get()) {
+                        onMetrics(report.toPipelineMetrics(preparation.roundTripMicros))
+                    }
+                }
+            }
         } catch (error: Throwable) {
             if (!stopping.get()) {
                 onStatus(NetworkMediaStatus.Failed(error.message ?: "WebRTC session failed"))
@@ -316,6 +323,7 @@ class AndroidWebRtcMediaClient(
     }
 
     companion object {
+        private const val STATS_INTERVAL_SECONDS = 1L
         private const val ROUTE_RETRY_DELAY_MILLIS = 500L
         private val ROUTE_SETTLE_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(20)
         private val initialized = AtomicBoolean(false)
@@ -335,3 +343,51 @@ class AndroidWebRtcMediaClient(
         val preparation: dev.jonalakas.bridgepad.transport.network.NetworkMediaPreparation,
     )
 }
+
+private fun RTCStatsReport.toPipelineMetrics(signalingRoundTripMicros: Long): MediaPipelineMetrics {
+    val inboundVideo = statsMap.values.firstOrNull { stats ->
+        stats.type == "inbound-rtp" &&
+            (stats.members["kind"] == "video" || stats.members["mediaType"] == "video")
+    }
+    val candidatePair = statsMap.values.firstOrNull { stats ->
+        stats.type == "candidate-pair" &&
+            (stats.members["selected"] == true || stats.members["nominated"] == true) &&
+            stats.members["state"] == "succeeded"
+    }
+    val framesDecoded = inboundVideo.longMember("framesDecoded")
+    val jitterBufferEmitted = inboundVideo.doubleMember("jitterBufferEmittedCount")
+    val averageDecodeMicros = averageMicros(
+        totalSeconds = inboundVideo.doubleMember("totalDecodeTime"),
+        count = framesDecoded.toDouble(),
+    )
+    val averageJitterBufferMicros = averageMicros(
+        totalSeconds = inboundVideo.doubleMember("jitterBufferDelay"),
+        count = jitterBufferEmitted,
+    )
+    val currentRoundTripMicros = candidatePair
+        .doubleMember("currentRoundTripTime")
+        .takeIf { it > 0.0 }
+        ?.let { seconds -> (seconds * 500_000.0).toLong() }
+        ?: signalingRoundTripMicros / 2
+    return MediaPipelineMetrics(
+        networkEstimateMicros = currentRoundTripMicros.coerceAtLeast(0),
+        decodeMicros = averageDecodeMicros,
+        presentationMicros = averageJitterBufferMicros,
+        receivedFrames = framesDecoded,
+        droppedFrames = inboundVideo.longMember("framesDropped"),
+        receivedBytes = inboundVideo.longMember("bytesReceived"),
+    )
+}
+
+private fun org.webrtc.RTCStats?.longMember(name: String): Long =
+    (this?.members?.get(name) as? Number)?.toLong() ?: 0L
+
+private fun org.webrtc.RTCStats?.doubleMember(name: String): Double =
+    (this?.members?.get(name) as? Number)?.toDouble() ?: 0.0
+
+private fun averageMicros(totalSeconds: Double, count: Double): Long =
+    if (totalSeconds > 0.0 && count > 0.0) {
+        (totalSeconds * 1_000_000.0 / count).toLong().coerceAtLeast(0)
+    } else {
+        0L
+    }

@@ -353,21 +353,21 @@ fun MouseTouchpadScreen(
 }
 
 @Composable
-private fun MouseTouchpad(
+internal fun MouseTouchpad(
     modifier: Modifier = Modifier,
     shape: Shape = touchControlShape(TouchControlId.MOUSE_TOUCHPAD),
+    transparent: Boolean = false,
 ) {
     val touchpadLabel = stringResource(R.string.open_mouse_touchpad)
     val touchpadHint = stringResource(R.string.mouse_touchpad_instructions)
     val container = MaterialTheme.colorScheme.surfaceVariant
     val outline = MaterialTheme.colorScheme.outline
-    Surface(
-        modifier = modifier
-            .semantics {
-                contentDescription = touchpadLabel
-                stateDescription = touchpadHint
-            }
-            .pointerInput(Unit) {
+    val interactionModifier = modifier
+        .semantics {
+            contentDescription = touchpadLabel
+            stateDescription = touchpadHint
+        }
+        .pointerInput(Unit) {
                 val motionThreshold = minOf(
                     viewConfiguration.touchSlop,
                     TOUCHPAD_TAP_SLOP_DP.dp.toPx(),
@@ -552,17 +552,26 @@ private fun MouseTouchpad(
                         }
                     }
                 }
-            },
-        shape = shape,
-        color = container,
-        border = androidx.compose.foundation.BorderStroke(2.dp, outline),
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(R.string.mouse_surface),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            }
+
+    if (transparent) {
+        // The streaming player only needs an input target here. Avoid drawing a
+        // second full-screen Surface over the hardware-decoded video.
+        Box(modifier = interactionModifier)
+    } else {
+        Surface(
+            modifier = interactionModifier,
+            shape = shape,
+            color = container,
+            border = androidx.compose.foundation.BorderStroke(2.dp, outline),
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.mouse_surface),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

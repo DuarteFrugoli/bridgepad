@@ -24,7 +24,7 @@ use bridgepad_virtual_device::{
     DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, KeyboardModifiers, PointerReport,
     VirtualGamepadDevice, VirtualKeyboardDevice, VirtualPointerDevice,
 };
-use bridgepad_webrtc::{MediaSendError, MediaWebRtcSession};
+use bridgepad_webrtc::{MediaAudioSender, MediaSendError, MediaWebRtcSession};
 use bridgepad_windows_audio::{AudioCaptureError, AudioConfig, WindowsAudioLoopback};
 use bridgepad_windows_capture::{CaptureConfig, CaptureError, WindowsCapturePipeline};
 use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
@@ -52,6 +52,7 @@ const GAMEPAD_WATCHDOG_TIMEOUT: Duration = Duration::from_millis(150);
 const GAMEPAD_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_millis(20);
 const WEBRTC_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const STREAM_BITRATE_UPDATE_INTERVAL: Duration = Duration::from_secs(1);
+const STREAM_METRICS_INTERVAL: Duration = Duration::from_secs(2);
 
 pub type AnyError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -824,11 +825,23 @@ fn negotiate_and_stream_webrtc(
         return Ok(());
     }
 
+    run_media_stream(capture_config, peer, cancelled, &webrtc)
+}
+
+fn run_media_stream(
+    capture_config: CaptureConfig,
+    peer: std::net::SocketAddr,
+    cancelled: &AtomicBool,
+    webrtc: &MediaWebRtcSession,
+) -> Result<(), AnyError> {
     let capture = WindowsCapturePipeline::start_primary(capture_config)?;
     let audio = WindowsAudioLoopback::start(AudioConfig::default())?;
     let frame_duration = Duration::from_secs_f64(1.0 / f64::from(capture_config.frames_per_second));
     let mut applied_bitrate = capture_config.bitrate_bits_per_second;
     let mut last_bitrate_update = Instant::now();
+    let mut previous_video_timestamp = None;
+    let mut pending_keyframe = false;
+    let mut latency = StreamLatencyMetrics::new();
     println!(
         "WebRTC stream started for {peer}: {}x{}@{} H.264 at {} kbps + 48 kHz stereo Opus",
         capture_config.width,
@@ -836,56 +849,190 @@ fn negotiate_and_stream_webrtc(
         capture_config.frames_per_second,
         applied_bitrate / 1_000,
     );
-    'streaming: while !webrtc.is_closed() && !cancelled.load(Ordering::Relaxed) {
-        loop {
-            match audio.try_recv() {
-                Ok(Some(frame)) => match webrtc.send_opus(frame.data, frame.duration) {
-                    Ok(()) => {}
-                    Err(MediaSendError::NotActive) => break 'streaming,
-                    Err(MediaSendError::Transport(error))
-                        if is_expected_media_route_disconnect(error.as_ref()) =>
-                    {
-                        println!("WebRTC media route disconnected for {peer}");
-                        return Ok(());
+    let media_stop = AtomicBool::new(false);
+    let audio_failure = Mutex::new(None::<String>);
+    let stream_result = thread::scope(|scope| -> Result<(), AnyError> {
+        let media_stop = &media_stop;
+        let audio_failure = &audio_failure;
+        let audio_sender = webrtc.audio_sender();
+        scope.spawn(move || {
+            run_audio_stream(&audio, &audio_sender, media_stop, cancelled, audio_failure);
+        });
+        let video_sender = webrtc.video_sender();
+
+        while !webrtc.is_closed() && !cancelled.load(Ordering::Relaxed) {
+            if audio_failure
+                .lock()
+                .expect("audio failure lock poisoned")
+                .is_some()
+            {
+                break;
+            }
+            pending_keyframe |= webrtc.take_keyframe_request();
+            if pending_keyframe && capture.request_keyframe().is_ok() {
+                pending_keyframe = false;
+            }
+            match capture.recv_timeout(Duration::from_millis(5)) {
+                Ok(frame) => {
+                    let queue_delay = frame.encoded_at.elapsed();
+                    webrtc.observe_sender_queue_delay(queue_delay);
+                    let actual_duration = previous_video_timestamp
+                        .and_then(|previous: Duration| {
+                            frame.presentation_timestamp.checked_sub(previous)
+                        })
+                        .filter(|duration| {
+                            *duration >= Duration::from_millis(1)
+                                && *duration <= Duration::from_millis(100)
+                        })
+                        .unwrap_or(frame_duration);
+                    previous_video_timestamp = Some(frame.presentation_timestamp);
+                    let send_started = Instant::now();
+                    match video_sender.send_h264(frame.data, actual_duration) {
+                        Ok(()) => latency.record(
+                            frame.encode_duration,
+                            queue_delay,
+                            send_started.elapsed(),
+                            frame.captured_at.elapsed(),
+                        ),
+                        Err(MediaSendError::NotActive) => break,
+                        Err(MediaSendError::Transport(error))
+                            if is_expected_media_route_disconnect(error.as_ref()) =>
+                        {
+                            println!("WebRTC media route disconnected for {peer}");
+                            break;
+                        }
+                        Err(error) => return Err(error.into()),
                     }
-                    Err(error) => return Err(error.into()),
-                },
-                Ok(None) => break,
-                Err(AudioCaptureError::Disconnected) => {
-                    return Err("Windows system audio capture stopped unexpectedly".into());
                 }
+                Err(CaptureError::Timeout) => {}
                 Err(error) => return Err(error.into()),
             }
-        }
-        match capture.recv_timeout(Duration::from_millis(5)) {
-            Ok(frame) => match webrtc.send_h264(frame.data, frame_duration) {
-                Ok(()) => {}
-                Err(MediaSendError::NotActive) => break,
-                Err(MediaSendError::Transport(error))
-                    if is_expected_media_route_disconnect(error.as_ref()) =>
+            if last_bitrate_update.elapsed() >= STREAM_BITRATE_UPDATE_INTERVAL {
+                let target = webrtc.target_bitrate_bits_per_second();
+                let difference = target.abs_diff(applied_bitrate);
+                if difference >= applied_bitrate / 10 && capture.set_target_bitrate(target).is_ok()
                 {
-                    println!("WebRTC media route disconnected for {peer}");
-                    break;
-                }
-                Err(error) => return Err(error.into()),
-            },
-            Err(CaptureError::Timeout) => {}
-            Err(error) => return Err(error.into()),
-        }
-        if last_bitrate_update.elapsed() >= STREAM_BITRATE_UPDATE_INTERVAL {
-            let target = webrtc.target_bitrate_bits_per_second();
-            let difference = target.abs_diff(applied_bitrate);
-            if difference >= applied_bitrate / 10 {
-                if capture.set_target_bitrate(target).is_ok() {
                     applied_bitrate = target;
                     println!("WebRTC bitrate adjusted to {} kbps", target / 1_000);
                 }
+                last_bitrate_update = Instant::now();
             }
-            last_bitrate_update = Instant::now();
+            latency.print_if_due(&capture, webrtc);
         }
+        media_stop.store(true, Ordering::Relaxed);
+        Ok(())
+    });
+    media_stop.store(true, Ordering::Relaxed);
+    stream_result?;
+    if let Some(error) = audio_failure
+        .into_inner()
+        .expect("audio failure lock poisoned")
+    {
+        return Err(error.into());
     }
     println!("WebRTC stream stopped for {peer}");
     Ok(())
+}
+
+fn run_audio_stream(
+    audio: &WindowsAudioLoopback,
+    sender: &MediaAudioSender,
+    stop: &AtomicBool,
+    cancelled: &AtomicBool,
+    failure: &Mutex<Option<String>>,
+) {
+    while !stop.load(Ordering::Relaxed) && !cancelled.load(Ordering::Relaxed) {
+        let result = match audio.recv_timeout(Duration::from_millis(5)) {
+            Ok(frame) => sender.send_opus(frame.data, frame.duration),
+            Err(AudioCaptureError::Timeout) => continue,
+            Err(AudioCaptureError::Disconnected) => {
+                *failure.lock().expect("audio failure lock poisoned") =
+                    Some("Windows system audio capture stopped unexpectedly".to_owned());
+                break;
+            }
+            Err(error) => {
+                *failure.lock().expect("audio failure lock poisoned") = Some(error.to_string());
+                break;
+            }
+        };
+        match result {
+            Ok(()) => {}
+            Err(MediaSendError::NotActive) => break,
+            Err(MediaSendError::Transport(error))
+                if is_expected_media_route_disconnect(error.as_ref()) =>
+            {
+                break;
+            }
+            Err(error) => {
+                *failure.lock().expect("audio failure lock poisoned") = Some(error.to_string());
+                break;
+            }
+        }
+    }
+}
+
+struct StreamLatencyMetrics {
+    last_report: Instant,
+    encode_samples: Vec<u64>,
+    queue_samples: Vec<u64>,
+    send_samples: Vec<u64>,
+    end_to_send_samples: Vec<u64>,
+}
+
+impl StreamLatencyMetrics {
+    fn new() -> Self {
+        Self {
+            last_report: Instant::now(),
+            encode_samples: Vec::with_capacity(128),
+            queue_samples: Vec::with_capacity(128),
+            send_samples: Vec::with_capacity(128),
+            end_to_send_samples: Vec::with_capacity(128),
+        }
+    }
+
+    fn record(&mut self, encode: Duration, queue: Duration, send: Duration, end_to_send: Duration) {
+        self.encode_samples.push(duration_micros(encode));
+        self.queue_samples.push(duration_micros(queue));
+        self.send_samples.push(duration_micros(send));
+        self.end_to_send_samples.push(duration_micros(end_to_send));
+    }
+
+    fn print_if_due(&mut self, capture: &WindowsCapturePipeline, webrtc: &MediaWebRtcSession) {
+        if self.last_report.elapsed() < STREAM_METRICS_INTERVAL {
+            return;
+        }
+        let capture_stats = capture.stats();
+        let transport = webrtc.transport_metrics();
+        println!(
+            "Streaming latency: encode p95 {} us | capture queue p95/max {}/{} us | RTP write p95 {} us | capture-to-send p95 {} us | dropped before encode {} | RTT {} us | jitter {} us | loss {:.1}%",
+            percentile_95(&mut self.encode_samples),
+            percentile_95(&mut self.queue_samples),
+            capture_stats.maximum_queue_micros,
+            percentile_95(&mut self.send_samples),
+            percentile_95(&mut self.end_to_send_samples),
+            capture_stats.dropped_before_encode,
+            transport.round_trip_micros,
+            transport.jitter_micros,
+            f64::from(transport.fraction_lost) * 100.0 / 256.0,
+        );
+        self.encode_samples.clear();
+        self.queue_samples.clear();
+        self.send_samples.clear();
+        self.end_to_send_samples.clear();
+        self.last_report = Instant::now();
+    }
+}
+
+fn duration_micros(duration: Duration) -> u64 {
+    u64::try_from(duration.as_micros()).unwrap_or(u64::MAX)
+}
+
+fn percentile_95(samples: &mut [u64]) -> u64 {
+    if samples.is_empty() {
+        return 0;
+    }
+    samples.sort_unstable();
+    samples[(samples.len() - 1) * 95 / 100]
 }
 
 fn is_expected_media_route_disconnect(error: &(dyn std::error::Error + 'static)) -> bool {

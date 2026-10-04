@@ -1,6 +1,12 @@
 # ADR 0013: WebRTC media plane and isolated streaming foundation
 
-Status: accepted
+Status: superseded by ADR 0014
+
+ADR 0013 records the WebRTC implementation that established the first real
+streaming baseline. Its decision to use WebRTC as the definitive local media
+backend, and its associated WebRTC DataChannel input plan, were replaced by
+ADR 0014. The component boundaries, input/media isolation and measurements
+defined here remain valid.
 
 ## Context
 

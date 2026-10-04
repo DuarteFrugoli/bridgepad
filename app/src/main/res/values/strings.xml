@@ -1,5 +1,5 @@
 <resources>
-    <string name="complete_session_setup">Choose a destination, connection, device and input to enable Connect and play.</string>
+    <string name="complete_session_setup">Complete the choices above to enable the session.</string>
     <string name="enable_bluetooth">Turn on Bluetooth</string>
     <string name="bluetooth_destination_off">Turn on Bluetooth to see paired PCs and choose where to connect.</string>
     <string name="bluetooth_destination_permission">Allow Bluetooth access to load paired PCs before choosing a destination.</string>
@@ -89,9 +89,21 @@
     <string name="session_active">Session in progress</string>
     <string name="home_title">Ready to play?</string>
     <string name="home_description">Choose where to play, how to connect and which controls to use.</string>
-    <string name="step_input">Controls</string>
-    <string name="step_transport">2 · Connection</string>
-    <string name="step_destination">1 · Destination</string>
+    <string name="step_play_mode">1 · Play mode</string>
+    <string name="step_destination">2 · Destination</string>
+    <string name="step_transport">3 · Connection</string>
+    <string name="step_input">4 · Controls</string>
+    <string name="step_streaming_transport">2 · Connection</string>
+    <string name="step_streaming_input">3 · Controller</string>
+    <string name="play_mode_controller">Use phone as a controller</string>
+    <string name="play_mode_streaming">Stream and play on this phone</string>
+    <string name="play_mode_description">Streaming sends the PC screen and audio to this phone while inputs use an independent connection.</string>
+    <string name="streaming_physical_controller_required">Connect a physical controller to continue.</string>
+    <string name="streaming_virtual_controller_later">Virtual controller — coming next</string>
+    <string name="start_streaming_session">Start streaming session</string>
+    <string name="open_streaming_session">Open full-screen streaming</string>
+    <string name="streaming_gameplay_connecting">Connecting video and audio…</string>
+    <string name="streaming_gameplay_stopped">Streaming stopped. Use Android Back to return.</string>
     <string name="destination_pc">PC · Windows or Linux</string>
     <string name="wifi_label">Wi-Fi</string>
     <string name="usb_connection_label">USB cable</string>
@@ -394,9 +406,9 @@
     <string name="synthetic_stream_metrics">Pipeline metrics</string>
     <string name="synthetic_stream_generation">Generation: %1$d µs</string>
     <string name="synthetic_stream_encode">Encode: %1$d µs</string>
-    <string name="synthetic_stream_network">Signalling RTT estimate: %1$d µs one-way</string>
-    <string name="synthetic_stream_decode">Decode: %1$d µs</string>
-    <string name="synthetic_stream_present">Presentation: %1$d µs</string>
+    <string name="synthetic_stream_network">Estimated WebRTC network: %1$d µs one-way</string>
+    <string name="synthetic_stream_decode">Average hardware decode: %1$d µs</string>
+    <string name="synthetic_stream_present">Average jitter buffer: %1$d µs</string>
     <string name="synthetic_stream_totals">Frames: %1$d received, %2$d dropped · %3$d bytes</string>
     <string name="synthetic_stream_idle">Ready to start</string>
     <string name="synthetic_stream_connecting">Connecting to BridgePad Desktop…</string>

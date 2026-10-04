@@ -67,10 +67,13 @@ import dev.jonalakas.bridgepad.core.session.SessionDraft
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
 import dev.jonalakas.bridgepad.ui.home.DestinationSelection
+import dev.jonalakas.bridgepad.ui.home.PlayControllerType
+import dev.jonalakas.bridgepad.ui.home.PlayMode
 import dev.jonalakas.bridgepad.session.SessionSetup
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadStatus
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
+import dev.jonalakas.bridgepad.ui.gamepad.StreamingGameplayScreen
 import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardState
 import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutEditorScreen
@@ -127,12 +130,18 @@ class MainActivity : ComponentActivity() {
                 var showBluetoothDesktopDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showUsbAccessoryDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showDesktopStreaming by rememberSaveable { mutableStateOf(false) }
+                var showGameplayStreaming by rememberSaveable { mutableStateOf(false) }
+                var gameplayStreamingPeerId by rememberSaveable { mutableStateOf<String?>(null) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
                 var destinationTypeName by rememberSaveable { mutableStateOf<String?>(null) }
                 var connectionMethodName by rememberSaveable { mutableStateOf<String?>(null) }
+                var playModeName by rememberSaveable { mutableStateOf<String?>(null) }
+                var streamingControllerTypeName by rememberSaveable {
+                    mutableStateOf<String?>(null)
+                }
                 var captureModeName by rememberSaveable {
                     mutableStateOf(PhysicalCaptureMode.COMPATIBILITY.name)
                 }
@@ -254,6 +263,12 @@ class MainActivity : ComponentActivity() {
                 val directUsbState by DirectUsbGamepadStore.state.collectAsState()
                 val physicalControllerConnected =
                     physicalGamepadState.devices.isNotEmpty() || directUsbState.active
+                val playMode = playModeName?.let { name ->
+                    runCatching { PlayMode.valueOf(name) }.getOrNull()
+                }
+                val streamingControllerType = streamingControllerTypeName?.let { name ->
+                    runCatching { PlayControllerType.valueOf(name) }.getOrNull()
+                }
                 val effectiveCaptureMode = if (hidState.sessionActive) {
                     hidState.physicalCaptureMode
                 } else {
@@ -331,18 +346,24 @@ class MainActivity : ComponentActivity() {
                     showNetworkDiagnostic,
                     showUsbNetworkDiagnostic,
                     effectiveConnectionMethod,
+                    playMode,
                 ) {
                     if (!showNetworkDiagnostic && !showUsbNetworkDiagnostic) {
                         val networkTransport = effectiveConnectionMethod.takeIf {
                             it == ConnectionMethod.WIFI || it == ConnectionMethod.USB
                         } ?: ConnectionMethod.WIFI
                         when (networkGameplayStatus) {
-                            NetworkGamepadStatus.Active -> sessionUiViewModel.dispatch(
-                                SessionUiEvent.TransportConnected(
-                                    networkTransport,
-                                    physicalControllerConnected,
-                                ),
-                            )
+                            NetworkGamepadStatus.Active -> {
+                                sessionUiViewModel.dispatch(
+                                    SessionUiEvent.TransportConnected(
+                                        networkTransport,
+                                        physicalControllerConnected,
+                                    ),
+                                )
+                                if (playMode == PlayMode.STREAMING) {
+                                    sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
+                                }
+                            }
                             is NetworkGamepadStatus.Failed -> sessionUiViewModel.dispatch(
                                 SessionUiEvent.TransportFailed(networkTransport),
                             )
@@ -411,6 +432,7 @@ class MainActivity : ComponentActivity() {
                         effectiveCaptureMode == PhysicalCaptureMode.COMPATIBILITY
                 val keepScreenAwake =
                     sessionUiState.surface != SessionSurface.NONE ||
+                        showGameplayStreaming ||
                         showTouchscreenLayoutEditor ||
                         diagnosticUsesGamepadMode ||
                         compatibilityInputNeedsScreen
@@ -434,6 +456,7 @@ class MainActivity : ComponentActivity() {
                     showUsbNetworkDiagnostic,
                     networkGameplayStatus,
                     bluetoothDesktopGameplayStatus,
+                    showGameplayStreaming,
                     showTouchscreenLayoutEditor,
                     sessionOrientationMode,
                     useDisplayCutoutArea,
@@ -443,7 +466,9 @@ class MainActivity : ComponentActivity() {
                             orientationMode = SessionOrientationMode.AUTO,
                             useDisplayCutoutArea = useDisplayCutoutArea,
                         )
-                        sessionUiState.surface != SessionSurface.NONE || diagnosticUsesGamepadMode -> {
+                        showGameplayStreaming ||
+                            sessionUiState.surface != SessionSurface.NONE ||
+                            diagnosticUsesGamepadMode -> {
                             enterGamepadMode(
                                 orientationMode = sessionOrientationMode,
                                 useDisplayCutoutArea = useDisplayCutoutArea,
@@ -606,6 +631,16 @@ class MainActivity : ComponentActivity() {
                             showTouchscreenLayoutEditor = false
                             if (returnToSettingsAfterLayoutEditor) showSettings = true
                             returnToSettingsAfterLayoutEditor = false
+                        },
+                    )
+                } else if (showGameplayStreaming && gameplayStreamingPeerId != null) {
+                    StreamingGameplayScreen(
+                        peerId = checkNotNull(gameplayStreamingPeerId),
+                        requestFor = networkDesktopCoordinator::mediaRequest,
+                        useDisplayCutoutArea = useDisplayCutoutArea,
+                        onExit = {
+                            showGameplayStreaming = false
+                            sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
                         },
                     )
                 } else if (showBluetoothDesktopDiagnostic) {
@@ -817,10 +852,32 @@ class MainActivity : ComponentActivity() {
                     physicalCaptureMode = effectiveCaptureMode,
                     sessionDraft = sessionDraft,
                     outputAdapters = sessionCoordinator.catalog,
+                    playMode = playMode,
+                    streamingControllerType = streamingControllerType,
                     destinationType = effectiveDestinationType,
                     connectionMethod = effectiveConnectionMethod,
                     directUsbState = directUsbState,
                     mappingAvailable = mappingInput != null,
+                    onPlayModeChanged = { selectedMode ->
+                        if (playMode != selectedMode) {
+                            playModeName = selectedMode.name
+                            streamingControllerTypeName = null
+                            destinationTypeName = if (selectedMode == PlayMode.STREAMING) {
+                                DestinationType.PC.name
+                            } else {
+                                null
+                            }
+                            connectionMethodName = null
+                            selectedAddress = null
+                            selectedNetworkDesktopId = null
+                            pairNewPcSelected = false
+                            useDirectBluetooth = false
+                            networkDesktopCoordinator.clearPairingStatus()
+                        }
+                    },
+                    onStreamingControllerTypeChanged = { selectedType ->
+                        streamingControllerTypeName = selectedType.name
+                    },
                     onDestinationChanged = { destination ->
                         if (destinationTypeName != destination.name) {
                             destinationTypeName = destination.name
@@ -929,6 +986,10 @@ class MainActivity : ComponentActivity() {
                                     effectiveCaptureMode,
                                     effectiveConnectionMethod,
                                 )
+                                if (playMode == PlayMode.STREAMING) {
+                                    gameplayStreamingPeerId = peerId
+                                    showGameplayStreaming = true
+                                }
                             }
                             return@HomeScreen
                         }
@@ -995,9 +1056,19 @@ class MainActivity : ComponentActivity() {
                             SessionUiEvent.SurfaceSelected(SessionSurface.MOUSE_TOUCHPAD),
                         )
                     },
+                    onOpenStreaming = {
+                        if (gameplayStreamingPeerId == null) {
+                            gameplayStreamingPeerId = selectedNetworkDesktopId
+                        }
+                        showGameplayStreaming = gameplayStreamingPeerId != null
+                    },
                     onStopHid = {
+                        showGameplayStreaming = false
+                        gameplayStreamingPeerId = null
                         gameplayKeyboardState.reset()
                         captureModeName = PhysicalCaptureMode.COMPATIBILITY.name
+                        playModeName = null
+                        streamingControllerTypeName = null
                         sessionCoordinator.preparePhysicalCapture(null)
                         destinationTypeName = null
                         connectionMethodName = null

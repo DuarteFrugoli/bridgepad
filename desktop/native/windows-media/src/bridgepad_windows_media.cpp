@@ -683,6 +683,10 @@ extern "C" int32_t bp_media_encoder_create(
         return BP_MEDIA_INVALID_ARGUMENT;
     }
     *encoder = nullptr;
+    // This function runs on the WGC callback thread. Prioritize capture and
+    // encoding above ordinary desktop work without changing the user's power
+    // plan or using a process-wide priority class.
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
     std::unique_ptr<bp_media_encoder> value(new (std::nothrow) bp_media_encoder{});
     if (!value) return BP_MEDIA_ENCODER_CONFIGURATION_FAILED;
     if (FAILED(value->com.result())) return BP_MEDIA_COM_INITIALIZATION_FAILED;

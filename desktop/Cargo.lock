@@ -444,6 +444,7 @@ name = "bridgepad-windows-capture"
 version = "0.1.0"
 dependencies = [
  "bridgepad-windows-media",
+ "windows 0.62.2",
  "windows-capture",
 ]
 

@@ -791,7 +791,12 @@ accessory mode.
 10. Compare loss, latency, reconnection and setup steps against Wi-Fi and the
     recorded AOA attempt before closing Gate D4.
 
-### Windows WebRTC streaming
+### Windows streaming baseline (WebRTC reference backend)
+
+This procedure reproduces the reference backend frozen in
+[`streaming-baseline.md`](./streaming-baseline.md). WebRTC is no longer the
+definitive local backend; keep this test runnable so BridgePad Media v1 can be
+compared against the same hardware, route, content and profile.
 
 1. Pair Android with the graphical BridgePad Desktop. Allow the executable
    through Windows Firewall for private networks; control/signalling uses TCP
@@ -871,3 +876,9 @@ normal stopped session, not a persistent Desktop error. This validation is a
 single-device milestone only; it does not replace the five-minute/soak, degraded
 network, long-duration audio/video synchronization, second-GPU, second-decoder
 or second-playback-endpoint checks above.
+
+When the dedicated local backend is available, run steps 3–12 once with the
+WebRTC reference and once with BridgePad Media v1. Save at least 60 seconds of
+Desktop rolling latency metrics and matching Android decode/presentation
+statistics for each run. Promotion requires the comparison rules in the frozen
+baseline, including clean Wi-Fi/USB teardown and no input regression.

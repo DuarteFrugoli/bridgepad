@@ -221,6 +221,21 @@ fun DesktopStreamingScreen(
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(stringResource(R.string.synthetic_stream_network, metrics.networkEstimateMicros))
+                        Text(stringResource(R.string.synthetic_stream_decode, metrics.decodeMicros))
+                        Text(
+                            stringResource(
+                                R.string.synthetic_stream_present,
+                                metrics.presentationMicros,
+                            ),
+                        )
+                        Text(
+                            stringResource(
+                                R.string.synthetic_stream_totals,
+                                metrics.receivedFrames,
+                                metrics.droppedFrames,
+                                metrics.receivedBytes,
+                            ),
+                        )
                     }
                 }
             }

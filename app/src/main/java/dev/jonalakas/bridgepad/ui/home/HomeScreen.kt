@@ -39,10 +39,14 @@ fun HomeScreen(
     physicalCaptureMode: PhysicalCaptureMode?,
     sessionDraft: SessionDraft,
     outputAdapters: OutputAdapterCatalog,
+    playMode: PlayMode?,
+    streamingControllerType: PlayControllerType?,
     destinationType: DestinationType?,
     connectionMethod: ConnectionMethod?,
     directUsbState: DirectUsbState,
     mappingAvailable: Boolean,
+    onPlayModeChanged: (PlayMode) -> Unit,
+    onStreamingControllerTypeChanged: (PlayControllerType) -> Unit,
     onDestinationChanged: (DestinationType) -> Unit,
     onSelectBluetooth: () -> Unit,
     onSelectWifi: () -> Unit,
@@ -75,6 +79,7 @@ fun HomeScreen(
     onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
     onOpenTouchController: () -> Unit,
     onOpenMouseTouchpad: () -> Unit,
+    onOpenStreaming: () -> Unit,
     onStopHid: () -> Unit,
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
@@ -83,6 +88,7 @@ fun HomeScreen(
     var pairingCode by rememberSaveable { mutableStateOf("") }
     var forgettingDesktopId by rememberSaveable { mutableStateOf<String?>(null) }
     val bluetoothSelected = connectionMethod == ConnectionMethod.BLUETOOTH
+    val streamingSelected = playMode == PlayMode.STREAMING
     val wifiSelected = connectionMethod == ConnectionMethod.WIFI
     val usbSelected = connectionMethod == ConnectionMethod.USB
     val networkSelected = wifiSelected || usbSelected
@@ -114,6 +120,13 @@ fun HomeScreen(
             availableTargetIds = pairedHosts.map { it.address },
         )
     }
+    val readyToPlay = setupComplete && (!streamingSelected ||
+        streamingInputReady(
+            controllerType = streamingControllerType,
+            captureMode = physicalCaptureMode,
+            compatibilityAvailable = physicalGamepadState.devices.isNotEmpty(),
+            directUsbAvailable = directUsbState.active,
+        ))
     val busy = preparingConnection || hidState.status in listOf(
         HidSessionStatus.STARTING,
         HidSessionStatus.REGISTERING,
@@ -179,6 +192,24 @@ fun HomeScreen(
                 Text(stringResource(R.string.home_description), style = MaterialTheme.typography.bodyMedium)
             }
             item {
+                SetupCard(R.string.step_play_mode) {
+                    Choice(
+                        playMode == PlayMode.CONTROLLER,
+                        R.string.play_mode_controller,
+                        !busy && !connected,
+                    ) { onPlayModeChanged(PlayMode.CONTROLLER) }
+                    Choice(
+                        streamingSelected,
+                        R.string.play_mode_streaming,
+                        !busy && !connected,
+                    ) { onPlayModeChanged(PlayMode.STREAMING) }
+                    Text(
+                        stringResource(R.string.play_mode_description),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            if (playMode == PlayMode.CONTROLLER) item {
                 SetupCard(R.string.step_destination) {
                     Choice(
                         destinationType == DestinationType.PC,
@@ -187,15 +218,20 @@ fun HomeScreen(
                     ) { onDestinationChanged(DestinationType.PC) }
                 }
             }
-            if (destinationType != null) {
+            if (playMode != null && destinationType != null) {
                 item {
-                    SetupCard(R.string.step_transport) {
-                        Choice(
-                            bluetoothSelected,
-                            R.string.bluetooth_label,
-                            !busy && !connected,
-                            onSelectBluetooth,
-                        )
+                    SetupCard(
+                        if (streamingSelected) R.string.step_streaming_transport
+                        else R.string.step_transport,
+                    ) {
+                        if (!streamingSelected) {
+                            Choice(
+                                bluetoothSelected,
+                                R.string.bluetooth_label,
+                                !busy && !connected,
+                                onSelectBluetooth,
+                            )
+                        }
                         Choice(wifiSelected, R.string.wifi_label, !busy && !connected, onSelectWifi)
                         Choice(usbSelected, R.string.usb_connection_label, !busy && !connected, onSelectUsb)
                         if (bluetoothSelected) {
@@ -236,18 +272,30 @@ fun HomeScreen(
             }
             if (targetChosen) {
                 item {
-                    InputCard(
-                        physicalGamepadState,
-                        directUsbState,
-                        physicalCaptureMode,
-                        mappingAvailable,
-                        busy,
-                        onPhysicalCaptureModeChanged,
-                        onConfigureGamepadMapping,
-                        onEditTouchscreenLayout,
-                        sessionOrientationMode,
-                        onSessionOrientationModeChanged,
-                    )
+                    if (streamingSelected) {
+                        StreamingInputCard(
+                            physical = physicalGamepadState,
+                            usb = directUsbState,
+                            selectedType = streamingControllerType,
+                            captureMode = physicalCaptureMode,
+                            busy = busy,
+                            onTypeChanged = onStreamingControllerTypeChanged,
+                            onCaptureModeChanged = onPhysicalCaptureModeChanged,
+                        )
+                    } else {
+                        InputCard(
+                            physicalGamepadState,
+                            directUsbState,
+                            physicalCaptureMode,
+                            mappingAvailable,
+                            busy,
+                            onPhysicalCaptureModeChanged,
+                            onConfigureGamepadMapping,
+                            onEditTouchscreenLayout,
+                            sessionOrientationMode,
+                            onSessionOrientationModeChanged,
+                        )
+                    }
                 }
             }
             if (bluetoothSelected && !hidCompatible && pairNewPcSelected) {
@@ -373,7 +421,7 @@ fun HomeScreen(
             }
             if (!connected) {
                 item {
-                    if (!setupComplete && !busy) {
+                    if (!readyToPlay && !busy) {
                         Text(
                             stringResource(R.string.complete_session_setup),
                             modifier = Modifier.padding(bottom = 8.dp),
@@ -382,7 +430,7 @@ fun HomeScreen(
                     Button(
                         onClick = onPlay,
                         enabled = (!bluetoothSelected || selectedAddress != null || hidCompatible) &&
-                            !busy && setupComplete,
+                            !busy && readyToPlay,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
@@ -390,6 +438,7 @@ fun HomeScreen(
                                 when {
                                     hidState.pairingModeActive -> R.string.waiting_for_pairing
                                     busy -> R.string.preparing_connection
+                                    streamingSelected -> R.string.start_streaming_session
                                     else -> R.string.connect_and_play
                                 },
                             ),
@@ -400,11 +449,17 @@ fun HomeScreen(
             if (connected) {
                 item {
                     SetupCard(R.string.session_screens) {
-                        Button(onClick = onOpenTouchController, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.open_virtual_controller))
-                        }
-                        OutlinedButton(onClick = onOpenMouseTouchpad, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.open_mouse_touchpad))
+                        if (streamingSelected && networkConnected) {
+                            Button(onClick = onOpenStreaming, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.open_streaming_session))
+                            }
+                        } else {
+                            Button(onClick = onOpenTouchController, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.open_virtual_controller))
+                            }
+                            OutlinedButton(onClick = onOpenMouseTouchpad, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.open_mouse_touchpad))
+                            }
                         }
                         Text(
                             stringResource(R.string.session_screens_description),
@@ -637,6 +692,60 @@ private fun InputCard(
             modifier = Modifier.fillMaxWidth(),
         ) { Text(stringResource(R.string.configure_gamepad_mapping)) }
         Text(stringResource(R.string.mapping_optional_both_modes), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun StreamingInputCard(
+    physical: PhysicalGamepadState,
+    usb: DirectUsbState,
+    selectedType: PlayControllerType?,
+    captureMode: PhysicalCaptureMode?,
+    busy: Boolean,
+    onTypeChanged: (PlayControllerType) -> Unit,
+    onCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
+) {
+    val names = physical.devices.joinToString { it.name }
+    val physicalConnected = physical.devices.isNotEmpty() || usb.active
+    SetupCard(R.string.step_streaming_input) {
+        Choice(
+            selected = selectedType == PlayControllerType.PHYSICAL,
+            label = R.string.physical_controller,
+            enabled = physicalConnected && !busy,
+        ) { onTypeChanged(PlayControllerType.PHYSICAL) }
+        if (physicalConnected) {
+            Text(usb.deviceName ?: names, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            NoticeCard(
+                stringResource(R.string.streaming_physical_controller_required),
+                NoticeTone.WARNING,
+            )
+        }
+        Choice(
+            selected = selectedType == PlayControllerType.VIRTUAL,
+            label = R.string.streaming_virtual_controller_later,
+            enabled = false,
+        ) { onTypeChanged(PlayControllerType.VIRTUAL) }
+        if (selectedType == PlayControllerType.PHYSICAL && physicalConnected) {
+            HorizontalDivider()
+            Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleSmall)
+            Choice(
+                captureMode == PhysicalCaptureMode.COMPATIBILITY,
+                R.string.compatibility_mode,
+                physical.devices.isNotEmpty() && !busy,
+            ) { onCaptureModeChanged(PhysicalCaptureMode.COMPATIBILITY) }
+            Choice(
+                captureMode == PhysicalCaptureMode.BACKGROUND_USB,
+                R.string.background_usb_mode,
+                usb.active && !busy,
+            ) { onCaptureModeChanged(PhysicalCaptureMode.BACKGROUND_USB) }
+            if (captureMode == PhysicalCaptureMode.BACKGROUND_USB && !usb.active) {
+                Text(
+                    stringResource(R.string.physical_input_missing_usb),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 

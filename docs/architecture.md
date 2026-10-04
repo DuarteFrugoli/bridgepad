@@ -29,8 +29,9 @@ new connection methods and destinations do not change existing input adapters.
 - `:streaming-core` owns transport- and platform-independent video/audio
   contracts, frame models, decoder boundaries and pipeline metrics.
 - `:transport-network` owns the platform-independent encrypted socket client,
-  pairing/authentication exchange, bounded input sender, authenticated WebRTC
-  signalling and reconnect policy.
+  pairing/authentication exchange, bounded input sender, authenticated media
+  session negotiation and reconnect policy. WebRTC signalling remains in this
+  module while the reference backend is available.
   Discovery and persistence remain above it and never enter input code.
 - `:transport-bluetooth-hid` owns the reusable Android Bluetooth HID contract,
   generic Windows/Linux profile, descriptors and encoders.
@@ -148,44 +149,41 @@ for BridgePad's own C++ Media Foundation backend. The native backend enumerates
 only hardware H.264 MFTs, requires an asynchronous D3D11-aware transform,
 converts and scales BGRA capture textures to NV12 on the GPU, and processes the
 MFT through `METransformNeedInput`/`METransformHaveOutput`. No software fallback
-is allowed silently. This replaces the unfinished `win-native-media` allocator
-path that failed with `E_UNEXPECTED`; its end-to-end smoke and multi-GPU gates
-remain open. `bridgepad-webrtc` packetizes the Annex-B access units and sends
-them through ICE/DTLS/SRTP; RTCP receiver reports adjust the encoder bitrate
-between 500 kbps and the negotiated limit. On Android, the native WebRTC stack
-selects a MediaCodec decoder and renders directly into a `SurfaceViewRenderer`,
-without a Bitmap/CPU frame path. `bridgepad-windows-audio` independently opens
-the default Windows playback endpoint through WASAPI loopback, converts it to
-48 kHz stereo float in shared mode and encodes 20 ms Opus packets at 128 kbps.
-Its bounded queue feeds a separate WebRTC audio track, so audio capture and
-encoding cannot block the H.264 capture callback or the input session. Android
-receives that track through WebRTC's audio device module using media playback
-attributes; BridgePad never opens the phone microphone for desktop streaming.
+is allowed silently. `bridgepad-windows-audio` independently opens the default
+Windows playback endpoint through WASAPI loopback and encodes 48 kHz stereo
+Opus. These capture and codec boundaries are retained independently of the
+selected media transport.
 
-Control/input currently remains on TCP/TLS `39393`. TCP/TLS `39394`
-authenticates the independent media session and exchanges the complete SDP
-offer/answer, but no video frame crosses that socket. Media uses its own UDP
-sockets and workers. Capture queues are bounded and drop stale frames instead
-of accumulating delay, so congestion or stopping video cannot block, recreate
-or neutralize the input session.
+The currently implemented reference backend is `bridgepad-webrtc`. It
+packetizes the Annex-B video and Opus audio through ICE/DTLS/SRTP; RTCP feedback
+controls bitrate and keyframes. Android's WebRTC decoder factory selects a
+MediaCodec decoder and renders directly into a `SurfaceViewRenderer`, without a
+Bitmap/CPU frame path. TCP/TLS `39394` authenticates that media session and
+exchanges SDP; no encoded media crosses the signalling socket. The exact
+configuration and validated scenarios are frozen in
+[`streaming-baseline.md`](./streaming-baseline.md).
 
-Media teardown is also bounded. The capture callback releases its Media
-Foundation/D3D resources before stopping Windows Graphics Capture, the WebRTC
-runtime cannot hold a daemon connection lease indefinitely, and removing a
-Wi-Fi or USB interface is classified as a normal route loss. A completed media
-session must release its connection count before another route is selected.
+ADR 0014 supersedes WebRTC as the definitive local backend. The target local
+Wi-Fi/USB path is BridgePad Media v1: authenticated session negotiation on the
+control plane plus independent encrypted UDP audio and video flows with
+explicit packet/frame identifiers, monotonic timestamps, bounded reordering,
+stale-frame disposal, IDR feedback and adaptive bitrate. Android will decode
+H.264 directly to a `Surface` with an application-owned low-latency
+presentation policy. The WebRTC path stays available as the measured reference
+until the dedicated path meets or beats it.
 
-After the real streaming path has been validated, Desktop input carried over an
-IP network will move to a separate WebRTC peer connection with purpose-specific
-data channels. Time-sensitive replaceable state (gamepad snapshots and pointer
-movement) will use unordered delivery without retransmission, while keyboard,
-text and session/control operations will remain reliable and ordered. The
-authenticated TCP/TLS plane remains responsible for pairing, authorization,
-capability negotiation and WebRTC signalling. This is not raw unauthenticated
-UDP, and it does not replace Bluetooth HID or RFCOMM. Input and media continue
-to use independent peer connections, queues and workers so media congestion
-cannot cause input head-of-line blocking. ADR 0013 records this staged
-transport decision.
+Control/input currently remains on TCP/TLS `39393` and never shares a media
+socket, worker, queue or lifecycle. Its future low-latency transport will be
+decided in a separate ADR only after BridgePad Media v1 is validated; it is no
+longer predetermined to use WebRTC DataChannels. Bluetooth HID and RFCOMM are
+outside that future IP migration.
+
+Capture and media teardown are bounded. The capture callback releases its Media
+Foundation/D3D resources before stopping capture, route loss is a normal session
+termination and a completed media session must release its connection count
+before another Wi-Fi or USB route is selected. Capture queues drop stale work
+instead of accumulating delay, so congestion or stopping video cannot block,
+recreate or neutralize input.
 
 The setup model is a progressive dependency chain:
 

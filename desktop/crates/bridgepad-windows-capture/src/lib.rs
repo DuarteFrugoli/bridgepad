@@ -3,8 +3,10 @@
 //! The rest of `BridgePad` only sees encoded Annex-B access units. Direct3D and
 //! Media Foundation objects remain owned by the capture worker thread.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 const CAPTURE_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -67,12 +69,53 @@ pub struct EncodedH264Frame {
     pub data: Vec<u8>,
     pub presentation_timestamp: Duration,
     pub keyframe: bool,
+    pub captured_at: Instant,
+    pub encoded_at: Instant,
+    pub encode_duration: Duration,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CapturePipelineStats {
+    pub captured_frames: u64,
+    pub encoded_frames: u64,
+    pub dropped_before_encode: u64,
+    pub keyframes: u64,
+    pub total_encode_micros: u64,
+    pub total_queue_micros: u64,
+    pub maximum_queue_micros: u64,
+}
+
+#[derive(Debug, Default)]
+struct CaptureCounters {
+    pending_frames: AtomicUsize,
+    captured_frames: AtomicU64,
+    encoded_frames: AtomicU64,
+    dropped_before_encode: AtomicU64,
+    keyframes: AtomicU64,
+    total_encode_micros: AtomicU64,
+    total_queue_micros: AtomicU64,
+    maximum_queue_micros: AtomicU64,
+}
+
+impl CaptureCounters {
+    fn snapshot(&self) -> CapturePipelineStats {
+        CapturePipelineStats {
+            captured_frames: self.captured_frames.load(Ordering::Relaxed),
+            encoded_frames: self.encoded_frames.load(Ordering::Relaxed),
+            dropped_before_encode: self.dropped_before_encode.load(Ordering::Relaxed),
+            keyframes: self.keyframes.load(Ordering::Relaxed),
+            total_encode_micros: self.total_encode_micros.load(Ordering::Relaxed),
+            total_queue_micros: self.total_queue_micros.load(Ordering::Relaxed),
+            maximum_queue_micros: self.maximum_queue_micros.load(Ordering::Relaxed),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct WindowsCapturePipeline {
     frames: Receiver<Result<EncodedH264Frame, CaptureError>>,
     commands: Option<SyncSender<CaptureCommand>>,
+    counters: Arc<CaptureCounters>,
     stopped: Receiver<()>,
     worker: Option<std::thread::JoinHandle<()>>,
 }
@@ -80,6 +123,7 @@ pub struct WindowsCapturePipeline {
 #[derive(Clone, Copy, Debug)]
 enum CaptureCommand {
     SetBitrate(u32),
+    RequestKeyframe,
     Stop,
 }
 
@@ -102,7 +146,18 @@ impl WindowsCapturePipeline {
     /// capture worker ends.
     pub fn recv_timeout(&self, timeout: Duration) -> Result<EncodedH264Frame, CaptureError> {
         match self.frames.recv_timeout(timeout) {
-            Ok(result) => result,
+            Ok(Ok(frame)) => {
+                self.counters.pending_frames.fetch_sub(1, Ordering::Release);
+                let queue_micros = duration_micros(frame.encoded_at.elapsed());
+                self.counters
+                    .total_queue_micros
+                    .fetch_add(queue_micros, Ordering::Relaxed);
+                self.counters
+                    .maximum_queue_micros
+                    .fetch_max(queue_micros, Ordering::Relaxed);
+                Ok(frame)
+            }
+            Ok(Err(error)) => Err(error),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(CaptureError::Timeout),
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(CaptureError::Stopped),
         }
@@ -120,15 +175,38 @@ impl WindowsCapturePipeline {
                 "bitrate must be at least 100 kbps",
             ));
         }
+        self.try_send_command(CaptureCommand::SetBitrate(bits_per_second))
+    }
+
+    /// Requests the next encoded access unit to be an IDR frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ControlBusy` when the bounded command queue is occupied or
+    /// `Stopped` after the capture worker has ended.
+    pub fn request_keyframe(&self) -> Result<(), CaptureError> {
+        self.try_send_command(CaptureCommand::RequestKeyframe)
+    }
+
+    #[must_use]
+    pub fn stats(&self) -> CapturePipelineStats {
+        self.counters.snapshot()
+    }
+
+    fn try_send_command(&self, command: CaptureCommand) -> Result<(), CaptureError> {
         self.commands
             .as_ref()
             .ok_or(CaptureError::Stopped)?
-            .try_send(CaptureCommand::SetBitrate(bits_per_second))
+            .try_send(command)
             .map_err(|error| match error {
                 std::sync::mpsc::TrySendError::Full(_) => CaptureError::ControlBusy,
                 std::sync::mpsc::TrySendError::Disconnected(_) => CaptureError::Stopped,
             })
     }
+}
+
+fn duration_micros(duration: Duration) -> u64 {
+    u64::try_from(duration.as_micros()).unwrap_or(u64::MAX)
 }
 
 impl Drop for WindowsCapturePipeline {
@@ -188,8 +266,8 @@ impl std::error::Error for CaptureError {}
 #[cfg(windows)]
 mod platform {
     use super::{
-        CAPTURE_STOP_TIMEOUT, CaptureCommand, CaptureConfig, CaptureError, EncodedH264Frame,
-        WindowsCapturePipeline,
+        CAPTURE_STOP_TIMEOUT, CaptureCommand, CaptureConfig, CaptureCounters, CaptureError,
+        EncodedH264Frame, WindowsCapturePipeline, duration_micros,
     };
     use bridgepad_windows_media::{H264EncoderConfig, H264HardwareEncoder};
     use std::cell::RefCell;
@@ -197,19 +275,58 @@ mod platform {
     use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
     use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
     use std::time::Duration;
+    use windows::Graphics::Capture::GraphicsCaptureItem;
     use windows_capture::capture::{Context, GraphicsCaptureApiHandler};
     use windows_capture::frame::Frame;
     use windows_capture::graphics_capture_api::InternalCaptureControl;
     use windows_capture::monitor::Monitor;
     use windows_capture::settings::{
         ColorFormat, CursorCaptureSettings, DirtyRegionSettings, DrawBorderSettings,
-        MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
+        GraphicsCaptureItemType, MinimumUpdateIntervalSettings, SecondaryWindowSettings, Settings,
     };
+
+    struct PreparedMonitorItem {
+        item: GraphicsCaptureItem,
+        monitor: Monitor,
+    }
+
+    impl PreparedMonitorItem {
+        fn new(monitor: Monitor) -> Result<Self, CaptureError> {
+            let capture_item: GraphicsCaptureItemType = monitor.try_into().map_err(|error| {
+                CaptureError::CaptureFailed(format!(
+                    "Windows could not prepare the primary monitor for capture: {error}"
+                ))
+            })?;
+            match capture_item {
+                GraphicsCaptureItemType::Monitor((item, monitor)) => Ok(Self { item, monitor }),
+                _ => Err(CaptureError::CaptureFailed(
+                    "Windows returned an unexpected capture item for the primary monitor"
+                        .to_owned(),
+                )),
+            }
+        }
+    }
+
+    impl TryInto<GraphicsCaptureItemType> for PreparedMonitorItem {
+        type Error = std::convert::Infallible;
+
+        fn try_into(self) -> Result<GraphicsCaptureItemType, Self::Error> {
+            Ok(GraphicsCaptureItemType::Monitor((self.item, self.monitor)))
+        }
+    }
+
+    fn prepared_primary_monitor() -> Result<PreparedMonitorItem, CaptureError> {
+        let monitor =
+            Monitor::primary().map_err(|error| CaptureError::CaptureFailed(error.to_string()))?;
+        PreparedMonitorItem::new(monitor)
+    }
 
     struct HandlerConfig {
         capture: CaptureConfig,
         frames: SyncSender<Result<EncodedH264Frame, CaptureError>>,
         target_bitrate: Arc<AtomicU32>,
+        keyframe_requested: Arc<AtomicBool>,
+        counters: Arc<CaptureCounters>,
         stop_requested: Arc<AtomicBool>,
     }
 
@@ -229,6 +346,8 @@ mod platform {
     struct CaptureHandler {
         frames: SyncSender<Result<EncodedH264Frame, CaptureError>>,
         target_bitrate: Arc<AtomicU32>,
+        keyframe_requested: Arc<AtomicBool>,
+        counters: Arc<CaptureCounters>,
         stop_requested: Arc<AtomicBool>,
     }
 
@@ -274,6 +393,8 @@ mod platform {
             Ok(Self {
                 frames: context.flags.frames,
                 target_bitrate: context.flags.target_bitrate,
+                keyframe_requested: context.flags.keyframe_requested,
+                counters: context.flags.counters,
                 stop_requested: context.flags.stop_requested,
             })
         }
@@ -283,12 +404,22 @@ mod platform {
             frame: &mut Frame,
             capture_control: InternalCaptureControl,
         ) -> Result<(), Self::Error> {
+            let captured_at = std::time::Instant::now();
+            self.counters
+                .captured_frames
+                .fetch_add(1, Ordering::Relaxed);
             if self.stop_requested.load(Ordering::Relaxed) {
                 // The Media Foundation encoder owns D3D resources on this
                 // callback thread. Release it before asking WGC's dispatcher
                 // to stop; otherwise ShutdownQueueAsync can wait forever.
                 ENCODER_STATE.with(|slot| *slot.borrow_mut() = None);
                 capture_control.stop();
+                return Ok(());
+            }
+            if self.counters.pending_frames.load(Ordering::Acquire) >= 2 {
+                self.counters
+                    .dropped_before_encode
+                    .fetch_add(1, Ordering::Relaxed);
                 return Ok(());
             }
             let target_bitrate = self.target_bitrate.load(Ordering::Relaxed);
@@ -298,6 +429,7 @@ mod platform {
                     self.report_and_fail(CaptureError::CaptureFailed(error.to_string()))
                 })?
                 .Duration;
+            let encode_started = std::time::Instant::now();
             let encoded = ENCODER_STATE.with(|slot| {
                 let mut slot = slot.borrow_mut();
                 let state = slot
@@ -312,6 +444,11 @@ mod platform {
                         })?;
                     state.bitrate_bits_per_second = target_bitrate;
                 }
+                if self.keyframe_requested.swap(false, Ordering::AcqRel) {
+                    state.encoder.request_keyframe().map_err(|error| {
+                        self.report_and_fail(CaptureError::EncodeFailed(error.to_string()))
+                    })?;
+                }
                 let first = *state.first_timestamp_100ns.get_or_insert(timestamp_100ns);
                 let relative_100ns =
                     u64::try_from(timestamp_100ns.saturating_sub(first)).unwrap_or_default();
@@ -322,16 +459,40 @@ mod platform {
                     .map_err(|error| {
                         self.report_and_fail(CaptureError::EncodeFailed(error.to_string()))
                     })
-            })?;
+            });
+            let encode_duration = encode_started.elapsed();
+            let encoded = encoded?;
             if let Some(sample) = encoded {
+                let encoded_at = std::time::Instant::now();
                 let value = Ok(EncodedH264Frame {
                     data: sample.data,
                     presentation_timestamp: sample.presentation_timestamp,
                     keyframe: sample.keyframe,
+                    captured_at,
+                    encoded_at,
+                    encode_duration,
                 });
+                self.counters.pending_frames.fetch_add(1, Ordering::Release);
                 match self.frames.try_send(value) {
-                    Ok(()) | Err(TrySendError::Full(_)) => {}
-                    Err(TrySendError::Disconnected(_)) => return Err(CaptureError::Stopped),
+                    Ok(()) => {
+                        self.counters.encoded_frames.fetch_add(1, Ordering::Relaxed);
+                        self.counters
+                            .total_encode_micros
+                            .fetch_add(duration_micros(encode_duration), Ordering::Relaxed);
+                        if sample.keyframe {
+                            self.counters.keyframes.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                    Err(TrySendError::Full(_)) => {
+                        self.counters.pending_frames.fetch_sub(1, Ordering::Release);
+                        self.counters
+                            .dropped_before_encode
+                            .fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(TrySendError::Disconnected(_)) => {
+                        self.counters.pending_frames.fetch_sub(1, Ordering::Release);
+                        return Err(CaptureError::Stopped);
+                    }
                 }
             }
             Ok(())
@@ -349,16 +510,19 @@ mod platform {
         let (command_tx, command_rx) = sync_channel(4);
         let (stopped_tx, stopped_rx) = sync_channel(1);
         let target_bitrate = Arc::new(AtomicU32::new(config.bitrate_bits_per_second));
+        let keyframe_requested = Arc::new(AtomicBool::new(false));
+        let counters = Arc::new(CaptureCounters::default());
+        let worker_counters = Arc::clone(&counters);
         let stop_requested = Arc::new(AtomicBool::new(false));
         let worker_stop_requested = Arc::clone(&stop_requested);
         let worker = std::thread::Builder::new()
             .name("bridgepad-windows-capture".to_owned())
             .spawn(move || {
                 let _completion = WorkerCompletion(stopped_tx);
-                let monitor = match Monitor::primary() {
+                let monitor = match prepared_primary_monitor() {
                     Ok(value) => value,
                     Err(error) => {
-                        let _ = ready_tx.send(Err(CaptureError::CaptureFailed(error.to_string())));
+                        let _ = ready_tx.send(Err(error));
                         return;
                     }
                 };
@@ -381,6 +545,8 @@ mod platform {
                         capture: config,
                         frames: frame_tx,
                         target_bitrate: Arc::clone(&target_bitrate),
+                        keyframe_requested: Arc::clone(&keyframe_requested),
+                        counters: worker_counters,
                         stop_requested: Arc::clone(&worker_stop_requested),
                     },
                 );
@@ -401,6 +567,9 @@ mod platform {
                         CaptureCommand::SetBitrate(bitrate) => {
                             target_bitrate.store(bitrate, Ordering::Relaxed);
                         }
+                        CaptureCommand::RequestKeyframe => {
+                            keyframe_requested.store(true, Ordering::Release);
+                        }
                         CaptureCommand::Stop => {
                             worker_stop_requested.store(true, Ordering::Relaxed);
                             break;
@@ -418,6 +587,7 @@ mod platform {
             Ok(Ok(())) => Ok(WindowsCapturePipeline {
                 frames: frame_rx,
                 commands: Some(command_tx),
+                counters,
                 stopped: stopped_rx,
                 worker: Some(worker),
             }),
