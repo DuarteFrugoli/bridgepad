@@ -121,10 +121,6 @@ class InputRouter(scope: CoroutineScope) {
         }
     }
 
-    fun consumePointer(): PointerReport? = TouchMouseStore.consume()
-
-    fun consumeKeyboard(): KeyboardInput? = TouchKeyboardStore.consume()
-
     fun peekPointer(): PointerReport? = TouchMouseStore.peek()
 
     fun acknowledgePointer(sent: Boolean) = TouchMouseStore.acknowledge(sent)

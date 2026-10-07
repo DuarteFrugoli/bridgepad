@@ -192,8 +192,8 @@ Os módulos Gradle atuais são:
 
 As dependências apontam para `:domain`. Uma entrada nova não deve conhecer o
 transporte, e uma saída deve consumir apenas estados normalizados. Consulte
-[`docs/architecture.md`](./docs/architecture.md) e os ADRs em
-[`docs/decisions`](./docs/decisions/).
+[`docs/architecture.md`](./docs/architecture.md), a fonte única da arquitetura
+atual.
 
 ## Próxima direção
 
@@ -299,7 +299,7 @@ app/                       aplicativo Android e composição
 domain/                    domínio de gamepad independente
 protocol/                  futuras mensagens do protocolo desktop
 transport-bluetooth-hid/   adaptador Bluetooth HID para Android
-docs/                      documentação pública em inglês e ADRs
+docs/                      documentação pública em inglês
 README.md                  apresentação em inglês
 README.pt-BR.md            apresentação em português brasileiro
 ```
@@ -317,8 +317,7 @@ paralelo.
   localização;
 - [`docs/testing.md`](./docs/testing.md) — procedimentos de build e hardware;
 - [`docs/compatibility.md`](./docs/compatibility.md) — resultados reais;
-- [`docs/release-checklist.md`](./docs/release-checklist.md) — gates restantes;
-- [`docs/decisions`](./docs/decisions/) — decisões de arquitetura.
+- [`docs/release-checklist.md`](./docs/release-checklist.md) — gates restantes.
 
 ## Compatibilidade
 

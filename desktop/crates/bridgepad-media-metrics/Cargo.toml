@@ -1,0 +1,12 @@
+[package]
+name = "bridgepad-media-metrics"
+description = "Bounded stage metrics for BridgePad media pipelines"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true

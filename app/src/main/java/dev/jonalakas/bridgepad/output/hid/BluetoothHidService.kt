@@ -69,7 +69,10 @@ class BluetoothHidService : Service() {
     private val outputHandler = Handler(outputThread.looper)
     private val outputRunning = AtomicBoolean(false)
     private val transportLock = Any()
-    private val outputScheduler = OutputScheduler(OUTPUT_RATE_HZ)
+    private val outputScheduler = OutputScheduler(
+        reportRateHz = OUTPUT_RATE_HZ,
+        maximumPendingTransitions = MAX_PENDING_GAMEPAD_TRANSITIONS,
+    )
     private lateinit var inputRouter: InputRouter
     private var inputSubscription: InputSubscription? = null
     private var activeCaptureMode = PhysicalCaptureMode.COMPATIBILITY
@@ -88,12 +91,13 @@ class BluetoothHidService : Service() {
     private var latestLatencyMs: Float? = null
     private var nextOutputTickUptimeMs = 0L
     private var maxOutputDelayNanos = 0L
-    private var nextOutputKindIndex = 0
+    private var lastGamepadRejectionLogNanos = NO_INPUT_TIMESTAMP
+    private var nextAuxiliaryOutputKindIndex = 0
     private val outputTick = object : Runnable {
         override fun run() {
             if (shuttingDown || !outputRunning.get()) return
             recordOutputDelay()
-            sendNextOutputReport()
+            sendOutputReports()
             updateOutputMetrics()
             if (!shuttingDown && outputRunning.get()) {
                 scheduleNextOutputTick()
@@ -101,8 +105,7 @@ class BluetoothHidService : Service() {
         }
     }
 
-    private enum class OutputKind {
-        GAMEPAD,
+    private enum class AuxiliaryOutputKind {
         POINTER,
         KEYBOARD,
     }
@@ -618,24 +621,29 @@ class BluetoothHidService : Service() {
         latestLatencyMs = null
         nextOutputTickUptimeMs = SystemClock.uptimeMillis()
         maxOutputDelayNanos = 0L
-        nextOutputKindIndex = 0
+        lastGamepadRejectionLogNanos = NO_INPUT_TIMESTAMP
+        nextAuxiliaryOutputKindIndex = 0
         outputRunning.set(true)
         outputHandler.postAtTime(outputTick, nextOutputTickUptimeMs)
     }
 
-    private fun sendNextOutputReport() {
+    private fun sendOutputReports() {
         if (connectedDevice == null) return
         val now = monotonicNanos()
-        val kinds = OutputKind.entries
+        sendScheduledGamepadReport(now)
+        sendNextAuxiliaryOutputReport()
+    }
+
+    private fun sendNextAuxiliaryOutputReport() {
+        val kinds = AuxiliaryOutputKind.entries
         repeat(kinds.size) { offset ->
-            val index = (nextOutputKindIndex + offset) % kinds.size
+            val index = (nextAuxiliaryOutputKindIndex + offset) % kinds.size
             val attempted = when (kinds[index]) {
-                OutputKind.GAMEPAD -> sendScheduledGamepadReport(now)
-                OutputKind.POINTER -> sendMouseReport()
-                OutputKind.KEYBOARD -> sendKeyboardReport()
+                AuxiliaryOutputKind.POINTER -> sendMouseReport()
+                AuxiliaryOutputKind.KEYBOARD -> sendKeyboardReport()
             }
             if (attempted) {
-                nextOutputKindIndex = (index + 1) % kinds.size
+                nextAuxiliaryOutputKindIndex = (index + 1) % kinds.size
                 return
             }
         }
@@ -647,7 +655,13 @@ class BluetoothHidService : Service() {
         val sent = synchronized(transportLock) { outputTransport.sendGamepad(state) }
         outputScheduler.complete(state, sent, monotonicNanos())
         if (!sent) {
-            SessionLog.record("GAMEPAD", "A gamepad report was retained for retry")
+            if (
+                lastGamepadRejectionLogNanos == NO_INPUT_TIMESTAMP ||
+                now - lastGamepadRejectionLogNanos >= REJECTION_LOG_INTERVAL_NANOS
+            ) {
+                SessionLog.record("GAMEPAD", "A gamepad report was rejected; continuing with the newest state")
+                lastGamepadRejectionLogNanos = now
+            }
             return true
         }
         reportsSinceConnection++
@@ -692,6 +706,7 @@ class BluetoothHidService : Service() {
 
         val elapsedSeconds = ((now - metricsStartedNanos).coerceAtLeast(1L)) / 1_000_000_000f
         val pointerDiagnostics = inputRouter.pointerDiagnostics()
+        val gamepadDiagnostics = outputScheduler.diagnostics()
         HidSessionStore.update {
             it.copy(
                 inputRateHz = inputEventsSinceConnection.get() / elapsedSeconds,
@@ -704,6 +719,10 @@ class BluetoothHidService : Service() {
                 pointerOutputRateHz = pointerReportsSinceConnection / elapsedSeconds,
                 pointerRejectedReports = pointerRejectedReports,
                 pointerPendingReports = pointerDiagnostics.pendingReportCount,
+                gamepadRejectedReports = gamepadDiagnostics.rejectedReports,
+                gamepadPendingTransitions = gamepadDiagnostics.pendingTransitions,
+                gamepadPeakPendingTransitions = gamepadDiagnostics.peakPendingTransitions,
+                gamepadDroppedTransitions = gamepadDiagnostics.droppedTransitions,
             )
         }
         lastMetricsUpdateNanos = now
@@ -904,7 +923,9 @@ class BluetoothHidService : Service() {
         private const val POST_PAIR_CONNECTION_DELAY_MS = 500L
         private const val OUTPUT_RATE_HZ = 100
         private const val OUTPUT_INTERVAL_MS = 10L
+        private const val MAX_PENDING_GAMEPAD_TRANSITIONS = 8
         private const val METRICS_UPDATE_INTERVAL_NANOS = 500_000_000L
+        private const val REJECTION_LOG_INTERVAL_NANOS = 1_000_000_000L
         private const val NO_INPUT_TIMESTAMP = -1L
         fun intent(context: Context, action: String) =
             Intent(context, BluetoothHidService::class.java).setAction(action)

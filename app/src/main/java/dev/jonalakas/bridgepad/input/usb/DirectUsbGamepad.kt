@@ -4,6 +4,7 @@ import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import dev.jonalakas.bridgepad.core.mapping.GamepadMapping
 import dev.jonalakas.bridgepad.localization.LocalizedMessage
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,7 +25,10 @@ data class DirectUsbState(
 
 object DirectUsbGamepadStore {
     private val mutableState = MutableStateFlow(DirectUsbState())
-    private val updateChannel = Channel<DirectUsbState>(Channel.UNLIMITED)
+    private val updateChannel = Channel<DirectUsbState>(
+        capacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
     val state = mutableState.asStateFlow()
     val updates: Flow<DirectUsbState> = updateChannel.receiveAsFlow()
     fun set(state: DirectUsbState) {

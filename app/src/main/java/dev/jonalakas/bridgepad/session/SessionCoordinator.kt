@@ -37,6 +37,9 @@ class SessionCoordinator(
     ): Boolean {
         val adapter = adaptersById[adapterId] ?: return false
         if (destination !in adapter.descriptor.supportedDestinations) return false
+        if (activeAdapterId != null && activeAdapterId != adapterId) {
+            activeAdapter()?.stop()
+        }
         activeAdapterId = adapterId
         adapter.start(destination, physicalCaptureMode)
         return true

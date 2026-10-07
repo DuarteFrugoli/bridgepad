@@ -4,6 +4,7 @@ import dev.jonalakas.bridgepad.core.gamepad.SourceId
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,7 +40,10 @@ data class PhysicalGamepadState(
 
 object PhysicalGamepadStore {
     private val mutableState = MutableStateFlow(PhysicalGamepadState())
-    private val updateChannel = Channel<PhysicalGamepadState>(Channel.UNLIMITED)
+    private val updateChannel = Channel<PhysicalGamepadState>(
+        capacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
     val state: StateFlow<PhysicalGamepadState> = mutableState.asStateFlow()
     val updates: Flow<PhysicalGamepadState> = updateChannel.receiveAsFlow()
 

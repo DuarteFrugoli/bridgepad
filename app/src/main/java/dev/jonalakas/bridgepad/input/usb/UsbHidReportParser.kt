@@ -14,7 +14,12 @@ internal class UsbHidReportParser(descriptor: ByteArray) {
     private val hasRxRy = fields.any { it.usagePage == 0x01 && it.usage == 0x33 } &&
         fields.any { it.usagePage == 0x01 && it.usage == 0x34 }
 
-    init { require(fields.isNotEmpty()) { "The USB HID descriptor has no readable gamepad fields." } }
+    init {
+        require(hasGameControllerApplicationCollection(descriptor)) {
+            "The USB HID descriptor is not a joystick or gamepad application."
+        }
+        require(fields.isNotEmpty()) { "The USB HID descriptor has no readable gamepad fields." }
+    }
 
     fun decode(report: ByteArray): VirtualGamepadState {
         val reportId = if (fields.any { it.reportId != 0 }) report.firstOrNull()?.toInt()?.and(0xff) ?: 0 else 0
@@ -107,6 +112,43 @@ internal class UsbHidReportParser(descriptor: ByteArray) {
     private fun button(usage: Int) = VirtualControl.entries.getOrNull(usage - 1)
 
     companion object {
+        private fun hasGameControllerApplicationCollection(bytes: ByteArray): Boolean {
+            var usagePage = 0
+            var usages = mutableListOf<Int>()
+            var index = 0
+            while (index < bytes.size) {
+                val prefix = bytes[index++].toInt() and 0xff
+                if (prefix == 0xfe) {
+                    if (index + 1 >= bytes.size) return false
+                    val length = bytes[index].toInt() and 0xff
+                    index += length + 2
+                    continue
+                }
+                val length = when (prefix and 3) {
+                    3 -> 4
+                    else -> prefix and 3
+                }
+                if (index + length > bytes.size) return false
+                var value = 0
+                repeat(length) { byte ->
+                    value = value or ((bytes[index + byte].toInt() and 0xff) shl (byte * 8))
+                }
+                index += length
+                when (prefix and 0xfc) {
+                    0x04 -> usagePage = value
+                    0x08 -> usages += value
+                    0xa0 -> {
+                        val applicationCollection = value == 1
+                        val gameController = usages.lastOrNull() in setOf(0x04, 0x05)
+                        if (applicationCollection && usagePage == 0x01 && gameController) return true
+                        usages = mutableListOf()
+                    }
+                    0xc0 -> usages = mutableListOf()
+                }
+            }
+            return false
+        }
+
         private fun signExtend(value: Int, bits: Int): Int {
             if (bits <= 0 || bits >= 32) return value
             val sign = 1 shl (bits - 1)

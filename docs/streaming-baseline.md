@@ -3,7 +3,8 @@
 This document freezes the working WebRTC implementation as the comparison
 baseline for BridgePad's dedicated local media plane. It is a development
 benchmark, not a claim that WebRTC is the definitive local backend or that the
-release compatibility matrix is complete. ADR 0014 records that distinction.
+release compatibility matrix is complete. The definitive direction is recorded
+in [`architecture.md`](./architecture.md).
 
 Baseline date: 2026-10-04. Baseline source: the commit that first adds this
 document.

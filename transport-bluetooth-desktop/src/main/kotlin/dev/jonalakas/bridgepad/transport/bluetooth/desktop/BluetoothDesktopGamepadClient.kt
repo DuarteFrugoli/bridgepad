@@ -53,19 +53,24 @@ class BluetoothDesktopGamepadClient(
         ?.adapter
         ?: error("Bluetooth is not available on this device")
     private val stopping = AtomicBoolean(false)
-    private val scheduler = OutputScheduler(REPORT_RATE_HZ)
+    private val scheduler = OutputScheduler(
+        reportRateHz = REPORT_RATE_HZ,
+        maximumPendingTransitions = GAMEPAD_TRANSITION_QUEUE_CAPACITY,
+    )
     private val pendingPointers = ArrayBlockingQueue<PointerReport>(POINTER_QUEUE_CAPACITY)
     private val pendingKeyboard = ArrayBlockingQueue<KeyboardInput>(KEYBOARD_QUEUE_CAPACITY)
     @Volatile
     private var socket: BluetoothSocket? = null
     @Volatile
     private var started = false
+    @Volatile
+    private var worker: Thread? = null
 
     fun start() {
         check(!started) { "A Bluetooth Desktop client can only be started once" }
         started = true
         onStatus(BluetoothDesktopGamepadStatus.Connecting)
-        Thread(::runSession, "BridgePad-bluetooth-desktop-gamepad").apply {
+        worker = Thread(::runSession, "BridgePad-bluetooth-desktop-gamepad").apply {
             isDaemon = true
             start()
         }
@@ -88,6 +93,19 @@ class BluetoothDesktopGamepadClient(
     fun closeImmediately() {
         stopping.set(true)
         runCatching { socket?.close() }
+    }
+
+    fun stopAndAwait(immediate: Boolean, timeoutMillis: Long = STOP_TIMEOUT_MILLIS): Boolean {
+        stopping.set(true)
+        if (immediate) runCatching { socket?.close() }
+        val activeWorker = worker ?: return true
+        if (activeWorker === Thread.currentThread()) return false
+        activeWorker.join(timeoutMillis)
+        if (activeWorker.isAlive) {
+            runCatching { socket?.close() }
+            activeWorker.join(FORCED_STOP_TIMEOUT_MILLIS)
+        }
+        return !activeWorker.isAlive
     }
 
     private fun runSession() {
@@ -114,6 +132,7 @@ class BluetoothDesktopGamepadClient(
                 reconnectAttempt += 1
                 pendingPointers.clear()
                 pendingKeyboard.clear()
+                scheduler.discardPendingTransitions()
                 onStatus(
                     BluetoothDesktopGamepadStatus.Reconnecting(
                         reconnectAttempt,
@@ -253,6 +272,9 @@ class BluetoothDesktopGamepadClient(
         // Absorb short RFCOMM delivery stalls without rejecting pointer samples.
         const val POINTER_QUEUE_CAPACITY = 64
         const val KEYBOARD_QUEUE_CAPACITY = 64
+        const val GAMEPAD_TRANSITION_QUEUE_CAPACITY = 8
+        const val STOP_TIMEOUT_MILLIS = 1_000L
+        const val FORCED_STOP_TIMEOUT_MILLIS = 500L
         val RECONNECT_DELAYS_MILLIS = longArrayOf(500, 1_000, 2_000)
         val RFCOMM_SERVICE_UUID: UUID = UUID.fromString("7a1b8d5f-6c24-4e71-9f52-a4b8d9c30101")
     }

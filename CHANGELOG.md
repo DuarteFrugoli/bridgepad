@@ -194,7 +194,7 @@ The project follows [Semantic Versioning](https://semver.org/).
 - GitHub Actions checks for unit tests, lint and debug builds.
 - Device baseline screen with app and Android system information.
 - Repeatable build, installation and hardware-testing documentation.
-- Architecture decision record for native Android and API 28.
+- Architecture documentation for native Android and API 28.
 - Brazilian Portuguese README and a public English documentation policy.
 - Bluetooth HID Device spike with runtime permission handling, foreground
   service, paired-host selection and a test gamepad report.

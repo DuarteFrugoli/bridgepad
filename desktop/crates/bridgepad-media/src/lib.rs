@@ -6,6 +6,9 @@ use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+pub mod assembly;
+pub mod impairment;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum VideoCodec {
     RawRgb565,
@@ -65,7 +68,17 @@ pub trait VideoEncoder: Send {
 
 pub trait MediaTransport {
     type Error;
+    /// Sends the newest complete encoded frame.
+    ///
+    /// # Errors
+    ///
+    /// Returns the transport-specific error when the frame cannot be queued.
     fn send_video(&mut self, frame: &EncodedVideoFrame) -> Result<(), Self::Error>;
+    /// Polls receiver feedback without blocking the media producer.
+    ///
+    /// # Errors
+    ///
+    /// Returns the transport-specific error when feedback cannot be read.
     fn poll_feedback(&mut self) -> Result<Option<MediaFeedback>, Self::Error>;
 }
 
@@ -133,7 +146,7 @@ impl VideoCaptureSource for SyntheticVideoSource {
             width: self.format.width,
             height: self.format.height,
             rgb888: pixels,
-            generation_micros: micros(started.elapsed()).min(u64::from(u32::MAX)) as u32,
+            generation_micros: micros_u32(started.elapsed()),
         };
         self.frame_id = self.frame_id.wrapping_add(1);
         result
@@ -145,6 +158,11 @@ pub struct RawRgb565Encoder {
 }
 
 impl RawRgb565Encoder {
+    /// Creates the diagnostic RGB565 encoder.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `format` requests a codec other than [`VideoCodec::RawRgb565`].
     #[must_use]
     pub fn new(format: VideoFormat) -> Self {
         assert_eq!(format.codec, VideoCodec::RawRgb565);
@@ -160,7 +178,9 @@ impl VideoEncoder for RawRgb565Encoder {
     fn encode(&mut self, frame: CapturedVideoFrame, force_keyframe: bool) -> EncodedVideoFrame {
         let started = Instant::now();
         let mut payload = Vec::with_capacity(frame.rgb888.len() / 3 * 2);
-        for pixel in frame.rgb888.chunks_exact(3) {
+        let (pixels, remainder) = frame.rgb888.as_chunks::<3>();
+        debug_assert!(remainder.is_empty());
+        for pixel in pixels {
             let red = u16::from(pixel[0]) >> 3;
             let green = u16::from(pixel[1]) >> 2;
             let blue = u16::from(pixel[2]) >> 3;
@@ -173,7 +193,7 @@ impl VideoEncoder for RawRgb565Encoder {
             keyframe: force_keyframe || frame.frame_id == 0,
             payload,
             generation_micros: frame.generation_micros,
-            encode_micros: micros(started.elapsed()).min(u64::from(u32::MAX)) as u32,
+            encode_micros: micros_u32(started.elapsed()),
         }
     }
 
@@ -245,6 +265,10 @@ fn send_latest<T>(sender: &SyncSender<T>, value: T) {
 
 fn micros(duration: Duration) -> u64 {
     u64::try_from(duration.as_micros()).unwrap_or(u64::MAX)
+}
+
+fn micros_u32(duration: Duration) -> u32 {
+    u32::try_from(micros(duration)).unwrap_or(u32::MAX)
 }
 
 #[cfg(test)]

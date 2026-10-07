@@ -5,13 +5,16 @@ import androidx.core.content.ContextCompat
 import dev.jonalakas.bridgepad.core.session.DestinationType
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.ports.OutputSessionAdapter
+import dev.jonalakas.bridgepad.session.OutputSessionOwner
 
 /** Starts the Android service that hosts one Bluetooth HID device profile. */
 class BluetoothHidSessionAdapter(
     context: Context,
     private val profile: BluetoothHidProfile,
+    private val outputSessionOwner: OutputSessionOwner,
 ) : OutputSessionAdapter {
     private val applicationContext = context.applicationContext
+    private var ownership: OutputSessionOwner.Lease? = null
 
     override val descriptor
         get() = profile.adapter
@@ -22,6 +25,9 @@ class BluetoothHidSessionAdapter(
     ) {
         require(destination in descriptor.supportedDestinations) {
             "${descriptor.id.value} does not support $destination."
+        }
+        ownership = outputSessionOwner.claim(OutputSessionOwner.Kind.BLUETOOTH_HID) {
+            stopForOwnershipChange()
         }
         ContextCompat.startForegroundService(
             applicationContext,
@@ -43,7 +49,9 @@ class BluetoothHidSessionAdapter(
     }
 
     override fun stop() {
-        applicationContext.startService(command(BluetoothHidService.ACTION_STOP))
+        val activeOwnership = ownership
+        stopForOwnershipChange()
+        activeOwnership?.release()
     }
 
     override fun updatePhysicalCapture(physicalCaptureMode: PhysicalCaptureMode) {
@@ -66,4 +74,9 @@ class BluetoothHidSessionAdapter(
     }
 
     private fun command(action: String) = BluetoothHidService.intent(applicationContext, action)
+
+    private fun stopForOwnershipChange() {
+        applicationContext.startService(command(BluetoothHidService.ACTION_STOP))
+        ownership = null
+    }
 }

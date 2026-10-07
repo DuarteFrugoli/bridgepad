@@ -20,7 +20,7 @@ mod platform {
     use futures_executor::block_on;
     use std::collections::HashMap;
     use std::future::IntoFuture;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc::{SyncSender, sync_channel};
     use std::sync::{Arc, Mutex};
     use std::thread;
@@ -35,6 +35,8 @@ mod platform {
     use windows::core::GUID;
 
     const RFCOMM_SERVICE_UUID: GUID = GUID::from_u128(0x7a1b8d5f_6c24_4e71_9f52_a4b8d9c30101);
+    const GAMEPAD_WATCHDOG_TIMEOUT: Duration = Duration::from_millis(150);
+    const GAMEPAD_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct BluetoothServerSnapshot {
@@ -412,8 +414,16 @@ mod platform {
     }
 
     struct GamepadLease {
-        device: VigemGamepad,
+        shared: Arc<Mutex<GamepadWatchdogState>>,
+        stop: Arc<AtomicBool>,
+        watchdog: Option<thread::JoinHandle<()>>,
         active_sessions: Arc<AtomicUsize>,
+    }
+
+    struct GamepadWatchdogState {
+        device: VigemGamepad,
+        last_update: Instant,
+        neutral: bool,
     }
 
     impl GamepadLease {
@@ -422,23 +432,67 @@ mod platform {
             active_sessions: Arc<AtomicUsize>,
         ) -> Result<Self, AnyError> {
             device.neutralize().map_err(|error| error.to_string())?;
+            let shared = Arc::new(Mutex::new(GamepadWatchdogState {
+                device,
+                last_update: Instant::now(),
+                neutral: true,
+            }));
+            let stop = Arc::new(AtomicBool::new(false));
+            let worker_shared = Arc::clone(&shared);
+            let worker_stop = Arc::clone(&stop);
+            let watchdog = thread::Builder::new()
+                .name("BridgePad-RFCOMM-watchdog".to_owned())
+                .spawn(move || {
+                    while !worker_stop.load(Ordering::Relaxed) {
+                        thread::sleep(GAMEPAD_WATCHDOG_POLL_INTERVAL);
+                        let Ok(mut current) = worker_shared.lock() else {
+                            return;
+                        };
+                        if !current.neutral
+                            && current.last_update.elapsed() >= GAMEPAD_WATCHDOG_TIMEOUT
+                        {
+                            match current.device.neutralize() {
+                                Ok(()) => current.neutral = true,
+                                Err(error) => eprintln!(
+                                    "Could not neutralize stale Bluetooth gamepad state: {error}"
+                                ),
+                            }
+                        }
+                    }
+                })?;
             active_sessions.fetch_add(1, Ordering::Relaxed);
             Ok(Self {
-                device,
+                shared,
+                stop,
+                watchdog: Some(watchdog),
                 active_sessions,
             })
         }
 
         fn update(&mut self, report: GamepadReport) -> Result<(), AnyError> {
-            self.device
+            let mut current = self
+                .shared
+                .lock()
+                .map_err(|_| "Bluetooth gamepad lock is poisoned")?;
+            current
+                .device
                 .update(report)
-                .map_err(|error| error.to_string().into())
+                .map_err(|error| error.to_string())?;
+            current.last_update = Instant::now();
+            current.neutral = report == GamepadReport::default();
+            Ok(())
         }
     }
 
     impl Drop for GamepadLease {
         fn drop(&mut self) {
-            if let Err(error) = self.device.shutdown() {
+            self.stop.store(true, Ordering::Relaxed);
+            if let Some(watchdog) = self.watchdog.take() {
+                let _ = watchdog.join();
+            }
+            if let Ok(mut current) = self.shared.lock()
+                && let Err(error) = current.device.shutdown()
+            {
                 eprintln!("Could not safely stop Bluetooth XInput gamepad: {error}");
             }
             self.active_sessions.fetch_sub(1, Ordering::Relaxed);

@@ -59,10 +59,10 @@ compare a run made during phone hotspot use with one made without it, because
 2.4 GHz radio coexistence can alter Bluetooth performance.
 
 The provisional winner shown by Android uses loss first and p95 RTT second. It
-is a convenience, not the architecture decision: reconnect reliability,
-maximum gaps and repeated runs must also be considered. This spike does not
-prove authentication or XInput integration; those belong to the production
-phase after a transport is selected.
+is a convenience, not enough to select the production transport: reconnect
+reliability, maximum gaps and repeated runs must also be considered. This spike
+does not prove authentication or XInput integration; those belong to the
+production phase after a transport is selected.
 
 ### First playable RFCOMM/XInput path
 
@@ -144,7 +144,7 @@ setup, and the complete deterministic demo produced the expected buttons,
 D-pad, sticks and triggers. The controller also appeared in `joy.cpl` and worked
 in a native controller game. The functional Windows recognition spike is
 approved; sustainable signed production distribution remains a separate gate
-under ADR 0010.
+documented in [`architecture.md`](./architecture.md#windows-production-virtual-device-gate).
 
 ## Encrypted Android-to-desktop network probe
 

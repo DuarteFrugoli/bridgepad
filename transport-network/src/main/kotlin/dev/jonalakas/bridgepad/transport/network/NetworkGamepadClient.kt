@@ -98,12 +98,14 @@ class NetworkGamepadClient(
     private var socket: SSLSocket? = null
     @Volatile
     private var started = false
+    @Volatile
+    private var worker: Thread? = null
 
     fun start() {
         check(!started) { "A network gamepad client can only be started once" }
         started = true
         onStatus(NetworkGamepadStatus.Connecting)
-        Thread(::runSession, "BridgePad-network-gamepad").apply {
+        worker = Thread(::runSession, "BridgePad-network-gamepad").apply {
             isDaemon = true
             start()
         }
@@ -167,6 +169,19 @@ class NetworkGamepadClient(
     fun closeImmediately() {
         stopping.set(true)
         runCatching { socket?.close() }
+    }
+
+    fun stopAndAwait(immediate: Boolean, timeoutMillis: Long = STOP_TIMEOUT_MILLIS): Boolean {
+        stopping.set(true)
+        if (immediate) runCatching { socket?.close() }
+        val activeWorker = worker ?: return true
+        if (activeWorker === Thread.currentThread()) return false
+        activeWorker.join(timeoutMillis)
+        if (activeWorker.isAlive) {
+            runCatching { socket?.close() }
+            activeWorker.join(FORCED_STOP_TIMEOUT_MILLIS)
+        }
+        return !activeWorker.isAlive
     }
 
     private fun runSession() {
@@ -290,8 +305,43 @@ class NetworkGamepadClient(
 
             var nextGamepadReportAt = 0L
             var lastHeartbeatAt = System.nanoTime()
+            val pendingHeartbeatNonce = AtomicLong(NO_HEARTBEAT)
+            val pendingHeartbeatSince = AtomicLong(0L)
+            val heartbeatFailure = AtomicReference<Exception?>(null)
+            val heartbeatReader = Thread(
+                {
+                    while (!stopping.get() && !connected.isClosed) {
+                        try {
+                            val pongPacket = readBridgePacket(input)
+                            val pong = pongPacket.message as? BridgeMessage.Pong
+                                ?: error("Desktop sent an unexpected control response")
+                            check(pongPacket.sessionId == sessionId) {
+                                "Desktop returned a heartbeat for another session"
+                            }
+                            val expectedNonce = pendingHeartbeatNonce.get()
+                            check(expectedNonce != NO_HEARTBEAT && pong.nonce == expectedNonce) {
+                                "Desktop changed the heartbeat nonce"
+                            }
+                            pendingHeartbeatNonce.compareAndSet(expectedNonce, NO_HEARTBEAT)
+                        } catch (_: SocketTimeoutException) {
+                            // Read timeouts only wake this monitor so it can observe shutdown.
+                        } catch (error: Exception) {
+                            if (!stopping.get() && !connected.isClosed) {
+                                heartbeatFailure.compareAndSet(null, error)
+                                runCatching { connected.close() }
+                            }
+                            return@Thread
+                        }
+                    }
+                },
+                "BridgePad-network-heartbeat",
+            ).apply {
+                isDaemon = true
+                start()
+            }
             while (!stopping.get()) {
                 val loopStartedAt = System.nanoTime()
+                heartbeatFailure.get()?.let { throw it }
                 var sentInput = false
                 if (loopStartedAt >= nextGamepadReportAt) {
                     val next = pollFreshGamepadTransition(loopStartedAt) ?: latestState.get()
@@ -323,23 +373,23 @@ class NetworkGamepadClient(
                     sentInput = true
                 }
                 val now = System.nanoTime()
-                if (now - lastHeartbeatAt >= HEARTBEAT_INTERVAL_NANOS) {
+                val awaitingHeartbeat = pendingHeartbeatNonce.get() != NO_HEARTBEAT
+                if (awaitingHeartbeat &&
+                    now - pendingHeartbeatSince.get() >= request.readTimeoutMillis * 1_000_000L
+                ) {
+                    throw SocketTimeoutException("Desktop heartbeat timed out")
+                }
+                if (!awaitingHeartbeat && now - lastHeartbeatAt >= HEARTBEAT_INTERVAL_NANOS) {
                     val nonce = now and Long.MAX_VALUE
-                    val pingSequence = sequence
+                    pendingHeartbeatNonce.set(nonce)
+                    pendingHeartbeatSince.set(now)
                     sequence = writeBridgePacket(
                         connected,
                         sessionId,
                         sequence,
                         BridgeMessage.Ping(nonce),
                     )
-                    val pongPacket = readBridgePacket(input)
-                    val pong = pongPacket.message as? BridgeMessage.Pong
-                        ?: error("Desktop did not answer the heartbeat")
-                    check(pongPacket.sessionId == sessionId && pongPacket.sequence == pingSequence) {
-                        "Desktop returned a heartbeat for another session"
-                    }
-                    check(pong.nonce == nonce) { "Desktop changed the heartbeat nonce" }
-                    lastHeartbeatAt = System.nanoTime()
+                    lastHeartbeatAt = now
                 }
                 if (!sentInput) Thread.sleep(IDLE_POLL_MILLIS)
             }
@@ -356,6 +406,8 @@ class NetworkGamepadClient(
                 sequence,
                 BridgeMessage.SessionStop(BridgeStopReason.USER_REQUEST),
             )
+            runCatching { connected.close() }
+            heartbeatReader.join(HEARTBEAT_READER_STOP_TIMEOUT_MILLIS)
         }
         socket = null
     }
@@ -402,6 +454,10 @@ class NetworkGamepadClient(
         const val POINTER_QUEUE_CAPACITY = 8
         const val KEYBOARD_QUEUE_CAPACITY = 128
         const val STOP_POLL_MILLIS = 100L
+        const val STOP_TIMEOUT_MILLIS = 1_000L
+        const val FORCED_STOP_TIMEOUT_MILLIS = 500L
+        const val HEARTBEAT_READER_STOP_TIMEOUT_MILLIS = 500L
+        const val NO_HEARTBEAT = -1L
         val RECONNECT_DELAYS_MILLIS = longArrayOf(250, 500, 1_000, 1_500, 2_000)
     }
 }

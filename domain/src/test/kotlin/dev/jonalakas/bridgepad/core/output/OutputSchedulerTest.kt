@@ -51,16 +51,46 @@ class OutputSchedulerTest {
     }
 
     @Test
-    fun rejectedReportIsRetainedForRetry() {
+    fun rejectedTransitionDoesNotBlockANewerRelease() {
         val scheduler = OutputScheduler(reportRateHz = 100)
         val pressed = VirtualGamepadState(setOf(VirtualControl.FACE_SOUTH))
+        val released = VirtualGamepadState()
         scheduler.submit(pressed)
 
         val firstAttempt = scheduler.poll(0L)!!
         scheduler.complete(firstAttempt, sent = false, nowNanos = 0L)
+        scheduler.submit(released)
 
         assertNull(scheduler.poll(9_999_999L))
-        assertEquals(firstAttempt, scheduler.poll(10_000_000L))
+        assertEquals(released, scheduler.poll(10_000_000L))
+        assertEquals(1L, scheduler.diagnostics().rejectedReports)
+    }
+
+    @Test
+    fun rejectedAnalogSnapshotIsRetriedFromLatestState() {
+        val scheduler = OutputScheduler(reportRateHz = 100)
+        val latest = VirtualGamepadState(leftStickX = 0.75f)
+        scheduler.submit(latest)
+
+        val firstAttempt = scheduler.poll(0L)!!
+        scheduler.complete(firstAttempt, sent = false, nowNanos = 0L)
+
+        assertEquals(latest, scheduler.poll(10_000_000L))
+    }
+
+    @Test
+    fun transitionBacklogIsBoundedAndCollapsesToCurrentState() {
+        val scheduler = OutputScheduler(reportRateHz = 100, maximumPendingTransitions = 2)
+        scheduler.submit(VirtualGamepadState(setOf(VirtualControl.FACE_SOUTH)))
+        scheduler.submit(VirtualGamepadState())
+        val latest = VirtualGamepadState(setOf(VirtualControl.FACE_EAST))
+
+        scheduler.submit(latest)
+
+        assertEquals(1, scheduler.diagnostics().pendingTransitions)
+        assertEquals(2, scheduler.diagnostics().peakPendingTransitions)
+        assertEquals(2L, scheduler.diagnostics().droppedTransitions)
+        assertEquals(latest, scheduler.poll(0L))
     }
 
     @Test
@@ -70,5 +100,17 @@ class OutputSchedulerTest {
 
         assertEquals(VirtualGamepadState(), scheduler.stop())
         assertEquals(VirtualGamepadState(), scheduler.poll(0L))
+    }
+
+    @Test
+    fun reconnectDropsHistoryButImmediatelySendsLatestState() {
+        val scheduler = OutputScheduler(reportRateHz = 100)
+        scheduler.submit(VirtualGamepadState(setOf(VirtualControl.FACE_SOUTH)))
+        val latest = VirtualGamepadState(leftStickX = 0.5f)
+        scheduler.submit(latest)
+
+        scheduler.discardPendingTransitions()
+
+        assertEquals(latest, scheduler.poll(0L))
     }
 }

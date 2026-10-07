@@ -1,7 +1,5 @@
 package dev.jonalakas.bridgepad.output.hid
 
-import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
-
 object GamepadHidDescriptor {
     const val REPORT_ID = 1
     const val MOUSE_REPORT_ID = 2
@@ -111,8 +109,6 @@ object GamepadHidDescriptor {
         0x81.toByte(), 0x00, // Six key usages
         0xC0.toByte(),
     )
-
-    fun neutralReport(): ByteArray = HidReportEncoder.encode(VirtualGamepadState())
 
     fun mouseReport(buttons: Int, deltaX: Int, deltaY: Int, scrollY: Int = 0): ByteArray = byteArrayOf(
         (buttons and 0x07).toByte(),

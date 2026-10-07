@@ -2,8 +2,6 @@ package dev.jonalakas.bridgepad.ui.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -29,44 +26,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
-import dev.jonalakas.bridgepad.core.session.SessionStatus
-import dev.jonalakas.bridgepad.diagnostics.DeviceInfo
-import dev.jonalakas.bridgepad.input.android.PhysicalGamepadState
-import dev.jonalakas.bridgepad.session.SessionState
 import dev.jonalakas.bridgepad.ui.components.SessionOrientationSelector
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    appVersion: String,
-    deviceInfo: DeviceInfo,
-    hidState: SessionState,
-    physicalGamepadState: PhysicalGamepadState,
     physicalControllerConnected: Boolean,
     mappingAvailable: Boolean,
     sessionOrientationMode: SessionOrientationMode,
     invertedTouchpadScroll: Boolean,
     useDisplayCutoutArea: Boolean,
+    onOpenTests: () -> Unit,
     onEditTouchscreenLayout: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
     onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
     onInvertedTouchpadScrollChanged: (Boolean) -> Unit,
     onUseDisplayCutoutAreaChanged: (Boolean) -> Unit,
-    onOpenNetworkDiagnostic: () -> Unit,
-    onOpenUsbNetworkDiagnostic: () -> Unit,
-    onOpenBluetoothDesktopDiagnostic: () -> Unit,
-    onOpenUsbAccessoryDiagnostic: () -> Unit,
-    onOpenDesktopStreaming: () -> Unit,
     onLanguageSettings: (() -> Unit)?,
-    onCopyDiagnostics: () -> Unit,
-    onShareDiagnostics: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -96,7 +78,18 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item {
-                SettingsCard(title = stringResource(R.string.session_orientation)) {
+                SettingsSectionCard(title = stringResource(R.string.tests_title)) {
+                    Text(stringResource(R.string.tests_settings_description))
+                    OutlinedButton(
+                        onClick = onOpenTests,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.open_tests))
+                    }
+                }
+            }
+            item {
+                SettingsSectionCard(title = stringResource(R.string.session_orientation)) {
                     Text(stringResource(R.string.session_orientation_description))
                     SessionOrientationSelector(
                         selected = sessionOrientationMode,
@@ -105,7 +98,7 @@ fun SettingsScreen(
                 }
             }
             item {
-                SettingsCard(title = stringResource(R.string.virtual_gamepad_settings)) {
+                SettingsSectionCard(title = stringResource(R.string.virtual_gamepad_settings)) {
                     Text(stringResource(R.string.virtual_gamepad_settings_description))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -140,7 +133,7 @@ fun SettingsScreen(
                 }
             }
             item {
-                SettingsCard(title = stringResource(R.string.touchpad_settings)) {
+                SettingsSectionCard(title = stringResource(R.string.touchpad_settings)) {
                     Text(stringResource(R.string.touchpad_settings_description))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -159,7 +152,7 @@ fun SettingsScreen(
             }
             if (physicalControllerConnected) {
                 item {
-                    SettingsCard(title = stringResource(R.string.physical_gamepad_settings)) {
+                    SettingsSectionCard(title = stringResource(R.string.physical_gamepad_settings)) {
                         Text(stringResource(R.string.physical_gamepad_settings_description))
                         OutlinedButton(
                             onClick = onConfigureGamepadMapping,
@@ -172,62 +165,7 @@ fun SettingsScreen(
                 }
             }
             item {
-                SettingsCard(title = stringResource(R.string.network_diagnostic_title)) {
-                    Text(stringResource(R.string.network_diagnostic_settings_description))
-                    OutlinedButton(
-                        onClick = onOpenNetworkDiagnostic,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.open_network_diagnostic))
-                    }
-                }
-            }
-            item {
-                SettingsCard(title = stringResource(R.string.usb_network_test_title)) {
-                    Text(stringResource(R.string.usb_network_test_settings_description))
-                    OutlinedButton(
-                        onClick = onOpenUsbNetworkDiagnostic,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.usb_network_test_open))
-                    }
-                }
-            }
-            item {
-                SettingsCard(title = stringResource(R.string.bluetooth_desktop_test_title)) {
-                    Text(stringResource(R.string.bluetooth_desktop_test_settings_description))
-                    OutlinedButton(
-                        onClick = onOpenBluetoothDesktopDiagnostic,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.bluetooth_desktop_test_open))
-                    }
-                }
-            }
-            item {
-                SettingsCard(title = stringResource(R.string.usb_accessory_test_title)) {
-                    Text(stringResource(R.string.usb_accessory_test_settings_description))
-                    OutlinedButton(
-                        onClick = onOpenUsbAccessoryDiagnostic,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.usb_accessory_test_open))
-                    }
-                }
-            }
-            item {
-                SettingsCard(title = stringResource(R.string.synthetic_stream_title)) {
-                    Text(stringResource(R.string.synthetic_stream_settings_description))
-                    OutlinedButton(
-                        onClick = onOpenDesktopStreaming,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.synthetic_stream_open))
-                    }
-                }
-            }
-            item {
-                SettingsCard(title = stringResource(R.string.language_title)) {
+                SettingsSectionCard(title = stringResource(R.string.language_title)) {
                     Text(stringResource(R.string.language_description))
                     if (onLanguageSettings != null) {
                         OutlinedButton(
@@ -236,70 +174,6 @@ fun SettingsScreen(
                         ) {
                             Text(stringResource(R.string.change_language))
                         }
-                    }
-                }
-            }
-            item {
-                SettingsCard(title = stringResource(R.string.diagnostics)) {
-                    Text(stringResource(R.string.diagnostic_status, stringResource(hidState.status.labelResource())))
-                    Text(
-                        stringResource(
-                            R.string.diagnostic_version,
-                            appVersion,
-                            deviceInfo.displayModel,
-                            deviceInfo.androidVersion,
-                        ),
-                    )
-                    Text(stringResource(R.string.diagnostic_api, deviceInfo.sdkLevel))
-                    Text(
-                        stringResource(
-                            R.string.diagnostic_metrics,
-                            formatMetric(hidState.inputRateHz),
-                            formatMetric(hidState.outputRateHz),
-                            hidState.lastLatencyMs?.let(::formatMetric) ?: "—",
-                            formatMetric(hidState.maxOutputDelayMs),
-                        ),
-                    )
-                    Text(
-                        stringResource(
-                            R.string.diagnostic_pointer_metrics,
-                            formatMetric(hidState.pointerInputRateHz),
-                            formatMetric(hidState.pointerOutputRateHz),
-                            hidState.pointerRejectedReports,
-                            hidState.pointerPendingReports,
-                        ),
-                    )
-                    if (physicalGamepadState.devices.isNotEmpty()) {
-                        Text(
-                            stringResource(R.string.physical_gamepad_diagnostic),
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        physicalGamepadState.devices.forEach { device ->
-                            Text(device.name, style = MaterialTheme.typography.titleSmall)
-                            Text(stringResource(R.string.diagnostic_controller_ids, device.vendorId, device.productId))
-                            Text(stringResource(R.string.diagnostic_axes, device.axes.joinToString()))
-                            Text(
-                                physicalGamepadState.sourceStates[device.sourceId]?.toString().orEmpty(),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Text(physicalGamepadState.lastRawEvent, style = MaterialTheme.typography.bodySmall)
-                    }
-                    Text(
-                        stringResource(R.string.diagnostics_technical_note),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    OutlinedButton(
-                        onClick = onCopyDiagnostics,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.copy_diagnostics))
-                    }
-                    OutlinedButton(
-                        onClick = onShareDiagnostics,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.share_diagnostics))
                     }
                 }
             }
@@ -339,30 +213,3 @@ fun SettingsScreen(
         )
     }
 }
-
-@Composable
-private fun SettingsCard(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            content()
-        }
-    }
-}
-
-private fun SessionStatus.labelResource(): Int = when (this) {
-    SessionStatus.IDLE -> R.string.state_idle
-    SessionStatus.STARTING, SessionStatus.REGISTERING, SessionStatus.STOPPING -> R.string.preparing_connection
-    SessionStatus.READY -> R.string.state_ready
-    SessionStatus.CONNECTING -> R.string.state_connecting
-    SessionStatus.CONNECTED -> R.string.state_connected
-    SessionStatus.ERROR -> R.string.state_error
-}
-
-private fun formatMetric(value: Float): String = String.format(Locale.getDefault(), "%.1f", value)

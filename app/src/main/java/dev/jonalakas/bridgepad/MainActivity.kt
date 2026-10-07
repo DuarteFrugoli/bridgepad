@@ -84,6 +84,7 @@ import dev.jonalakas.bridgepad.ui.onboarding.OnboardingScreen
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
 import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
+import dev.jonalakas.bridgepad.ui.settings.TestsScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.UsbAccessoryDiagnosticScreen
@@ -125,6 +126,7 @@ class MainActivity : ComponentActivity() {
                 var returnToSettingsAfterGamepadMapping by rememberSaveable { mutableStateOf(false) }
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var showSettings by rememberSaveable { mutableStateOf(false) }
+                var showTests by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showUsbNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showBluetoothDesktopDiagnostic by rememberSaveable { mutableStateOf(false) }
@@ -659,7 +661,7 @@ class MainActivity : ComponentActivity() {
                         onBack = {
                             bluetoothDesktopGameplayController.shutdown()
                             showBluetoothDesktopDiagnostic = false
-                            showSettings = true
+                            showTests = true
                         },
                     )
                 } else if (showUsbAccessoryDiagnostic) {
@@ -667,7 +669,7 @@ class MainActivity : ComponentActivity() {
                         probe = remember { UsbAccessoryProbe(this@MainActivity) },
                         onBack = {
                             showUsbAccessoryDiagnostic = false
-                            showSettings = true
+                            showTests = true
                         },
                     )
                 } else if (showDesktopStreaming) {
@@ -676,7 +678,7 @@ class MainActivity : ComponentActivity() {
                         requestFor = networkDesktopCoordinator::mediaRequest,
                         onBack = {
                             showDesktopStreaming = false
-                            showSettings = true
+                            showTests = true
                         },
                     )
                 } else if (showNetworkDiagnostic || showUsbNetworkDiagnostic) {
@@ -700,68 +702,35 @@ class MainActivity : ComponentActivity() {
                             networkGameplayController.shutdown()
                             showNetworkDiagnostic = false
                             showUsbNetworkDiagnostic = false
-                            showSettings = true
+                            showTests = true
                         },
                     )
-                } else if (showSettings) {
-                    SettingsScreen(
+                } else if (showTests) {
+                    TestsScreen(
                         appVersion = BuildConfig.VERSION_NAME,
                         deviceInfo = deviceInfo,
                         hidState = hidState,
                         physicalGamepadState = physicalGamepadState,
-                        physicalControllerConnected = physicalControllerConnected,
-                        mappingAvailable = mappingInput != null,
-                        sessionOrientationMode = sessionOrientationMode,
-                        invertedTouchpadScroll = invertedTouchpadScroll,
-                        useDisplayCutoutArea = useDisplayCutoutArea,
-                        onEditTouchscreenLayout = {
-                            returnToSettingsAfterLayoutEditor = true
-                            showSettings = false
-                            showTouchscreenLayoutEditor = true
-                        },
-                        onConfigureGamepadMapping = {
-                            if (mappingInput != null) {
-                                returnToSettingsAfterGamepadMapping = true
-                                showSettings = false
-                                showGamepadMapping = true
-                            }
-                        },
-                        onSessionOrientationModeChanged = SessionOrientationStore::set,
-                        onInvertedTouchpadScrollChanged = TouchpadSettingsStore::setInvertedScroll,
-                        onUseDisplayCutoutAreaChanged =
-                            TouchscreenDisplaySettingsStore::setUseDisplayCutoutArea,
                         onOpenNetworkDiagnostic = {
-                            showSettings = false
+                            showTests = false
                             showNetworkDiagnostic = true
                         },
                         onOpenUsbNetworkDiagnostic = {
-                            showSettings = false
+                            showTests = false
                             showUsbNetworkDiagnostic = true
                         },
                         onOpenBluetoothDesktopDiagnostic = {
-                            showSettings = false
+                            showTests = false
                             showBluetoothDesktopDiagnostic = true
                         },
                         onOpenUsbAccessoryDiagnostic = {
-                            showSettings = false
+                            showTests = false
                             showUsbAccessoryDiagnostic = true
                         },
                         onOpenDesktopStreaming = {
-                            showSettings = false
+                            showTests = false
                             showDesktopStreaming = true
                         },
-                        onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
-                            runCatching {
-                                startActivity(
-                                    Intent(
-                                        Settings.ACTION_APP_LOCALE_SETTINGS,
-                                        Uri.parse("package:$packageName"),
-                                    ),
-                                )
-                            }.onFailure {
-                                Toast.makeText(this, R.string.language_description, Toast.LENGTH_LONG).show()
-                            }
-                        }) else null,
                         onCopyDiagnostics = {
                             val report = DiagnosticReport.create(
                                 BuildConfig.VERSION_NAME,
@@ -791,6 +760,50 @@ class MainActivity : ComponentActivity() {
                                 ),
                             )
                         },
+                        onBack = {
+                            showTests = false
+                            showSettings = true
+                        },
+                    )
+                } else if (showSettings) {
+                    SettingsScreen(
+                        physicalControllerConnected = physicalControllerConnected,
+                        mappingAvailable = mappingInput != null,
+                        sessionOrientationMode = sessionOrientationMode,
+                        invertedTouchpadScroll = invertedTouchpadScroll,
+                        useDisplayCutoutArea = useDisplayCutoutArea,
+                        onOpenTests = {
+                            showSettings = false
+                            showTests = true
+                        },
+                        onEditTouchscreenLayout = {
+                            returnToSettingsAfterLayoutEditor = true
+                            showSettings = false
+                            showTouchscreenLayoutEditor = true
+                        },
+                        onConfigureGamepadMapping = {
+                            if (mappingInput != null) {
+                                returnToSettingsAfterGamepadMapping = true
+                                showSettings = false
+                                showGamepadMapping = true
+                            }
+                        },
+                        onSessionOrientationModeChanged = SessionOrientationStore::set,
+                        onInvertedTouchpadScrollChanged = TouchpadSettingsStore::setInvertedScroll,
+                        onUseDisplayCutoutAreaChanged =
+                            TouchscreenDisplaySettingsStore::setUseDisplayCutoutArea,
+                        onLanguageSettings = if (Build.VERSION.SDK_INT >= 33) ({
+                            runCatching {
+                                startActivity(
+                                    Intent(
+                                        Settings.ACTION_APP_LOCALE_SETTINGS,
+                                        Uri.parse("package:$packageName"),
+                                    ),
+                                )
+                            }.onFailure {
+                                Toast.makeText(this, R.string.language_description, Toast.LENGTH_LONG).show()
+                            }
+                        }) else null,
                         onBack = { showSettings = false },
                     )
                 } else if (showGamepadMapping && mappingInput != null) {

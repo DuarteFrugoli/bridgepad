@@ -67,7 +67,7 @@ class DirectUsbGamepadController(
         captureRequested.set(true)
         if (running.get() || pendingPermissionDevice != null) return
         val candidate = manager.deviceList.values.firstOrNull { device ->
-            (0 until device.interfaceCount).any { device.getInterface(it).interfaceClass == UsbConstants.USB_CLASS_HID }
+            (0 until device.interfaceCount).any { isGamepadHidCandidate(device.getInterface(it)) }
         }
         if (candidate == null) {
             onStatus(false, LocalizedMessage(R.string.usb_no_gamepad), true)
@@ -88,7 +88,7 @@ class DirectUsbGamepadController(
         if (!captureRequested.get()) return
         closeConnection()
         val hidInterface = (0 until device.interfaceCount).map(device::getInterface)
-            .firstOrNull { it.interfaceClass == UsbConstants.USB_CLASS_HID }
+            .firstOrNull(::isGamepadHidCandidate)
         val endpoint = hidInterface?.let { intf ->
             (0 until intf.endpointCount).map(intf::getEndpoint).firstOrNull {
                 it.direction == UsbConstants.USB_DIR_IN && it.type == UsbConstants.USB_ENDPOINT_XFER_INT
@@ -198,8 +198,15 @@ class DirectUsbGamepadController(
         }
     }
 
+    private fun isGamepadHidCandidate(usbInterface: UsbInterface): Boolean =
+        usbInterface.interfaceClass == UsbConstants.USB_CLASS_HID &&
+            usbInterface.interfaceProtocol != HID_BOOT_KEYBOARD_PROTOCOL &&
+            usbInterface.interfaceProtocol != HID_BOOT_MOUSE_PROTOCOL
+
     companion object {
         private const val ACTION_USB_PERMISSION = "dev.jonalakas.bridgepad.USB_PERMISSION"
         private const val PERMISSION_CONFIRMATION_DELAY_MS = 250L
+        private const val HID_BOOT_KEYBOARD_PROTOCOL = 1
+        private const val HID_BOOT_MOUSE_PROTOCOL = 2
     }
 }

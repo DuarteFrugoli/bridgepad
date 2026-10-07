@@ -3,6 +3,36 @@
 BridgePad separates controller input, logical behavior and output transport so
 new connection methods and destinations do not change existing input adapters.
 
+This document is the single source of truth for the current architecture. It
+describes decisions that are still active rather than keeping a separate record
+for every experiment or superseded direction. Git history preserves how these
+choices evolved.
+
+## Current architectural decisions
+
+- Android is implemented natively with Kotlin and Jetpack Compose. The minimum
+  supported version is Android 9 (`minSdk = 28`).
+- All controller sources are normalized into `VirtualGamepadState` before an
+  output transport sees them. Inputs and outputs must remain independently
+  replaceable.
+- Direct Bluetooth exposes one composite generic HID device for gamepad, mouse
+  and keyboard. Bluetooth through BridgePad Desktop is a separate RFCOMM path
+  that creates one native virtual controller and must never run alongside the
+  direct-HID output.
+- Wi-Fi and phone-to-PC USB use the authenticated BridgePad Desktop protocol.
+  The production USB carrier is IP over Android USB tethering; Android Open
+  Accessory remains a diagnostic experiment, not a product dependency.
+- Network trust uses a persistent Desktop TLS identity, certificate pinning and
+  explicit user-confirmed pairing. Saved credentials authorize later sessions;
+  an unexpected identity change is rejected until the user forgets and pairs
+  the Desktop again.
+- Desktop session code depends on the `bridgepad-virtual-device` boundary.
+  ViGEm is the current Windows development backend, not the final distribution
+  commitment. Linux will use its own native backend behind the same boundary.
+- WebRTC is the frozen streaming reference implementation, not the definitive
+  local media backend. The production local Wi-Fi/USB direction is the dedicated
+  BridgePad Media v1 path described below.
+
 ## Gradle modules
 
 ```text
@@ -163,8 +193,8 @@ exchanges SDP; no encoded media crosses the signalling socket. The exact
 configuration and validated scenarios are frozen in
 [`streaming-baseline.md`](./streaming-baseline.md).
 
-ADR 0014 supersedes WebRTC as the definitive local backend. The target local
-Wi-Fi/USB path is BridgePad Media v1: authenticated session negotiation on the
+WebRTC is not the definitive local backend. The target local Wi-Fi/USB path is
+BridgePad Media v1: authenticated session negotiation on the
 control plane plus independent encrypted UDP audio and video flows with
 explicit packet/frame identifiers, monotonic timestamps, bounded reordering,
 stale-frame disposal, IDR feedback and adaptive bitrate. Android will decode
@@ -172,10 +202,21 @@ H.264 directly to a `Surface` with an application-owned low-latency
 presentation policy. The WebRTC path stays available as the measured reference
 until the dedicated path meets or beats it.
 
+The first BridgePad Media v1 increment is intentionally transport independent.
+`bridgepad-media-protocol` owns the fixed 1200-byte datagram contract and Rust
+codec; `:streaming-core` contains the matching Kotlin codec and shared golden
+vector. `bridgepad-media` owns bounded packetization, assembly deadlines and a
+deterministic loss/duplication/reordering harness. `bridgepad-media-metrics`
+collects bounded rolling p50/p95/p99 timings for every pipeline stage. Reliable
+offer/answer, feedback, keyframe request and stop/ack messages share a second
+Kotlin/Rust golden vector and remain independent of the selected transport.
+None of these modules opens a socket or imports WebRTC, capture, codec, Android
+UI or Windows APIs.
+
 Control/input currently remains on TCP/TLS `39393` and never shares a media
 socket, worker, queue or lifecycle. Its future low-latency transport will be
-decided in a separate ADR only after BridgePad Media v1 is validated; it is no
-longer predetermined to use WebRTC DataChannels. Bluetooth HID and RFCOMM are
+selected and documented here only after BridgePad Media v1 is validated; it is
+not predetermined to use WebRTC DataChannels. Bluetooth HID and RFCOMM are
 outside that future IP migration.
 
 Capture and media teardown are bounded. The capture callback releases its Media
@@ -227,8 +268,8 @@ setting that becomes relevant only when compatible hardware is detected.
 - `bridgepad-virtual-device` is the only contract consumed by desktop session
   code. Windows backend details remain in replaceable adapters. ViGEm is the
   current development/alpha adapter; the proposed production direction is a
-  Microsoft-signed UMDF2 package with an XUSB personality, subject to ADR 0010's
-  acceptance gate.
+  Microsoft-signed UMDF2 package with an XUSB personality, subject to the
+  production acceptance gate below.
 - Bluetooth HID remains an Android-only adapter and does not use the desktop
   protocol.
 - Bluetooth via BridgePad Desktop is a separate adapter, not a mode of
@@ -258,3 +299,20 @@ setting that becomes relevant only when compatible hardware is detected.
 - The existing `GenericCompositeHidProfile` contains the Windows/Linux Bluetooth
   descriptor and report encoding. Additional PC profiles can implement the same
   contract without modifying input routing or the generic profile.
+
+### Windows production virtual-device gate
+
+The Windows backend is not production-ready until it satisfies all of these
+requirements:
+
+- automatic recognition in `joy.cpl`, current Steam and representative games;
+- correct buttons, D-pad, sticks, independent triggers and rumble round-trip;
+- reliable create, update, neutralize and destroy behavior during normal exit,
+  crash, disconnect, sleep/resume and upgrade;
+- clean installation, update and removal on every supported Windows version;
+- no test-signing mode or locally trusted self-signed root certificate;
+- a Microsoft-trusted driver package and reproducible installer build;
+- normal gameplay operation without administrator privileges;
+- latency and CPU use no worse than the accepted ViGEm development baseline;
+- compatibility testing with representative security and anti-cheat software;
+- an explicit Windows x64 and ARM64 support decision.

@@ -72,14 +72,3 @@ data class SessionConfiguration(
     val destinationTarget: DestinationTarget? = null,
     val physicalCaptureMode: PhysicalCaptureMode = PhysicalCaptureMode.COMPATIBILITY,
 )
-
-data class GamepadSessionState(
-    val status: SessionStatus = SessionStatus.IDLE,
-    val errorMessage: String? = null,
-) {
-    init {
-        require(status == SessionStatus.ERROR || errorMessage == null) {
-            "An error message can only be attached to an error session."
-        }
-    }
-}

@@ -198,8 +198,8 @@ The Gradle modules are:
 
 Dependencies point inward toward `:domain`. New input sources must not depend on
 an output transport, and new transports must consume only normalized gamepad or
-pointer state. See [`docs/architecture.md`](./docs/architecture.md) and the ADRs
-in [`docs/decisions`](./docs/decisions/).
+pointer state. See [`docs/architecture.md`](./docs/architecture.md), the single
+source of truth for the current architecture.
 
 ## Next direction
 
@@ -304,7 +304,7 @@ app/                       Android application and composition root
 domain/                    platform-independent gamepad domain
 protocol/                  future desktop wire messages
 transport-bluetooth-hid/   Android Bluetooth HID adapter
-docs/                      public English documentation and ADRs
+docs/                      public English documentation
 README.md                  English project overview
 README.pt-BR.md            Brazilian Portuguese overview
 ```
@@ -323,8 +323,7 @@ parallel.
 - [`docs/testing.md`](./docs/testing.md) — build and hardware test procedures;
 - [`docs/compatibility.md`](./docs/compatibility.md) — recorded hardware results;
 - [`docs/release-checklist.md`](./docs/release-checklist.md) — remaining release
-  gates;
-- [`docs/decisions`](./docs/decisions/) — architecture decision records.
+  gates.
 
 ## Compatibility
 

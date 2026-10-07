@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 class NetworkGameplayController(
     private val inputRouter: InputRouter,
     private val scope: CoroutineScope,
+    private val outputSessionOwner: OutputSessionOwner,
 ) {
     private val mutableStatus = MutableStateFlow<NetworkGamepadStatus>(NetworkGamepadStatus.Stopped)
     val status: StateFlow<NetworkGamepadStatus> = mutableStatus.asStateFlow()
@@ -24,36 +25,41 @@ class NetworkGameplayController(
     private var inputSubscription: InputSubscription? = null
     private var pointerJob: Job? = null
     private var generation = 0L
+    private var ownership: OutputSessionOwner.Lease? = null
 
-    @Synchronized
     fun start(
         request: NetworkGamepadRequest,
         physicalCaptureMode: PhysicalCaptureMode,
     ) {
         stopCurrent(immediate = true)
-        val currentGeneration = ++generation
+        val nextOwnership = outputSessionOwner.claim(OutputSessionOwner.Kind.NETWORK_DESKTOP) {
+            stopForOwnershipChange()
+        }
+        val currentGeneration = synchronized(this) { ++generation }
         val nextClient = NetworkGamepadClient(request) { update ->
             handleClientStatus(currentGeneration, update)
         }
-        client = nextClient
-        inputSubscription = inputRouter.observe(physicalCaptureMode) { routed ->
-            nextClient.send(routed.gamepad)
-        }
-        pointerJob = scope.launch {
-            while (isActive) {
-                inputRouter.peekPointer()?.let { pointer ->
-                    inputRouter.acknowledgePointer(nextClient.sendPointer(pointer))
+        synchronized(this) {
+            ownership = nextOwnership
+            client = nextClient
+            inputSubscription = inputRouter.observe(physicalCaptureMode) { routed ->
+                nextClient.send(routed.gamepad)
+            }
+            pointerJob = scope.launch {
+                while (isActive) {
+                    inputRouter.peekPointer()?.let { pointer ->
+                        inputRouter.acknowledgePointer(nextClient.sendPointer(pointer))
+                    }
+                    inputRouter.peekKeyboard()?.let { keyboard ->
+                        inputRouter.acknowledgeKeyboard(nextClient.sendKeyboard(keyboard))
+                    }
+                    delay(POINTER_POLL_MILLIS)
                 }
-                inputRouter.peekKeyboard()?.let { keyboard ->
-                    inputRouter.acknowledgeKeyboard(nextClient.sendKeyboard(keyboard))
-                }
-                delay(POINTER_POLL_MILLIS)
             }
         }
         nextClient.start()
     }
 
-    @Synchronized
     fun stop() {
         stopCurrent(immediate = false)
     }
@@ -63,24 +69,27 @@ class NetworkGameplayController(
         client?.updateEndpoints(hosts)
     }
 
-    @Synchronized
     fun shutdown() {
         stopCurrent(immediate = true)
     }
 
-    @Synchronized
     fun reportFailure(reason: NetworkFailureReason, detail: String) {
         stopCurrent(immediate = true)
         mutableStatus.value = NetworkGamepadStatus.Failed(reason, detail)
     }
 
     private fun stopCurrent(immediate: Boolean) {
-        releaseInputPipeline()
-        client?.let { active ->
-            if (immediate) active.closeImmediately() else active.stop()
+        val activeClient = synchronized(this) {
+            generation++
+            releaseInputPipeline()
+            val active = client
+            client = null
+            ownership?.release()
+            ownership = null
+            mutableStatus.value = NetworkGamepadStatus.Stopped
+            active
         }
-        client = null
-        mutableStatus.value = NetworkGamepadStatus.Stopped
+        activeClient?.stopAndAwait(immediate)
     }
 
     @Synchronized
@@ -90,7 +99,13 @@ class NetworkGameplayController(
         if (update is NetworkGamepadStatus.Failed || update is NetworkGamepadStatus.Stopped) {
             releaseInputPipeline()
             client = null
+            ownership?.release()
+            ownership = null
         }
+    }
+
+    private fun stopForOwnershipChange() {
+        stopCurrent(immediate = true)
     }
 
     private fun releaseInputPipeline() {

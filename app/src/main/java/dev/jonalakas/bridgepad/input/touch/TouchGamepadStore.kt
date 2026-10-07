@@ -7,6 +7,7 @@ import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +25,10 @@ object TouchGamepadStore {
     val sourceId = SourceId("touchscreen")
 
     private val mutableState = MutableStateFlow(TouchGamepadSnapshot())
-    private val updateChannel = Channel<TouchGamepadSnapshot>(Channel.UNLIMITED)
+    private val updateChannel = Channel<TouchGamepadSnapshot>(
+        capacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
     val state: StateFlow<TouchGamepadSnapshot> = mutableState.asStateFlow()
     val updates: Flow<TouchGamepadSnapshot> = updateChannel.receiveAsFlow()
 

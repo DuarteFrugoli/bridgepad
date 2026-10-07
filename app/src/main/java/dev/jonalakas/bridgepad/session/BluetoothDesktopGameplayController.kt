@@ -18,6 +18,7 @@ class BluetoothDesktopGameplayController(
     private val context: Context,
     private val inputRouter: InputRouter,
     private val scope: CoroutineScope,
+    private val outputSessionOwner: OutputSessionOwner,
 ) {
     private val mutableStatus = MutableStateFlow<BluetoothDesktopGamepadStatus>(
         BluetoothDesktopGamepadStatus.Stopped,
@@ -28,27 +29,33 @@ class BluetoothDesktopGameplayController(
     private var auxiliaryInputJob: Job? = null
     private var captureMode: PhysicalCaptureMode? = null
     private var generation = 0L
+    private var ownership: OutputSessionOwner.Lease? = null
 
-    @Synchronized
     fun start(deviceAddress: String, physicalCaptureMode: PhysicalCaptureMode) {
         stopCurrent(immediate = true)
-        val currentGeneration = ++generation
+        val nextOwnership = outputSessionOwner.claim(OutputSessionOwner.Kind.BLUETOOTH_DESKTOP) {
+            stopForOwnershipChange()
+        }
+        val currentGeneration = synchronized(this) { ++generation }
         val nextClient = BluetoothDesktopGamepadClient(
             context,
             BluetoothDesktopGamepadRequest(deviceAddress),
         ) { update -> handleStatus(currentGeneration, update) }
-        client = nextClient
-        captureMode = physicalCaptureMode
-        subscribeToInput(nextClient, physicalCaptureMode)
-        auxiliaryInputJob = scope.launch {
-            while (isActive) {
-                inputRouter.peekPointer()?.let { pointer ->
-                    inputRouter.acknowledgePointer(nextClient.sendPointer(pointer))
+        synchronized(this) {
+            ownership = nextOwnership
+            client = nextClient
+            captureMode = physicalCaptureMode
+            subscribeToInput(nextClient, physicalCaptureMode)
+            auxiliaryInputJob = scope.launch {
+                while (isActive) {
+                    inputRouter.peekPointer()?.let { pointer ->
+                        inputRouter.acknowledgePointer(nextClient.sendPointer(pointer))
+                    }
+                    inputRouter.peekKeyboard()?.let { keyboard ->
+                        inputRouter.acknowledgeKeyboard(nextClient.sendKeyboard(keyboard))
+                    }
+                    delay(AUXILIARY_INPUT_POLL_MILLIS)
                 }
-                inputRouter.peekKeyboard()?.let { keyboard ->
-                    inputRouter.acknowledgeKeyboard(nextClient.sendKeyboard(keyboard))
-                }
-                delay(AUXILIARY_INPUT_POLL_MILLIS)
             }
         }
         nextClient.start()
@@ -62,29 +69,32 @@ class BluetoothDesktopGameplayController(
         subscribeToInput(activeClient, physicalCaptureMode)
     }
 
-    @Synchronized
     fun stop() {
         stopCurrent(immediate = false)
     }
 
-    @Synchronized
     fun shutdown() {
         stopCurrent(immediate = true)
     }
 
     private fun stopCurrent(immediate: Boolean) {
-        inputSubscription?.cancel()
-        inputSubscription = null
-        auxiliaryInputJob?.cancel()
-        auxiliaryInputJob = null
-        inputRouter.clearPointer()
-        inputRouter.clearKeyboard()
-        captureMode = null
-        client?.let { active ->
-            if (immediate) active.closeImmediately() else active.stop()
+        val activeClient = synchronized(this) {
+            generation++
+            inputSubscription?.cancel()
+            inputSubscription = null
+            auxiliaryInputJob?.cancel()
+            auxiliaryInputJob = null
+            inputRouter.clearPointer()
+            inputRouter.clearKeyboard()
+            captureMode = null
+            val active = client
+            client = null
+            ownership?.release()
+            ownership = null
+            mutableStatus.value = BluetoothDesktopGamepadStatus.Stopped
+            active
         }
-        client = null
-        mutableStatus.value = BluetoothDesktopGamepadStatus.Stopped
+        activeClient?.stopAndAwait(immediate)
     }
 
     @Synchronized
@@ -102,7 +112,13 @@ class BluetoothDesktopGameplayController(
             inputRouter.clearKeyboard()
             client = null
             captureMode = null
+            ownership?.release()
+            ownership = null
         }
+    }
+
+    private fun stopForOwnershipChange() {
+        stopCurrent(immediate = true)
     }
 
     private fun subscribeToInput(

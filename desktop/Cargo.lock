@@ -394,6 +394,17 @@ dependencies = [
 [[package]]
 name = "bridgepad-media"
 version = "0.1.0"
+dependencies = [
+ "bridgepad-media-protocol",
+]
+
+[[package]]
+name = "bridgepad-media-metrics"
+version = "0.1.0"
+
+[[package]]
+name = "bridgepad-media-protocol"
+version = "0.1.0"
 
 [[package]]
 name = "bridgepad-protocol"
