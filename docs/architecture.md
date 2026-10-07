@@ -290,12 +290,12 @@ setting that becomes relevant only when compatible hardware is detected.
   network receiver is running, and delegates decoded state to the existing
   ViGEm virtual-device boundary. It always neutralizes the device when a session
   stops or the connection disappears.
-- For an already paired Bluetooth PC, Home tries the Desktop RFCOMM path first.
-  Direct HID is never started during that attempt. If Desktop is unavailable,
-  the user can explicitly choose the direct-HID fallback. Pairing a new PC still
-  uses the direct Bluetooth flow. The current RFCOMM product increment relies on
-  the operating-system Bluetooth bond; BridgePad application-level
-  authentication remains a release gate.
+- Home exposes Desktop RFCOMM and direct HID as explicit, mutually exclusive
+  Bluetooth outputs. It never silently changes output after a failed connection.
+  Pairing a new PC belongs to the direct-HID flow; Desktop Bluetooth selects an
+  existing operating-system bond and requires the companion to be open. The
+  current RFCOMM product increment relies on that bond; BridgePad
+  application-level authentication remains a release gate.
 - The existing `GenericCompositeHidProfile` contains the Windows/Linux Bluetooth
   descriptor and report encoding. Additional PC profiles can implement the same
   contract without modifying input routing or the generic profile.

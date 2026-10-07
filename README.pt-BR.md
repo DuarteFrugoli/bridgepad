@@ -68,11 +68,12 @@ assinatura de release e evidências em mais equipamentos.
 
 ## Como funciona hoje
 
-Para um PC já pareado, o BridgePad procura primeiro o BridgePad Desktop por
-Bluetooth. Quando ele está disponível, o Desktop cria um único controle XInput
-compatível com Xbox 360, reconhecido automaticamente pela Steam e por jogos
-XInput. Se o Desktop não estiver disponível, a Home oferece o Bluetooth HID
-direto como fallback. As duas saídas nunca ficam ativas ao mesmo tempo.
+No Bluetooth, a Home pergunta explicitamente se a conexão será HID direta ou
+via BridgePad Desktop. O Desktop cria um único controle XInput compatível com
+Xbox 360, reconhecido automaticamente pela Steam e por jogos XInput. O HID
+direto não precisa do aplicativo no computador. O BridgePad não troca entre os
+dois caminhos automaticamente, e as duas saídas nunca ficam ativas ao mesmo
+tempo.
 
 O modo HID direto apresenta o Android como gamepad e mouse Bluetooth genéricos
 e não precisa do BridgePad Desktop:
@@ -92,7 +93,7 @@ Touchscreen / controle físico
        Steam Input / jogo
 ```
 
-O fallback direto é HID genérico, não um dispositivo XInput nativo. Por isso, a
+O modo direto é HID genérico, não um dispositivo XInput nativo. Por isso, a
 Steam Input é a principal camada de compatibilidade. A Steam reconhece o
 BridgePad como controle genérico, mas pode exigir uma configuração inicial dos
 botões. Jogos que aceitam somente XInput podem não detectar diretamente o
@@ -102,10 +103,11 @@ controle Bluetooth atual.
 
 A Home monta a sessão nesta ordem:
 
-1. **Destino** — atualmente um PC Windows ou, futuramente, Linux.
-2. **Conexão** — Bluetooth, Wi-Fi e tethering USB estão disponíveis.
-3. **Computador** — no Bluetooth, escolher um PC pareado; no Wi-Fi, descobrir o
-   BridgePad Desktop automaticamente e digitar o PIN apenas no primeiro pareamento.
+1. **Modo de jogo** — usar o celular como controle ou transmitir o computador.
+2. **Conexão** — HID Bluetooth direto, Bluetooth via BridgePad Desktop, Wi-Fi e
+   tethering USB aparecem quando forem compatíveis com o modo escolhido.
+3. **Computador** — no Bluetooth, escolher um PC pareado; no Wi-Fi e no USB,
+   descobrir o BridgePad Desktop e digitar o PIN apenas no primeiro pareamento.
 
 A entrada não é mais uma escolha exclusiva. Os controles virtuais e qualquer
 controle físico detectado podem ser usados ao mesmo tempo.
@@ -227,7 +229,7 @@ A ordem pretendida é:
 
 Wi-Fi, Bluetooth XInput e USB precisam do BridgePad Desktop porque o computador
 deve receber o estado normalizado e criar um controle virtual nativo. Bluetooth
-HID continua como fallback direto, sem exigir o aplicativo complementar. O
+HID direto é uma alternativa explícita que não exige o aplicativo complementar. O
 incremento atual de Bluetooth via Desktop confia no pareamento Bluetooth do
 sistema operacional; a autenticação no protocolo do BridgePad ainda é exigida
 antes de uma versão pública.

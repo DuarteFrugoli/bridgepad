@@ -63,6 +63,7 @@ import dev.jonalakas.bridgepad.core.session.ConnectionMethod
 import dev.jonalakas.bridgepad.core.session.DestinationTarget
 import dev.jonalakas.bridgepad.core.session.DestinationTargetKind
 import dev.jonalakas.bridgepad.core.session.OutputAdapterIds
+import dev.jonalakas.bridgepad.core.session.OutputAdapterId
 import dev.jonalakas.bridgepad.core.session.SessionDraft
 import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.ui.home.HomeScreen
@@ -138,8 +139,10 @@ class MainActivity : ComponentActivity() {
                 var onboardingComplete by rememberSaveable {
                     mutableStateOf(preferences.getBoolean(KEY_ONBOARDING_COMPLETE, false))
                 }
-                var destinationTypeName by rememberSaveable { mutableStateOf<String?>(null) }
                 var connectionMethodName by rememberSaveable { mutableStateOf<String?>(null) }
+                var bluetoothOutputAdapterValue by rememberSaveable {
+                    mutableStateOf<String?>(null)
+                }
                 var playModeName by rememberSaveable { mutableStateOf<String?>(null) }
                 var streamingControllerTypeName by rememberSaveable {
                     mutableStateOf<String?>(null)
@@ -150,7 +153,6 @@ class MainActivity : ComponentActivity() {
                 var selectedAddress by rememberSaveable { mutableStateOf<String?>(null) }
                 var selectedNetworkDesktopId by rememberSaveable { mutableStateOf<String?>(null) }
                 var pairNewPcSelected by rememberSaveable { mutableStateOf(false) }
-                var useDirectBluetooth by rememberSaveable { mutableStateOf(false) }
                 var pendingDestination by rememberSaveable { mutableStateOf<String?>(null) }
                 var connectionGate by rememberSaveable { mutableStateOf<String?>(null) }
                 var pairedHosts by remember { mutableStateOf(readPairedHosts()) }
@@ -279,7 +281,7 @@ class MainActivity : ComponentActivity() {
                 val effectiveDestinationType = if (hidState.sessionActive) {
                     hidState.destinationType
                 } else {
-                    destinationTypeName?.let(DestinationType::valueOf)
+                    if (playMode != null) DestinationType.PC else null
                 }
                 val effectiveConnectionMethod = if (hidState.sessionActive) {
                     hidState.connectionMethod
@@ -289,16 +291,9 @@ class MainActivity : ComponentActivity() {
                 val sessionDraft = SessionDraft(
                     destinationType = effectiveDestinationType,
                     connectionMethod = effectiveConnectionMethod,
-                    outputAdapterId = if (
-                        effectiveDestinationType == DestinationType.PC &&
-                        effectiveConnectionMethod == ConnectionMethod.BLUETOOTH
-                    ) {
-                        if (selectedAddress != null && !useDirectBluetooth) {
-                            OutputAdapterIds.DESKTOP_BLUETOOTH
-                        } else {
-                            OutputAdapterIds.GENERIC_BLUETOOTH_HID
-                        }
-                    } else null,
+                    outputAdapterId = bluetoothOutputAdapterValue
+                        ?.takeIf { effectiveConnectionMethod == ConnectionMethod.BLUETOOTH }
+                        ?.let(::OutputAdapterId),
                     destinationTarget = when {
                         selectedAddress != null -> DestinationTarget(
                             DestinationTargetKind.EXISTING,
@@ -867,65 +862,53 @@ class MainActivity : ComponentActivity() {
                     outputAdapters = sessionCoordinator.catalog,
                     playMode = playMode,
                     streamingControllerType = streamingControllerType,
-                    destinationType = effectiveDestinationType,
                     connectionMethod = effectiveConnectionMethod,
+                    bluetoothOutputAdapterId = bluetoothOutputAdapterValue?.let(::OutputAdapterId),
                     directUsbState = directUsbState,
                     mappingAvailable = mappingInput != null,
                     onPlayModeChanged = { selectedMode ->
                         if (playMode != selectedMode) {
                             playModeName = selectedMode.name
                             streamingControllerTypeName = null
-                            destinationTypeName = if (selectedMode == PlayMode.STREAMING) {
-                                DestinationType.PC.name
-                            } else {
-                                null
-                            }
                             connectionMethodName = null
+                            bluetoothOutputAdapterValue = null
                             selectedAddress = null
                             selectedNetworkDesktopId = null
                             pairNewPcSelected = false
-                            useDirectBluetooth = false
                             networkDesktopCoordinator.clearPairingStatus()
                         }
                     },
                     onStreamingControllerTypeChanged = { selectedType ->
                         streamingControllerTypeName = selectedType.name
                     },
-                    onDestinationChanged = { destination ->
-                        if (destinationTypeName != destination.name) {
-                            destinationTypeName = destination.name
-                            connectionMethodName = null
-                            selectedAddress = null
-                            selectedNetworkDesktopId = null
-                            pairNewPcSelected = false
-                            useDirectBluetooth = false
-                        }
-                    },
-                    onSelectBluetooth = {
-                        if (connectionMethodName != ConnectionMethod.BLUETOOTH.name) {
+                    onSelectBluetoothOutput = { adapterId ->
+                        if (
+                            connectionMethodName != ConnectionMethod.BLUETOOTH.name ||
+                            bluetoothOutputAdapterValue != adapterId.value
+                        ) {
                             connectionMethodName = ConnectionMethod.BLUETOOTH.name
+                            bluetoothOutputAdapterValue = adapterId.value
                             selectedAddress = null
                             selectedNetworkDesktopId = null
                             pairNewPcSelected = false
-                            useDirectBluetooth = false
                             networkDesktopCoordinator.clearPairingStatus()
                         }
                     },
                     onSelectWifi = {
                         if (connectionMethodName != ConnectionMethod.WIFI.name) {
                             connectionMethodName = ConnectionMethod.WIFI.name
+                            bluetoothOutputAdapterValue = null
                             selectedAddress = null
                             pairNewPcSelected = false
-                            useDirectBluetooth = false
                             networkDesktopCoordinator.clearPairingStatus()
                         }
                     },
                     onSelectUsb = {
                         if (connectionMethodName != ConnectionMethod.USB.name) {
                             connectionMethodName = ConnectionMethod.USB.name
+                            bluetoothOutputAdapterValue = null
                             selectedAddress = null
                             pairNewPcSelected = false
-                            useDirectBluetooth = false
                             networkDesktopCoordinator.clearPairingStatus()
                         }
                     },
@@ -941,7 +924,6 @@ class MainActivity : ComponentActivity() {
                         if (selectedAddress != address || pairNewPcSelected != selectingNewPc) {
                             selectedAddress = address
                             pairNewPcSelected = selectingNewPc
-                            useDirectBluetooth = false
                         }
                     },
                     discoveredDesktops = discoveredDesktops,
@@ -973,17 +955,6 @@ class MainActivity : ComponentActivity() {
                         selectedAddress = null
                         connectionGate = null
                         pendingDestination = DestinationSelection.CHOOSE_PC
-                    },
-                    onUseDirectBluetooth = {
-                        val address = selectedAddress ?: return@HomeScreen
-                        useDirectBluetooth = true
-                        sessionCoordinator.stop()
-                        connectionGate = null
-                        pendingDestination = DestinationSelection.requestFor(
-                            selectedAddress = address,
-                            pairNewPcSelected = false,
-                            bluetoothReady = bluetoothEnabled,
-                        )
                     },
                     onPlay = {
                         if (
@@ -1026,7 +997,10 @@ class MainActivity : ComponentActivity() {
                             )) {
                             connectionGate = null
                             val address = selectedAddress
-                            if (address != null && !useDirectBluetooth) {
+                            if (
+                                address != null &&
+                                sessionDraft.outputAdapterId == OutputAdapterIds.DESKTOP_BLUETOOTH
+                            ) {
                                 pendingDestination = null
                                 if (hidState.sessionActive) sessionCoordinator.stop()
                                 sessionUiViewModel.dispatch(
@@ -1083,12 +1057,11 @@ class MainActivity : ComponentActivity() {
                         playModeName = null
                         streamingControllerTypeName = null
                         sessionCoordinator.preparePhysicalCapture(null)
-                        destinationTypeName = null
                         connectionMethodName = null
+                        bluetoothOutputAdapterValue = null
                         selectedAddress = null
                         selectedNetworkDesktopId = null
                         pairNewPcSelected = false
-                        useDirectBluetooth = false
                         pendingDestination = null
                         connectionGate = null
                         sessionUiViewModel.dispatch(SessionUiEvent.SessionEnded)

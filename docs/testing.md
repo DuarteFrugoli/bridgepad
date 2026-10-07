@@ -90,8 +90,9 @@ production phase after a transport is selected.
 
 This playable command is deliberately unauthenticated above the paired
 Bluetooth link and remains a spike. Product integration requires BridgePad
-trust/authentication, automatic Desktop preference with direct-HID fallback,
-and lifecycle/status integration in the normal Home flow.
+trust/authentication and lifecycle/status integration in the normal Home flow.
+Desktop Bluetooth and direct HID are explicit, mutually exclusive choices; no
+automatic preference or fallback is expected.
 
 On 2026-09-19, the Samsung Galaxy A35 completed this playable gate against the
 Windows test PC. The RFCOMM path drove the XInput controller correctly in
@@ -106,14 +107,16 @@ BridgePad Desktop now starts the RFCOMM gamepad receiver automatically together
 with its Wi-Fi receiver. Run `cargo run -p bridgepad-desktop`, then use the
 normal Home flow on Android:
 
-1. Choose PC, Bluetooth and an already paired computer.
+1. Choose controller mode, **Bluetooth via BridgePad Desktop** and an already
+   paired computer.
 2. Tap **Connect and play**. Confirm Home reports a Desktop/XInput connection
    and does not start or register direct HID.
 3. Validate the virtual and physical controls in `joy.cpl`, Steam and a game.
 4. End and restart the session. Confirm the virtual controller is neutralized
    and no second active controller receives the same input.
-5. Close BridgePad Desktop and try again. After the Desktop attempt fails, tap
-   **Use direct Bluetooth** and confirm the existing HID flow still connects.
+5. Close BridgePad Desktop and confirm the Desktop connection reports that the
+   companion is unavailable without starting HID. Return to Home, explicitly
+   choose **Direct Bluetooth (HID)** and confirm that path still connects.
 6. While RFCOMM is active, switch between Compatibility and Background USB and
    confirm the same XInput controller continues receiving the selected source.
 

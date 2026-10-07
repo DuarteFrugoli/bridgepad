@@ -41,14 +41,13 @@ fun HomeScreen(
     outputAdapters: OutputAdapterCatalog,
     playMode: PlayMode?,
     streamingControllerType: PlayControllerType?,
-    destinationType: DestinationType?,
     connectionMethod: ConnectionMethod?,
+    bluetoothOutputAdapterId: OutputAdapterId?,
     directUsbState: DirectUsbState,
     mappingAvailable: Boolean,
     onPlayModeChanged: (PlayMode) -> Unit,
     onStreamingControllerTypeChanged: (PlayControllerType) -> Unit,
-    onDestinationChanged: (DestinationType) -> Unit,
-    onSelectBluetooth: () -> Unit,
+    onSelectBluetoothOutput: (OutputAdapterId) -> Unit,
     onSelectWifi: () -> Unit,
     onSelectUsb: () -> Unit,
     onOpenUsbSettings: () -> Unit,
@@ -71,7 +70,6 @@ fun HomeScreen(
     onDismissNetworkPairingStatus: () -> Unit,
     onPhysicalCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
     onPrepareBluetooth: () -> Unit,
-    onUseDirectBluetooth: () -> Unit,
     onPlay: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
     onEditTouchscreenLayout: () -> Unit,
@@ -88,6 +86,10 @@ fun HomeScreen(
     var pairingCode by rememberSaveable { mutableStateOf("") }
     var forgettingDesktopId by rememberSaveable { mutableStateOf<String?>(null) }
     val bluetoothSelected = connectionMethod == ConnectionMethod.BLUETOOTH
+    val directBluetoothSelected = bluetoothSelected &&
+        bluetoothOutputAdapterId == OutputAdapterIds.GENERIC_BLUETOOTH_HID
+    val desktopBluetoothSelected = bluetoothSelected &&
+        bluetoothOutputAdapterId == OutputAdapterIds.DESKTOP_BLUETOOTH
     val streamingSelected = playMode == PlayMode.STREAMING
     val wifiSelected = connectionMethod == ConnectionMethod.WIFI
     val usbSelected = connectionMethod == ConnectionMethod.USB
@@ -105,13 +107,13 @@ fun HomeScreen(
     val selectedNetworkTrusted = trustedDesktops.any { it.peerIdHex == selectedNetworkDesktopId }
     val selectedNetworkOnline = discoveredDesktops.any { it.peerIdHex == selectedNetworkDesktopId }
     val targetChosen = connected || when {
-        destinationType != DestinationType.PC -> false
-        bluetoothSelected -> selectedAddress != null || pairNewPcSelected
+        directBluetoothSelected -> selectedAddress != null || pairNewPcSelected
+        desktopBluetoothSelected -> selectedAddress != null
         networkSelected -> selectedNetworkDesktopId != null
         else -> false
     }
     val setupComplete = if (networkSelected) {
-        destinationType == DestinationType.PC && selectedNetworkTrusted
+        selectedNetworkTrusted
     } else {
         SessionSetup.canConnect(
             draft = sessionDraft,
@@ -209,16 +211,7 @@ fun HomeScreen(
                     )
                 }
             }
-            if (playMode == PlayMode.CONTROLLER) item {
-                SetupCard(R.string.step_destination) {
-                    Choice(
-                        destinationType == DestinationType.PC,
-                        R.string.destination_pc,
-                        !busy && !connected,
-                    ) { onDestinationChanged(DestinationType.PC) }
-                }
-            }
-            if (playMode != null && destinationType != null) {
+            if (playMode != null) {
                 item {
                     SetupCard(
                         if (streamingSelected) R.string.step_streaming_transport
@@ -226,11 +219,31 @@ fun HomeScreen(
                     ) {
                         if (!streamingSelected) {
                             Choice(
-                                bluetoothSelected,
-                                R.string.bluetooth_label,
+                                directBluetoothSelected,
+                                R.string.bluetooth_direct_label,
                                 !busy && !connected,
-                                onSelectBluetooth,
-                            )
+                            ) {
+                                onSelectBluetoothOutput(OutputAdapterIds.GENERIC_BLUETOOTH_HID)
+                            }
+                            if (directBluetoothSelected) {
+                                Text(
+                                    stringResource(R.string.bluetooth_direct_description),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            Choice(
+                                desktopBluetoothSelected,
+                                R.string.bluetooth_desktop_label,
+                                !busy && !connected,
+                            ) {
+                                onSelectBluetoothOutput(OutputAdapterIds.DESKTOP_BLUETOOTH)
+                            }
+                            if (desktopBluetoothSelected) {
+                                Text(
+                                    stringResource(R.string.bluetooth_desktop_description),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                         Choice(wifiSelected, R.string.wifi_label, !busy && !connected, onSelectWifi)
                         Choice(usbSelected, R.string.usb_connection_label, !busy && !connected, onSelectUsb)
@@ -248,6 +261,7 @@ fun HomeScreen(
                                 pairedHosts,
                                 selectedAddress,
                                 pairNewPcSelected,
+                                directBluetoothSelected,
                                 onPrepareBluetooth,
                                 onSelectHost,
                             )
@@ -298,10 +312,10 @@ fun HomeScreen(
                     }
                 }
             }
-            if (bluetoothSelected && !hidCompatible && pairNewPcSelected) {
+            if (directBluetoothSelected && !hidCompatible) {
                 item { NoticeCard(stringResource(R.string.hid_unavailable), NoticeTone.ERROR) }
             }
-            if (bluetoothSelected && hidState.sessionActive && visibleHidState.message != null) {
+            if (directBluetoothSelected && hidState.sessionActive && visibleHidState.message != null) {
                 item {
                     NoticeCard(
                         stringResource(
@@ -317,7 +331,7 @@ fun HomeScreen(
                 }
             }
             if (
-                bluetoothSelected &&
+                directBluetoothSelected &&
                 hidState.status == HidSessionStatus.CONNECTED &&
                 !bluetoothDesktopConnected
             ) {
@@ -328,7 +342,7 @@ fun HomeScreen(
                     )
                 }
             }
-            if (bluetoothSelected) {
+            if (desktopBluetoothSelected) {
                 when (val status = bluetoothDesktopGameplayStatus) {
                     BluetoothDesktopGamepadStatus.Connecting -> item {
                         NoticeCard(
@@ -356,10 +370,6 @@ fun HomeScreen(
                         NoticeCard(
                             message = stringResource(R.string.bluetooth_desktop_unavailable),
                             tone = NoticeTone.WARNING,
-                            actionLabel = if (hidCompatible) {
-                                stringResource(R.string.bluetooth_use_direct_hid)
-                            } else null,
-                            onAction = if (hidCompatible) onUseDirectBluetooth else null,
                         )
                     }
                     BluetoothDesktopGamepadStatus.Stopped -> Unit
@@ -429,7 +439,8 @@ fun HomeScreen(
                     }
                     Button(
                         onClick = onPlay,
-                        enabled = (!bluetoothSelected || selectedAddress != null || hidCompatible) &&
+                        enabled = (!directBluetoothSelected || hidCompatible) &&
+                            (!desktopBluetoothSelected || selectedAddress != null) &&
                             !busy && readyToPlay,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -495,6 +506,7 @@ private fun BluetoothDestinations(
     hosts: List<PairedHost>,
     selectedAddress: String?,
     pairNewPcSelected: Boolean,
+    allowNewPairing: Boolean,
     onPrepare: () -> Unit,
     onSelect: (String?) -> Unit,
 ) {
@@ -527,9 +539,16 @@ private fun BluetoothDestinations(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Choice(pairNewPcSelected, R.string.pair_new_pc, !busy) { onSelect(null) }
+            if (allowNewPairing) {
+                Choice(pairNewPcSelected, R.string.pair_new_pc, !busy) { onSelect(null) }
+            }
             if (selectedAddress == null && !pairNewPcSelected) {
-                Text(stringResource(R.string.choose_destination_hint))
+                Text(
+                    stringResource(
+                        if (allowNewPairing) R.string.choose_destination_hint
+                        else R.string.choose_paired_pc_hint,
+                    ),
+                )
             }
             if (selectedAddress != null && hosts.none { it.address == selectedAddress }) {
                 NoticeCard(stringResource(R.string.selected_pc_unavailable), NoticeTone.WARNING)

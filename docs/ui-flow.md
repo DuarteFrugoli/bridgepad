@@ -1,12 +1,20 @@
 # Session UI and localization
 
-The Home screen progressively reveals three connection choices on one page:
+The Home screen progressively reveals three setup steps on one page:
 
-1. **Destination**: PC running Windows or Linux.
-2. **Connection**: the compatible methods for the selected destination.
-3. **Computer**: for Bluetooth, choose an already paired computer or explicitly
-   choose **Pair a new PC**. Product Wi-Fi discovery is still future work; its
-   current playable path remains in the diagnostic screen.
+1. **Play mode**: use the phone as a controller or stream the computer.
+2. **Connection**: direct Bluetooth HID, Bluetooth through BridgePad Desktop,
+   Wi-Fi or USB, filtered by the selected play mode.
+3. **Computer**: choose the target required by the selected connection.
+
+The UI does not ask for an operating system while PC is the only supported
+destination. Windows/Linux support remains an internal capability concern, not
+a redundant user decision.
+
+The two Bluetooth paths are explicit and mutually exclusive. Direct HID does
+not require BridgePad Desktop and allows pairing a new PC. Bluetooth through
+Desktop requires the companion to be open and creates the XInput device; it
+does not silently fall back to HID if the companion is unavailable.
 
 Input is automatic rather than a fourth required choice. Touchscreen and detected
 physical controllers may be used at the same time. If a session starts with a
@@ -14,7 +22,7 @@ physical controller connected, BridgePad opens the large mouse touchpad; otherwi
 it opens the virtual controller. This initial screen does not select or disable an
 input source.
 
-Each new setup starts with no destination, connection or target selected,
+Each new setup starts with no play mode, connection or target selected,
 including after explicitly ending a session. Previously saved setup preferences
 are ignored.
 Choices survive rotation while configuring the current session, and reopening an
@@ -28,13 +36,14 @@ outside the app or with the screen off. Compatibility is the default. This
 setting changes how the physical source is captured, not whether virtual input is
 accepted, and is independent from the output transport.
 
-Changing destination, connection or PC clears every dependent choice below it.
+Changing play mode, connection or PC clears every dependent choice below it.
 **Connect and play** remains disabled until the connection choices are valid,
 Bluetooth is on and access permission is
 granted. A selected PC that is no longer paired does not count as a valid
 destination. The button then
-starts HID registration and connects to the chosen PC, or requests temporary
-discoverability if **Pair a new PC** was explicitly selected. Picking a destination
+starts the explicitly selected output and connects to the chosen PC, or requests
+temporary discoverability if **Pair a new PC** was explicitly selected for direct
+HID. Picking a computer
 only fills the setup; it never starts a session on its own.
 
 While Bluetooth is off, Connection hides paired-host and new-pairing choices

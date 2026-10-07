@@ -70,11 +70,12 @@ signing and broader compatibility evidence.
 
 ## How it works today
 
-For an already paired PC, BridgePad first looks for BridgePad Desktop over
-Bluetooth. When available, Desktop creates one Xbox 360-compatible XInput
+For Bluetooth, Home explicitly asks whether to connect directly through HID or
+through BridgePad Desktop. Desktop creates one Xbox 360-compatible XInput
 controller, so Steam and XInput games recognize it without generic-controller
-mapping. If Desktop is unavailable, Home offers direct Bluetooth HID as a
-fallback. The two outputs are never active together.
+mapping. Direct HID does not require the desktop companion. BridgePad does not
+switch between these paths automatically, and the two outputs are never active
+together.
 
 Direct HID presents Android as a generic composite Bluetooth gamepad and mouse
 and does not require BridgePad Desktop:
@@ -94,8 +95,8 @@ Touchscreen / physical gamepad
         Steam Input / game
 ```
 
-The direct fallback is a generic HID controller rather than a native XInput
-device. Steam Input is therefore the primary compatibility layer. Steam
+The direct mode is a generic HID controller rather than a native XInput device.
+Steam Input is therefore the primary compatibility layer. Steam
 recognizes BridgePad as a generic controller, but an initial button
 configuration may be required. Games that accept only XInput might not detect
 the current Bluetooth controller directly.
@@ -104,10 +105,11 @@ the current Bluetooth controller directly.
 
 The Home screen builds a session in dependency order:
 
-1. **Destination** — currently a Windows or future Linux PC.
-2. **Connection** — Bluetooth, Wi-Fi and USB tethering are available.
-3. **Computer** — Bluetooth lists Android-paired PCs. Wi-Fi discovers BridgePad
-   Desktop automatically and asks for its one-time code only on first pairing.
+1. **Play mode** — use the phone as a controller or stream the computer.
+2. **Connection** — direct Bluetooth HID, Bluetooth through BridgePad Desktop,
+   Wi-Fi and USB tethering are available where compatible with the play mode.
+3. **Computer** — Bluetooth lists Android-paired PCs. Wi-Fi and USB discover
+   BridgePad Desktop and ask for its one-time code only on first pairing.
 
 Input is automatic rather than another required setup choice. Virtual controls
 and any detected physical controller may be used simultaneously.
@@ -232,8 +234,8 @@ The intended order is:
    low-latency video/audio path, then harden it for release.
 
 Wi-Fi, Bluetooth XInput and USB require BridgePad Desktop because the computer
-must receive normalized state and create a native virtual controller. Bluetooth
-HID remains available as a direct fallback that does not require the companion.
+must receive normalized state and create a native virtual controller. Direct
+Bluetooth HID is an explicit alternative that does not require the companion.
 The current Bluetooth Desktop increment relies on the operating-system
 Bluetooth bond; application-level authentication is still required before a
 public release.
