@@ -17,6 +17,22 @@ import java.util.Properties
 
 class BridgePacketCodecTest {
     @Test
+    fun gamepadLivenessMatchesSharedContract() {
+        assertEquals(
+            goldenVectors.getProperty("gamepad_keepalive_interval_ms").toLong(),
+            BridgeInputTiming.GAMEPAD_KEEPALIVE_INTERVAL_MILLIS,
+        )
+        assertEquals(
+            goldenVectors.getProperty("gamepad_watchdog_timeout_ms").toLong(),
+            BridgeInputTiming.GAMEPAD_WATCHDOG_TIMEOUT_MILLIS,
+        )
+        assertTrue(
+            BridgeInputTiming.GAMEPAD_KEEPALIVE_INTERVAL_MILLIS * 2 <
+                BridgeInputTiming.GAMEPAD_WATCHDOG_TIMEOUT_MILLIS,
+        )
+    }
+
+    @Test
     fun ping_matchesLanguageNeutralGoldenVector() {
         val encoded = BridgePacketCodec.encode(
             BridgePacket(

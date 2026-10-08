@@ -12,6 +12,7 @@ import dev.jonalakas.bridgepad.core.output.OutputScheduler
 import dev.jonalakas.bridgepad.protocol.BridgeCapabilities
 import dev.jonalakas.bridgepad.protocol.BridgeCapability
 import dev.jonalakas.bridgepad.protocol.BridgeInputKind
+import dev.jonalakas.bridgepad.protocol.BridgeInputTiming
 import dev.jonalakas.bridgepad.protocol.BridgeMessage
 import dev.jonalakas.bridgepad.protocol.BridgePacket
 import dev.jonalakas.bridgepad.protocol.BridgePacketStream
@@ -41,6 +42,37 @@ sealed interface BluetoothDesktopGamepadStatus {
     data class Failed(val detail: String) : BluetoothDesktopGamepadStatus
 }
 
+internal class ReconnectAttemptBudget(
+    private val maximumAttempts: Int,
+    private val stableConnectionNanos: Long = DEFAULT_STABLE_CONNECTION_NANOS,
+) {
+    private var attempts = 0
+    private var connectedAtNanos: Long? = null
+
+    init {
+        require(maximumAttempts >= 0)
+        require(stableConnectionNanos > 0)
+    }
+
+    fun connected(nowNanos: Long) {
+        connectedAtNanos = nowNanos
+    }
+
+    fun nextAttemptAfterDisconnect(nowNanos: Long): Int? {
+        connectedAtNanos?.let { connectedAt ->
+            if (nowNanos - connectedAt >= stableConnectionNanos) attempts = 0
+        }
+        connectedAtNanos = null
+        if (attempts >= maximumAttempts) return null
+        attempts += 1
+        return attempts
+    }
+
+    private companion object {
+        const val DEFAULT_STABLE_CONNECTION_NANOS = 5_000_000_000L
+    }
+}
+
 /** First playable RFCOMM adapter. It remains diagnostic until product trust is added. */
 @SuppressLint("MissingPermission")
 class BluetoothDesktopGamepadClient(
@@ -55,6 +87,9 @@ class BluetoothDesktopGamepadClient(
     private val stopping = AtomicBoolean(false)
     private val scheduler = OutputScheduler(
         reportRateHz = REPORT_RATE_HZ,
+        // Keep held state comfortably inside the protocol watchdog window
+        // instead of inheriting OutputScheduler's slower generic default.
+        keepaliveIntervalMillis = BridgeInputTiming.GAMEPAD_KEEPALIVE_INTERVAL_MILLIS,
         maximumPendingTransitions = GAMEPAD_TRANSITION_QUEUE_CAPACITY,
     )
     private val pendingPointers = ArrayBlockingQueue<PointerReport>(POINTER_QUEUE_CAPACITY)
@@ -109,10 +144,12 @@ class BluetoothDesktopGamepadClient(
     }
 
     private fun runSession() {
-        var reconnectAttempt = 0
+        val reconnectBudget = ReconnectAttemptBudget(request.reconnectAttempts)
         while (!stopping.get()) {
             try {
-                runConnectedSession()
+                runConnectedSession {
+                    reconnectBudget.connected(System.nanoTime())
+                }
                 onStatus(BluetoothDesktopGamepadStatus.Stopped)
                 return
             } catch (error: Exception) {
@@ -121,7 +158,8 @@ class BluetoothDesktopGamepadClient(
                     onStatus(BluetoothDesktopGamepadStatus.Stopped)
                     return
                 }
-                if (reconnectAttempt >= request.reconnectAttempts) {
+                val reconnectAttempt = reconnectBudget.nextAttemptAfterDisconnect(System.nanoTime())
+                if (reconnectAttempt == null) {
                     onStatus(
                         BluetoothDesktopGamepadStatus.Failed(
                             "BridgePad Desktop did not keep the Bluetooth session available",
@@ -129,7 +167,6 @@ class BluetoothDesktopGamepadClient(
                     )
                     return
                 }
-                reconnectAttempt += 1
                 pendingPointers.clear()
                 pendingKeyboard.clear()
                 scheduler.discardPendingTransitions()
@@ -145,7 +182,7 @@ class BluetoothDesktopGamepadClient(
         onStatus(BluetoothDesktopGamepadStatus.Stopped)
     }
 
-    private fun runConnectedSession() {
+    private fun runConnectedSession(onConnected: () -> Unit) {
         check(adapter.isEnabled) { "Bluetooth is turned off" }
         val device = adapter.getRemoteDevice(request.deviceAddress)
         check(device.bondState == BluetoothDevice.BOND_BONDED) {
@@ -185,6 +222,7 @@ class BluetoothDesktopGamepadClient(
             check(BridgeCapability.POINTER in ready.enabledCapabilities) {
                 "BridgePad Desktop did not enable pointer input"
             }
+            onConnected()
             onStatus(BluetoothDesktopGamepadStatus.Active)
 
             while (!stopping.get()) {

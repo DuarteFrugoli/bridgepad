@@ -45,6 +45,7 @@ fun StreamingGameplayScreen(
     peerId: String,
     requestFor: (String) -> NetworkMediaRequest?,
     useDisplayCutoutArea: Boolean,
+    onOpenKeyboard: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -140,6 +141,7 @@ fun StreamingGameplayScreen(
             modifier = Modifier.fillMaxSize(),
             shape = RectangleShape,
             transparent = true,
+            onOpenKeyboard = onOpenKeyboard,
         )
     }
 }

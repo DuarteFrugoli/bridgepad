@@ -145,7 +145,7 @@ class NetworkDesktopCoordinator(
     fun prepareRepair(peerIdHex: String) {
         activePeerIdHex = null
         gameplay.stop()
-        NetworkSessionService.stop(applicationContext)
+        GameplaySessionService.stop(applicationContext)
         trustedStore.forget(peerIdHex)
         clearPairingStatus()
     }
@@ -176,6 +176,13 @@ class NetworkDesktopCoordinator(
         val endpointHosts = (
             discovered?.endpointHosts.orEmpty() + trusted.endpointHosts
             ).distinct()
+        if (endpointHosts.isEmpty()) {
+            gameplay.reportFailure(
+                NetworkFailureReason.DESKTOP_UNAVAILABLE,
+                "Trusted desktop has no usable endpoint",
+            )
+            return
+        }
         gameplay.start(
             request = NetworkGamepadRequest(
                 host = endpointHosts.first(),
@@ -192,13 +199,18 @@ class NetworkDesktopCoordinator(
             ),
             physicalCaptureMode = captureMode,
         )
-        NetworkSessionService.start(applicationContext, captureMode, connectionMethod)
+        GameplaySessionService.startNetwork(
+            applicationContext,
+            captureMode,
+            connectionMethod,
+            peerIdHex,
+        )
     }
 
     fun stopGameplay() {
         activePeerIdHex = null
         gameplay.stop()
-        NetworkSessionService.stop(applicationContext)
+        GameplaySessionService.stop(applicationContext)
     }
 
     fun mediaRequest(peerIdHex: String): NetworkMediaRequest? {
@@ -234,7 +246,7 @@ class NetworkDesktopCoordinator(
         activePeerIdHex = null
         discovery.stop()
         gameplay.shutdown()
-        NetworkSessionService.stop(applicationContext)
+        GameplaySessionService.stop(applicationContext)
     }
 
     private fun pairUsingDiscoveredEndpoints(

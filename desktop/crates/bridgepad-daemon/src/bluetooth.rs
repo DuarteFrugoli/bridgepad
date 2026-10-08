@@ -4,12 +4,12 @@
 mod platform {
     use crate::AnyError;
     use bridgepad_protocol::{
-        CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER, HEADER_SIZE,
-        KEYBOARD_MODIFIER_ALT, KEYBOARD_MODIFIER_CONTROL, KEYBOARD_MODIFIER_META,
-        KEYBOARD_MODIFIER_SHIFT, KeyboardInput as ProtocolKeyboardInput,
-        KeyboardKey as ProtocolKeyboardKey, MAX_PAYLOAD_SIZE, MessageType, PacketHeader,
-        decode_gamepad_snapshot, decode_keyboard, decode_packet, decode_pointer,
-        decode_session_start, encode_packet,
+        CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER,
+        GAMEPAD_WATCHDOG_TIMEOUT_MILLIS, HEADER_SIZE, KEYBOARD_MODIFIER_ALT,
+        KEYBOARD_MODIFIER_CONTROL, KEYBOARD_MODIFIER_META, KEYBOARD_MODIFIER_SHIFT,
+        KeyboardInput as ProtocolKeyboardInput, KeyboardKey as ProtocolKeyboardKey,
+        MAX_PAYLOAD_SIZE, MessageType, PacketHeader, decode_gamepad_snapshot, decode_keyboard,
+        decode_packet, decode_pointer, decode_session_start, encode_packet,
     };
     use bridgepad_virtual_device::{
         DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, KeyboardModifiers, PointerReport,
@@ -35,7 +35,8 @@ mod platform {
     use windows::core::GUID;
 
     const RFCOMM_SERVICE_UUID: GUID = GUID::from_u128(0x7a1b8d5f_6c24_4e71_9f52_a4b8d9c30101);
-    const GAMEPAD_WATCHDOG_TIMEOUT: Duration = Duration::from_millis(150);
+    const GAMEPAD_WATCHDOG_TIMEOUT: Duration =
+        Duration::from_millis(GAMEPAD_WATCHDOG_TIMEOUT_MILLIS);
     const GAMEPAD_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

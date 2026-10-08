@@ -54,7 +54,7 @@
             android:foregroundServiceType="connectedDevice" />
 
         <service
-            android:name=".session.NetworkSessionService"
+            android:name=".session.GameplaySessionService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
     </application>

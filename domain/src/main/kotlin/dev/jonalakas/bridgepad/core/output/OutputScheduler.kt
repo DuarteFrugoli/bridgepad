@@ -31,7 +31,7 @@ class OutputScheduler(
 
     @Synchronized
     fun submit(state: VirtualGamepadState) {
-        if (state.pressedButtons != lastSubmitted.pressedButtons || state.dpad != lastSubmitted.dpad) {
+        if (hasDiscreteGamepadTransition(lastSubmitted, state)) {
             if (transitions.size >= maximumPendingTransitions) {
                 droppedTransitions += transitions.size
                 transitions.clear()

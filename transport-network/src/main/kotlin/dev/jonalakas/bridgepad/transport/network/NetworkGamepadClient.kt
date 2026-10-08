@@ -1,6 +1,7 @@
 package dev.jonalakas.bridgepad.transport.network
 
 import dev.jonalakas.bridgepad.core.gamepad.VirtualGamepadState
+import dev.jonalakas.bridgepad.core.output.hasDiscreteGamepadTransition
 import dev.jonalakas.bridgepad.core.ports.PointerReport
 import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.protocol.BridgeCapabilities
@@ -115,7 +116,7 @@ class NetworkGamepadClient(
     fun send(state: VirtualGamepadState) {
         if (!stopping.get()) {
             val previous = latestState.getAndSet(state)
-            if (hasDiscreteTransition(previous, state)) {
+            if (hasDiscreteGamepadTransition(previous, state)) {
                 val transition = PendingGamepadTransition(state, System.nanoTime())
                 if (!pendingGamepadTransitions.offer(transition)) {
                     // Never build a delayed command replay. The periodic full
@@ -466,16 +467,6 @@ private data class PendingGamepadTransition(
     val state: VirtualGamepadState,
     val createdAtNanos: Long,
 )
-
-internal fun hasDiscreteTransition(
-    previous: VirtualGamepadState,
-    current: VirtualGamepadState,
-): Boolean = previous.pressedButtons != current.pressedButtons ||
-    previous.dpad != current.dpad ||
-    previous.leftTrigger.isPressed() != current.leftTrigger.isPressed() ||
-    previous.rightTrigger.isPressed() != current.rightTrigger.isPressed()
-
-private fun Float.isPressed(): Boolean = this > 0.01f
 
 internal fun normalizeFailureAfterActiveSession(
     failure: NetworkGamepadStatus.Failed,

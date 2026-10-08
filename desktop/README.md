@@ -82,8 +82,11 @@ Gameplay requires a paired client by default. The daemon rejects untrusted
 `SessionStart`, gamepad and pointer messages. Transient disconnects trigger
 bounded automatic reconnection in Android, and the UI distinguishes an offline
 desktop, changed identity, rejected authentication and a lost connection.
-Gamepad snapshots are renewed at 125 Hz; if they stop for 150 ms, Desktop
-neutralizes the virtual controller until a fresh snapshot arrives.
+Wi-Fi gamepad snapshots are renewed at 125 Hz. Bluetooth RFCOMM sends changed
+state at up to 125 Hz and refreshes unchanged held state every 50 ms. If every
+refresh stops for 150 ms, Desktop neutralizes the virtual controller until a
+fresh snapshot arrives. Kotlin and Rust verify these timing limits against the
+same protocol contract data.
 
 List or revoke the desktop's trusted phones while the receiver is stopped:
 

@@ -37,16 +37,28 @@ class DependencyRulesTest {
     }
 
     @Test
-    fun wifiBackgroundSessionHasAnAndroidLifecycleHost() {
-        val service = sourceRoot().resolve("session/NetworkSessionService.kt").readText()
+    fun desktopGameplayHasAUnifiedAndroidLifecycleHost() {
+        val service = sourceRoot().resolve("session/GameplaySessionService.kt").readText()
+        val resources = sourceRoot().resolve("session/GameplaySessionResources.kt").readText()
         val manifest = Path.of("src/main/AndroidManifest.xml").readText()
         val coordinator = sourceRoot().resolve("session/NetworkDesktopCoordinator.kt").readText()
+        val bluetoothDesktop = sourceRoot().resolve("session/BluetoothDesktopSessionAdapter.kt").readText()
+        val bluetoothHid = sourceRoot().resolve("output/hid/BluetoothHidService.kt").readText()
 
-        assertTrue("Wi-Fi gameplay must use a foreground service", "startForeground" in service)
-        assertTrue("Screen-off gameplay must keep the CPU awake", "PARTIAL_WAKE_LOCK" in service)
-        assertTrue("NetworkSessionService must be registered", ".session.NetworkSessionService" in manifest)
-        assertTrue("Starting gameplay must start the lifecycle host", "NetworkSessionService.start" in coordinator)
-        assertTrue("Stopping gameplay must stop the lifecycle host", "NetworkSessionService.stop" in coordinator)
+        assertTrue("Desktop gameplay must use a foreground service", "startForeground" in service)
+        assertTrue("Screen-off gameplay must keep the CPU awake", "PARTIAL_WAKE_LOCK" in resources)
+        assertTrue("GameplaySessionService must be registered", ".session.GameplaySessionService" in manifest)
+        assertTrue("Starting gameplay must start the lifecycle host", "GameplaySessionService.startNetwork" in coordinator)
+        assertTrue("Stopping gameplay must stop the lifecycle host", "GameplaySessionService.stop" in coordinator)
+        assertTrue(
+            "Bluetooth Desktop must use the unified lifecycle host",
+            "GameplaySessionService.startBluetoothDesktop" in bluetoothDesktop,
+        )
+        assertTrue(
+            "Direct HID must share the same background resource contract",
+            "GameplaySessionResources" in bluetoothHid,
+        )
+        assertTrue("Direct HID must be restartable after process reclamation", "START_STICKY" in bluetoothHid)
     }
 
     @Test

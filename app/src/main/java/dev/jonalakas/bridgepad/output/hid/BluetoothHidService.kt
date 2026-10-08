@@ -39,6 +39,7 @@ import dev.jonalakas.bridgepad.core.output.OutputScheduler
 import dev.jonalakas.bridgepad.diagnostics.SessionLog
 import dev.jonalakas.bridgepad.session.InputRouter
 import dev.jonalakas.bridgepad.session.InputSubscription
+import dev.jonalakas.bridgepad.session.GameplaySessionResources
 import dev.jonalakas.bridgepad.session.RoutedInputState
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -62,6 +63,7 @@ class BluetoothHidService : Service() {
     )
     private var requestedHostAddress: String? = null
     private var lastHostAddress: String? = null
+    private var restoredHostAddress: String? = null
     @Volatile
     private var shuttingDown = false
     private val handler = Handler(Looper.getMainLooper())
@@ -74,6 +76,7 @@ class BluetoothHidService : Service() {
         maximumPendingTransitions = MAX_PENDING_GAMEPAD_TRANSITIONS,
     )
     private lateinit var inputRouter: InputRouter
+    private lateinit var sessionResources: GameplaySessionResources
     private var inputSubscription: InputSubscription? = null
     private var activeCaptureMode = PhysicalCaptureMode.COMPATIBILITY
     private var discoverabilityTimeout: Runnable? = null
@@ -190,6 +193,10 @@ class BluetoothHidService : Service() {
                     hidDevice?.disconnect(pluggedDevice)
                 }
                 update(HidSessionStatus.READY, LocalizedMessage(R.string.hid_ready))
+                restoredHostAddress?.let { address ->
+                    restoredHostAddress = null
+                    handler.post { connect(address) }
+                }
             } else {
                 connectedDevice = null
                 finishSession(HidSessionStatus.ERROR, LocalizedMessage(R.string.hid_registration_lost))
@@ -298,10 +305,36 @@ class BluetoothHidService : Service() {
         }
         adapter = getSystemService(BluetoothManager::class.java)?.adapter
         inputRouter = (application as BridgePadApplication).inputRouter
+        sessionResources = GameplaySessionResources(this, "$packageName:bluetooth-hid-session")
         observeInputRouter()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent == null) {
+            val restored = loadRecoveryRecord()
+            if (restored == null) {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            activeProfile = profileRegistry.find(restored.outputAdapterId)
+                ?: GenericCompositeHidProfile
+            activeDestination = restored.destination
+            activeCaptureMode = restored.captureMode
+            restoredHostAddress = restored.hostAddress
+            sessionResources.start(activeCaptureMode, keepWifiAwake = false)
+            observeInputRouter()
+            HidSessionStore.update {
+                it.copy(
+                    physicalCaptureMode = activeCaptureMode,
+                    destinationType = activeDestination,
+                    connectionMethod = ConnectionMethod.BLUETOOTH,
+                    outputAdapterId = activeProfile.adapter.id,
+                )
+            }
+            updateNotification()
+            startHid()
+            return START_STICKY
+        }
         when (intent?.action) {
             ACTION_START -> {
                 val requestedAdapterId = intent.getStringExtra(EXTRA_OUTPUT_ADAPTER_ID)
@@ -324,6 +357,15 @@ class BluetoothHidService : Service() {
                     ?.let { runCatching { PhysicalCaptureMode.valueOf(it) }.getOrNull() }
                     ?: PhysicalCaptureMode.COMPATIBILITY
                 activeCaptureMode = captureMode
+                saveRecoveryRecord(
+                    HidRecoveryRecord(
+                        outputAdapterId = requestedAdapterId,
+                        destination = requestedDestination,
+                        captureMode = captureMode,
+                        hostAddress = null,
+                    ),
+                )
+                sessionResources.start(captureMode, keepWifiAwake = false)
                 observeInputRouter()
                 HidSessionStore.update {
                     it.copy(
@@ -341,11 +383,16 @@ class BluetoothHidService : Service() {
             ACTION_RECONNECT -> reconnect()
             ACTION_ENABLE_BACKGROUND_USB -> {
                 activeCaptureMode = PhysicalCaptureMode.BACKGROUND_USB
+                updateRecoveryCaptureMode(activeCaptureMode)
+                sessionResources.updateCaptureMode(activeCaptureMode)
                 observeInputRouter()
                 HidSessionStore.update { it.copy(physicalCaptureMode = PhysicalCaptureMode.BACKGROUND_USB) }
+                updateNotification()
             }
             ACTION_ENABLE_COMPATIBILITY_INPUT -> {
                 activeCaptureMode = PhysicalCaptureMode.COMPATIBILITY
+                updateRecoveryCaptureMode(activeCaptureMode)
+                sessionResources.updateCaptureMode(activeCaptureMode)
                 observeInputRouter()
                 HidSessionStore.update {
                     it.copy(
@@ -363,7 +410,7 @@ class BluetoothHidService : Service() {
             )
             ACTION_STOP -> stopHid()
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
@@ -383,6 +430,7 @@ class BluetoothHidService : Service() {
         inputSubscription = null
         outputThread.quitSafely()
         releaseProfile()
+        sessionResources.close()
         runCatching { unregisterReceiver(bluetoothStateReceiver) }
         if (!stateWasFinalized) {
             HidSessionStore.update { HidSessionState(message = LocalizedMessage(R.string.hid_ended)) }
@@ -453,6 +501,7 @@ class BluetoothHidService : Service() {
             return
         }
         val device = adapter?.getRemoteDevice(address) ?: return
+        updateRecoveryHost(address)
         requestedHostAddress = address
         lastHostAddress = address
         SessionLog.record("CONNECTION", "Connection requested for a paired computer")
@@ -547,6 +596,7 @@ class BluetoothHidService : Service() {
     }
 
     private fun acceptConnectedDevice(device: BluetoothDevice) {
+        updateRecoveryHost(device.address)
         connectedDevice = device
         requestedHostAddress = device.address
         lastHostAddress = device.address
@@ -762,6 +812,7 @@ class BluetoothHidService : Service() {
     private fun stopHid() {
         if (shuttingDown) return
         shuttingDown = true
+        clearRecoveryRecord()
         cancelPendingConnection()
         stopOutputPipeline()
         if (connectedDevice != null) {
@@ -780,6 +831,7 @@ class BluetoothHidService : Service() {
     private fun finishSession(status: HidSessionStatus, message: LocalizedMessage) {
         if (shuttingDown) return
         shuttingDown = true
+        clearRecoveryRecord()
         SessionLog.record(if (status == HidSessionStatus.ERROR) "ERROR" else "SESSION", message.resolve(this))
         HidSessionStore.update {
             HidSessionState(
@@ -902,6 +954,59 @@ class BluetoothHidService : Service() {
         getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
     }
 
+    private fun saveRecoveryRecord(record: HidRecoveryRecord) {
+        getSharedPreferences(RECOVERY_PREFERENCES, MODE_PRIVATE).edit()
+            .putString(RECOVERY_OUTPUT_ADAPTER_ID, record.outputAdapterId.value)
+            .putString(RECOVERY_DESTINATION, record.destination.name)
+            .putString(RECOVERY_CAPTURE_MODE, record.captureMode.name)
+            .apply {
+                if (record.hostAddress == null) remove(RECOVERY_HOST_ADDRESS)
+                else putString(RECOVERY_HOST_ADDRESS, record.hostAddress)
+            }
+            .apply()
+    }
+
+    private fun loadRecoveryRecord(): HidRecoveryRecord? {
+        val preferences = getSharedPreferences(RECOVERY_PREFERENCES, MODE_PRIVATE)
+        val outputAdapterId = preferences.getString(RECOVERY_OUTPUT_ADAPTER_ID, null)
+            ?.takeIf(String::isNotBlank)
+            ?.let(::OutputAdapterId)
+            ?: return null
+        val destination = preferences.getString(RECOVERY_DESTINATION, null)
+            ?.let { runCatching { DestinationType.valueOf(it) }.getOrNull() }
+            ?: return null
+        val captureMode = preferences.getString(RECOVERY_CAPTURE_MODE, null)
+            ?.let { runCatching { PhysicalCaptureMode.valueOf(it) }.getOrNull() }
+            ?: return null
+        return HidRecoveryRecord(
+            outputAdapterId,
+            destination,
+            captureMode,
+            preferences.getString(RECOVERY_HOST_ADDRESS, null)?.takeIf(String::isNotBlank),
+        )
+    }
+
+    private fun updateRecoveryHost(address: String) {
+        val record = loadRecoveryRecord() ?: return
+        saveRecoveryRecord(record.copy(hostAddress = address))
+    }
+
+    private fun updateRecoveryCaptureMode(captureMode: PhysicalCaptureMode) {
+        val record = loadRecoveryRecord() ?: return
+        saveRecoveryRecord(record.copy(captureMode = captureMode))
+    }
+
+    private fun clearRecoveryRecord() {
+        getSharedPreferences(RECOVERY_PREFERENCES, MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private data class HidRecoveryRecord(
+        val outputAdapterId: OutputAdapterId,
+        val destination: DestinationType,
+        val captureMode: PhysicalCaptureMode,
+        val hostAddress: String?,
+    )
+
     companion object {
         const val ACTION_START = "dev.jonalakas.bridgepad.hid.START"
         const val ACTION_CONNECT = "dev.jonalakas.bridgepad.hid.CONNECT"
@@ -919,6 +1024,11 @@ class BluetoothHidService : Service() {
 
         private const val CHANNEL_ID = "bluetooth_hid_session"
         private const val NOTIFICATION_ID = 1001
+        private const val RECOVERY_PREFERENCES = "bluetooth_hid_session_recovery"
+        private const val RECOVERY_OUTPUT_ADAPTER_ID = "output_adapter_id"
+        private const val RECOVERY_DESTINATION = "destination"
+        private const val RECOVERY_CAPTURE_MODE = "capture_mode"
+        private const val RECOVERY_HOST_ADDRESS = "host_address"
         private const val AUTOMATIC_CONNECTION_GRACE_PERIOD_MS = 1_500L
         private const val POST_PAIR_CONNECTION_DELAY_MS = 500L
         private const val OUTPUT_RATE_HZ = 100

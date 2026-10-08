@@ -692,6 +692,20 @@ Start with no PC session. Connect a physical USB gamepad to the phone:
     Share/Capture.
 15. On a nonessential step, press the physical button mapped as A and confirm
     that the step is skipped without assigning A to that control.
+16. Repeat Background USB through direct HID, Bluetooth via Desktop, Wi-Fi and
+    USB tethering. In each path, leave BridgePad for at least 15 minutes with
+    the screen off and confirm held and repeated controls still reach the same
+    PC controller without reopening the Activity.
+17. Return to BridgePad after each background interval. Confirm the original
+    session and capture mode are still shown and that only one foreground
+    gameplay notification exists for the selected transport.
+18. End the session normally and confirm the notification disappears, USB
+    capture stops and `joy.cpl` returns to neutral. Starting a new session must
+    not resurrect the previous destination.
+19. Kill the app process from Android developer tools without force-stopping the
+    package. Confirm the sticky lifecycle host is recreated and reconnects when
+    the USB device and destination remain available. A system-level **Force
+    stop** is intentionally terminal and must not restart automatically.
 
 ## Phase 7 MVP stabilization
 
@@ -730,22 +744,26 @@ first test.
 6. Use the touchpad simultaneously with a gamepad stick and buttons.
 7. Pinch with two fingers in a browser or editor and confirm that spreading
    zooms in while closing the fingers zooms out through `Ctrl + wheel`.
-8. Swipe up with three fingers and confirm that Windows opens Task View. Swipe
+8. Tap with three fingers and confirm that the Android keyboard screen opens.
+   Close it and confirm that BridgePad returns to the same touchpad surface.
+9. Swipe up with three fingers and confirm that Windows opens Task View. Swipe
    down without selecting a window and confirm that Task View closes without
    minimizing the windows that were already open.
-9. Swipe down with three fingers and confirm that Windows minimizes every
+10. Swipe down with three fingers and confirm that Windows minimizes every
    window. Swipe up next and confirm that those windows are restored instead
    of opening Task View; a later upward swipe must open Task View normally.
    Repeat the downward gesture, open something from the desktop with the
    BridgePad pointer, then swipe up and confirm that the old minimized set is
    not restored and Task View opens instead.
-10. Swipe sideways with three fingers and keep the fingers down. Confirm that
+11. Swipe sideways with three fingers and keep the fingers down. Confirm that
     the persistent Windows app switcher opens, that continued horizontal
     movement changes the selected window, and that lifting the fingers opens
     the selected window.
-11. Repeat the gesture checks on both the integrated controller touchpad and
-    the full-screen physical-controller touchpad.
-12. Switch to Physical gamepad input and confirm that touching the old surface
+12. Repeat the gesture checks on the integrated controller touchpad, the
+    full-screen physical-controller touchpad and the streaming touch surface.
+    Confirm that the full-screen touchpad has no keyboard or right-click buttons
+    taking space above it.
+13. Switch to Physical gamepad input and confirm that touching the old surface
    cannot move or click the pointer.
 
 ### Android Open Accessory USB spike

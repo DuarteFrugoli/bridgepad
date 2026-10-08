@@ -118,24 +118,30 @@ reverse landscape), so the same policy applies to the virtual controller, mouse
 touchpad, and sessions driven by a physical controller. A configuration change
 selects the matching layout variant without restarting the transport session.
 
-Active Wi-Fi gameplay is hosted by `NetworkSessionService`, a connected-device
-foreground service. The service holds CPU and Wi-Fi locks only for the lifetime
-of the playable session, keeps direct USB capture alive when Background USB is
-selected, and releases every resource on stop or terminal failure. The Activity
-may be stopped, rotated, removed from the foreground, or have the screen turned
-off without owning the network transport lifetime.
+Wi-Fi, USB-tethered and Bluetooth-via-Desktop gameplay share
+`GameplaySessionService`, a connected-device foreground lifecycle host. It owns
+CPU wakefulness, the Wi-Fi performance lock when applicable, direct USB capture
+and the persisted minimum needed to restore an interrupted Desktop session.
+Transport clients remain independent and do not own these Android resources.
+The service releases every resource on an explicit stop or terminal failure.
+The Activity may be stopped, rotated, removed from the foreground, or have the
+screen turned off without owning the transport lifetime.
 
 `BridgePadApplication` is the process-level composition root and owns the shared
-input router. The Bluetooth foreground service is only an Android lifecycle host
-for the Bluetooth adapter; it neither creates nor destroys the input pipeline and
-does not own USB capture, controller mapping or touchscreen state.
+input router. Direct Bluetooth HID retains its specialized foreground service
+because Android's HID profile callbacks belong to that service, but it uses the
+same `GameplaySessionResources` contract for CPU wakefulness and direct USB
+capture. Its minimal adapter, destination, capture mode and selected host are
+persisted so Android can recreate an unexpectedly reclaimed sticky service.
+Neither lifecycle host owns controller mapping or touchscreen state.
 `BluetoothHidOutputTransport` implements the same domain port intended for future
 Wi-Fi and USB desktop adapters.
 
 Input reports form a data plane that is kept separate from the UI and service
 control plane. Source adapters enqueue every changed state, `InputRouter`
 serializes updates from independent adapters, and `OutputScheduler` retains
-button/D-pad transitions while coalescing intermediate analog positions. The
+button, D-pad and trigger press/release transitions while coalescing intermediate
+stick positions and analog values that do not cross a trigger edge. The
 Bluetooth service arbitrates gamepad, pointer and keyboard output on a dedicated
 thread, sends at most one logical input per scheduling slot, retries rejected
 input without consuming it and uses a low-rate keepalive instead of repeating an
@@ -148,7 +154,9 @@ briefly retains discrete button, D-pad and trigger transitions so a fast tap is
 not collapsed before its next report. Stale transitions are discarded rather
 than replayed after congestion. On Desktop, each snapshot renews a short input
 lease; 150 ms without a valid refresh neutralizes the virtual gamepad, and the
-next snapshot resumes it normally.
+next snapshot resumes it normally. RFCOMM refreshes unchanged held state every
+50 ms. Both limits are normative protocol constants verified against the same
+shared contract data by Kotlin and Rust tests.
 
 Wi-Fi pointer and keyboard delivery uses a transactional producer contract: an
 input is consumed only after the bounded network queue accepts it.

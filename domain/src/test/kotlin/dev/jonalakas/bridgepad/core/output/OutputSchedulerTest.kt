@@ -38,6 +38,23 @@ class OutputSchedulerTest {
     }
 
     @Test
+    fun preservesRapidTriggerPressAndReleaseTransitions() {
+        val scheduler = OutputScheduler(reportRateHz = 100)
+        val pressed = VirtualGamepadState(rightTrigger = 1f)
+        val released = VirtualGamepadState()
+        scheduler.submit(pressed)
+        scheduler.submit(released)
+
+        val pressedReport = scheduler.poll(0L)!!
+        assertEquals(1f, pressedReport.rightTrigger)
+        scheduler.complete(pressedReport, sent = true, nowNanos = 0L)
+        val releasedReport = scheduler.poll(10_000_000L)!!
+        assertEquals(0f, releasedReport.rightTrigger)
+        scheduler.complete(releasedReport, sent = true, nowNanos = 10_000_000L)
+        assertNull(scheduler.poll(20_000_000L))
+    }
+
+    @Test
     fun coalescesIntermediateAnalogPositions() {
         val scheduler = OutputScheduler(reportRateHz = 100)
         scheduler.submit(VirtualGamepadState(leftStickX = -1f))

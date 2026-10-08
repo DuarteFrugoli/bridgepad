@@ -62,7 +62,7 @@ class BridgePadApplication : Application() {
         sessionCoordinator = SessionCoordinator(
             context = this,
             adapters = listOf(
-                BluetoothDesktopSessionAdapter(bluetoothDesktopGameplayController),
+                BluetoothDesktopSessionAdapter(this, bluetoothDesktopGameplayController),
                 BluetoothHidSessionAdapter(
                     this,
                     GenericCompositeHidProfile,

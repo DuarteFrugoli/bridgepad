@@ -12,13 +12,13 @@ use auth::{
 };
 use bridgepad_protocol::{
     CAPABILITY_AUDIO, CAPABILITY_GAMEPAD, CAPABILITY_KEYBOARD, CAPABILITY_POINTER,
-    CAPABILITY_VIDEO, HEADER_SIZE, KEYBOARD_MODIFIER_ALT, KEYBOARD_MODIFIER_CONTROL,
-    KEYBOARD_MODIFIER_META, KEYBOARD_MODIFIER_SHIFT, KeyboardInput as ProtocolKeyboardInput,
-    KeyboardKey as ProtocolKeyboardKey, MAX_PAYLOAD_SIZE, MAX_PEER_NAME_SIZE, MessageType,
-    PacketHeader, decode_auth_proof, decode_auth_request, decode_gamepad_snapshot, decode_keyboard,
-    decode_media_offer, decode_packet, decode_pair_request, decode_pointer,
-    decode_session_description, decode_session_start, encode_media_answer, encode_packet,
-    encode_session_description,
+    CAPABILITY_VIDEO, GAMEPAD_WATCHDOG_TIMEOUT_MILLIS, HEADER_SIZE, KEYBOARD_MODIFIER_ALT,
+    KEYBOARD_MODIFIER_CONTROL, KEYBOARD_MODIFIER_META, KEYBOARD_MODIFIER_SHIFT,
+    KeyboardInput as ProtocolKeyboardInput, KeyboardKey as ProtocolKeyboardKey, MAX_PAYLOAD_SIZE,
+    MAX_PEER_NAME_SIZE, MessageType, PacketHeader, decode_auth_proof, decode_auth_request,
+    decode_gamepad_snapshot, decode_keyboard, decode_media_offer, decode_packet,
+    decode_pair_request, decode_pointer, decode_session_description, decode_session_start,
+    encode_media_answer, encode_packet, encode_session_description,
 };
 use bridgepad_virtual_device::{
     DpadDirection, GamepadReport, KeyboardInput, KeyboardKey, KeyboardModifiers, PointerReport,
@@ -48,7 +48,7 @@ pub const DEFAULT_ADDRESS: &str = "0.0.0.0:39393";
 pub const DEFAULT_MEDIA_ADDRESS: &str = "0.0.0.0:39394";
 pub const DEFAULT_IDENTITY_DIRECTORY: &str = ".bridgepad-dev";
 
-const GAMEPAD_WATCHDOG_TIMEOUT: Duration = Duration::from_millis(150);
+const GAMEPAD_WATCHDOG_TIMEOUT: Duration = Duration::from_millis(GAMEPAD_WATCHDOG_TIMEOUT_MILLIS);
 const GAMEPAD_WATCHDOG_POLL_INTERVAL: Duration = Duration::from_millis(20);
 const WEBRTC_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const STREAM_BITRATE_UPDATE_INTERVAL: Duration = Duration::from_secs(1);

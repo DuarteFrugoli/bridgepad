@@ -71,6 +71,9 @@ class SessionCoordinator(
         } else {
             DirectUsbCaptureManager.stop()
         }
+        if (mode != null) {
+            GameplaySessionService.updateCaptureMode(applicationContext, mode)
+        }
     }
 
     fun updateState(transform: (SessionState) -> SessionState) = SessionStore.update(transform)

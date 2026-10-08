@@ -13,13 +13,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxWithConstraintsScope
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -149,6 +145,7 @@ private fun BoxWithConstraintsScope.RuntimeLayoutControl(
             TouchControlId.MOUSE_TOUCHPAD -> MouseTouchpad(
                 modifier = Modifier.fillMaxSize(),
                 shape = shape,
+                onOpenKeyboard = onKeyboardRequested,
             )
             TouchControlId.DPAD -> DpadPad(
                 modifier = Modifier.fillMaxSize(),
@@ -311,44 +308,18 @@ fun MouseTouchpadScreen(
             .background(MaterialTheme.colorScheme.surface)
             .windowInsetsPadding(touchscreenContentInsets(useDisplayCutoutArea)),
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-            ) {
-                AndroidKeyboardButton(
-                    shape = RoundedCornerShape(12.dp),
-                    onOpenKeyboard = onOpenKeyboard,
-                    modifier = Modifier.size(44.dp),
-                )
-                TouchButton(
-                    label = stringResource(R.string.right_click_short),
-                    onPressedChange = { pressed -> if (pressed) TouchMouseStore.rightClick() },
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .size(44.dp),
-                    accessibilityLabel = stringResource(R.string.right_click),
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .padding(top = 8.dp)
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) {
-                MouseTouchpad(modifier = Modifier.fillMaxSize())
-                Text(
-                    text = stringResource(R.string.mouse_touchpad_back_hint),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            }
-        }
+        MouseTouchpad(
+            modifier = Modifier.fillMaxSize(),
+            onOpenKeyboard = onOpenKeyboard,
+        )
+        Text(
+            text = stringResource(R.string.mouse_touchpad_back_hint),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.labelSmall,
+        )
     }
 }
 
@@ -357,7 +328,9 @@ internal fun MouseTouchpad(
     modifier: Modifier = Modifier,
     shape: Shape = touchControlShape(TouchControlId.MOUSE_TOUCHPAD),
     transparent: Boolean = false,
+    onOpenKeyboard: () -> Unit,
 ) {
+    val currentOnOpenKeyboard by rememberUpdatedState(onOpenKeyboard)
     val touchpadLabel = stringResource(R.string.open_mouse_touchpad)
     val touchpadHint = stringResource(R.string.mouse_touchpad_instructions)
     val container = MaterialTheme.colorScheme.surfaceVariant
@@ -374,6 +347,7 @@ internal fun MouseTouchpad(
                 )
                 val pinchThreshold = TOUCHPAD_PINCH_SLOP_DP.dp.toPx()
                 val threeFingerThreshold = TOUCHPAD_THREE_FINGER_SWIPE_DP.dp.toPx()
+                val threeFingerTapSlop = TOUCHPAD_THREE_FINGER_TAP_SLOP_DP.dp.toPx()
                 val windowSwitcherStep = TOUCHPAD_WINDOW_SWITCH_STEP_DP.dp.toPx()
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
@@ -383,6 +357,7 @@ internal fun MouseTouchpad(
                     var bufferedSpanDelta = 0f
                     var threeFingerDelta = Offset.Zero
                     var threeFingerMode = ThreeFingerGestureMode.UNDECIDED
+                    var threeFingerTapEligible = true
                     var windowSwitcherRemainder = 0f
                     var twoFingerMode = TwoFingerGestureMode.UNDECIDED
                     var motionAccepted = false
@@ -411,6 +386,9 @@ internal fun MouseTouchpad(
                         when (activePointerMode) {
                             3 -> {
                                 threeFingerDelta += delta
+                                if (hypot(threeFingerDelta.x, threeFingerDelta.y) > threeFingerTapSlop) {
+                                    threeFingerTapEligible = false
+                                }
                                 when (threeFingerMode) {
                                     ThreeFingerGestureMode.UNDECIDED -> {
                                         val horizontal = abs(threeFingerDelta.x) >
@@ -542,7 +520,11 @@ internal fun MouseTouchpad(
                                 }
                                 shortcut?.let(TouchKeyboardStore::submit)
                             }
-                            ThreeFingerGestureMode.UNDECIDED -> Unit
+                            ThreeFingerGestureMode.UNDECIDED -> if (
+                                threeFingerTapEligible && !producedMotion
+                            ) {
+                                currentOnOpenKeyboard()
+                            }
                         }
                     } else if (!producedMotion) {
                         if (maximumPointerCount == 2) {
@@ -985,6 +967,7 @@ private val DpadDirection.hasWest: Boolean
 private const val KEYBOARD_SYMBOL = "⌨"
 private const val TOUCHPAD_TAP_SLOP_DP = 2f
 private const val TOUCHPAD_PINCH_SLOP_DP = 4f
+private const val TOUCHPAD_THREE_FINGER_TAP_SLOP_DP = 12f
 private const val TOUCHPAD_THREE_FINGER_SWIPE_DP = 48f
 private const val TOUCHPAD_WINDOW_SWITCH_STEP_DP = 40f
 private const val DPAD_CELL_FRACTION = 0.36f

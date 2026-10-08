@@ -10,6 +10,12 @@ object BridgeProtocol {
     const val SERVICE_ID: String = "bridgepad"
 }
 
+/** Normative liveness limits shared by Android senders and Desktop receivers. */
+object BridgeInputTiming {
+    const val GAMEPAD_KEEPALIVE_INTERVAL_MILLIS: Long = 50L
+    const val GAMEPAD_WATCHDOG_TIMEOUT_MILLIS: Long = 150L
+}
+
 class BridgeProtocolException(message: String, cause: Throwable? = null) :
     IllegalArgumentException(message, cause)
 

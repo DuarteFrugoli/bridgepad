@@ -10,6 +10,8 @@ pub const HEADER_SIZE: usize = 32;
 // milestone, so a complete SDP offer/answer must fit in one protocol packet.
 pub const MAX_PAYLOAD_SIZE: usize = 16_384;
 pub const MAX_PEER_NAME_SIZE: usize = 64;
+pub const GAMEPAD_KEEPALIVE_INTERVAL_MILLIS: u64 = 50;
+pub const GAMEPAD_WATCHDOG_TIMEOUT_MILLIS: u64 = 150;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
@@ -601,6 +603,19 @@ mod tests {
     ));
 
     #[test]
+    fn gamepad_liveness_matches_shared_contract() {
+        assert_eq!(
+            contract_value("gamepad_keepalive_interval_ms"),
+            GAMEPAD_KEEPALIVE_INTERVAL_MILLIS
+        );
+        assert_eq!(
+            contract_value("gamepad_watchdog_timeout_ms"),
+            GAMEPAD_WATCHDOG_TIMEOUT_MILLIS
+        );
+        assert!(GAMEPAD_KEEPALIVE_INTERVAL_MILLIS * 2 < GAMEPAD_WATCHDOG_TIMEOUT_MILLIS);
+    }
+
+    #[test]
     fn kotlin_ping_vector_decodes_and_encodes_identically() {
         let expected = vector("ping");
         let packet = decode_packet(&expected).expect("Kotlin vector must decode");
@@ -865,6 +880,17 @@ mod tests {
             .filter_map(|line| line.split_once('='))
             .collect();
         decode_hex(entries.get(name).expect("missing golden vector"))
+    }
+
+    fn contract_value(name: &str) -> u64 {
+        GOLDEN_VECTORS
+            .lines()
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .filter_map(|line| line.split_once('='))
+            .find_map(|(key, value)| (key == name).then_some(value))
+            .expect("missing shared contract value")
+            .parse()
+            .expect("contract value must be an unsigned integer")
     }
 
     fn decode_hex(value: &str) -> Vec<u8> {

@@ -14,9 +14,7 @@
     <string name="pair_new_pc">Pair a new PC</string>
     <string name="physical_gamepad_diagnostic">Physical gamepad diagnostic</string>
     <string name="open_mouse_touchpad">Open mouse touchpad</string>
-    <string name="mouse_touchpad_instructions">Move with one finger and tap for a left click. Use two fingers to right-click, scroll or pinch to zoom. Swipe three fingers up for Task View or to restore minimized windows, down to return from Task View or minimize all windows, or sideways to choose a window.</string>
-    <string name="right_click_short">R</string>
-    <string name="right_click">Right click</string>
+    <string name="mouse_touchpad_instructions">Move with one finger and tap for a left click. Use two fingers to right-click, scroll or pinch to zoom. Tap three fingers to open the keyboard. Swipe three fingers up for Task View or to restore minimized windows, down to return from Task View or minimize all windows, or sideways to choose a window.</string>
     <string name="mouse_touchpad_back_hint">← Use Android Back to open the session menu</string>
     <string name="onboarding_title">Your phone, your controller</string>
     <string name="onboarding_description">Choose a play mode and connect through direct Bluetooth, BridgePad Desktop, Wi-Fi or USB. Virtual and physical controls work together automatically.</string>
@@ -346,7 +344,7 @@
     <string name="control_interaction_hold">Hold</string>
     <string name="control_interaction_toggle">Toggle</string>
     <string name="control_interaction_hint">Toggle keeps the control pressed until you tap it again.</string>
-    <string name="network_session_notification_channel">Desktop network session</string>
+    <string name="gameplay_session_notification_channel">Desktop gameplay session</string>
     <string name="notification_wifi_session_active">Wi-Fi session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
     <string name="notification_wifi_background_usb_active">Wi-Fi session and Background USB active. You can play with BridgePad minimized or the screen off.</string>
     <string name="notification_usb_session_active">USB cable session active. Keep BridgePad open to use touchscreen or compatibility controllers.</string>
