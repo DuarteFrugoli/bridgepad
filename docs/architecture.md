@@ -221,6 +221,14 @@ Kotlin/Rust golden vector and remain independent of the selected transport.
 None of these modules opens a socket or imports WebRTC, capture, codec, Android
 UI or Windows APIs.
 
+The S2 transport bake-off keeps the same inner Media v1 bytes. QUIC DATAGRAM
+authenticates those bytes with TLS 1.3. The raw UDP candidate wraps them in the
+normative AES-256-GCM `BPA1` envelope implemented by
+`bridgepad-media-protocol` and `:streaming-core`. The envelope uses directional
+ephemeral keys, monotonic nonces and a bounded replay window; it is not a second
+encryption layer for QUIC. Socket ownership and key agreement remain outside
+the protocol codec so neither candidate can leak into capture, decode or UI.
+
 Control/input currently remains on TCP/TLS `39393` and never shares a media
 socket, worker, queue or lifecycle. Its future low-latency transport will be
 selected and documented here only after BridgePad Media v1 is validated; it is

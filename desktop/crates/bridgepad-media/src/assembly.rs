@@ -4,8 +4,8 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
 
 use bridgepad_media_protocol::{
-    MAX_PAYLOAD_SIZE, MediaDatagram, MediaDatagramHeader, PacketFlags, PacketKind, ProtocolError,
-    decode_datagram, encode_datagram,
+    HEADER_SIZE, MAX_DATAGRAM_SIZE, MediaDatagram, MediaDatagramHeader, PacketFlags, PacketKind,
+    ProtocolError, decode_datagram, encode_datagram,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -25,6 +25,7 @@ pub struct PacketizeRequest<'a> {
 pub enum PacketizeError {
     EmptyFrame,
     FrameTooLarge,
+    InvalidDatagramSize,
     ReservedFlags,
     Protocol(ProtocolError),
 }
@@ -44,10 +45,33 @@ impl std::error::Error for PacketizeError {}
 /// Returns [`PacketizeError`] for an empty or oversized unit, caller-supplied
 /// boundary/FEC flags, or invalid session metadata.
 pub fn packetize(request: PacketizeRequest<'_>) -> Result<Vec<Vec<u8>>, PacketizeError> {
+    packetize_with_max_datagram_size(request, MAX_DATAGRAM_SIZE)
+}
+
+/// Splits one encoded unit while reserving transport-specific overhead outside
+/// the enclosed Media v1 datagram.
+///
+/// Each transport passes its negotiated application-datagram budget. The raw
+/// UDP+AEAD candidate must reserve its envelope and tag so the final sealed UDP
+/// payload remains at most 1200 bytes; QUIC must likewise reserve its own
+/// packet overhead from the current path MTU.
+///
+/// # Errors
+///
+/// Returns [`PacketizeError`] for an invalid datagram size or the same invalid
+/// frame metadata rejected by [`packetize`].
+pub fn packetize_with_max_datagram_size(
+    request: PacketizeRequest<'_>,
+    max_datagram_size: usize,
+) -> Result<Vec<Vec<u8>>, PacketizeError> {
     if request.payload.is_empty() {
         return Err(PacketizeError::EmptyFrame);
     }
-    let packet_count = request.payload.len().div_ceil(MAX_PAYLOAD_SIZE);
+    if max_datagram_size <= HEADER_SIZE || max_datagram_size > MAX_DATAGRAM_SIZE {
+        return Err(PacketizeError::InvalidDatagramSize);
+    }
+    let max_payload_size = max_datagram_size - HEADER_SIZE;
+    let packet_count = request.payload.len().div_ceil(max_payload_size);
     let packet_count = u16::try_from(packet_count).map_err(|_| PacketizeError::FrameTooLarge)?;
     let original_frame_bytes =
         u32::try_from(request.payload.len()).map_err(|_| PacketizeError::FrameTooLarge)?;
@@ -58,7 +82,7 @@ pub fn packetize(request: PacketizeRequest<'_>) -> Result<Vec<Vec<u8>>, Packetiz
 
     request
         .payload
-        .chunks(MAX_PAYLOAD_SIZE)
+        .chunks(max_payload_size)
         .enumerate()
         .map(|(index, payload)| {
             let index = u16::try_from(index).map_err(|_| PacketizeError::FrameTooLarge)?;
@@ -326,6 +350,7 @@ fn common_flags(flags: PacketFlags) -> PacketFlags {
 mod tests {
     use super::*;
     use crate::impairment::{DeterministicImpairment, ImpairmentConfig};
+    use bridgepad_media_protocol::{MAX_PAYLOAD_SIZE, security::MAX_PLAINTEXT_SIZE};
 
     fn request(payload: &[u8], frame_id: u32) -> PacketizeRequest<'_> {
         PacketizeRequest {
@@ -388,5 +413,30 @@ mod tests {
         }
         assert_eq!(completed.unwrap().payload, payload);
         assert_eq!(assembler.metrics().duplicate_packets, 1);
+    }
+
+    #[test]
+    fn packetizer_reserves_udp_aead_transport_overhead() {
+        let payload = vec![0x5a; 3_000];
+        let packets =
+            packetize_with_max_datagram_size(request(&payload, 4), MAX_PLAINTEXT_SIZE).unwrap();
+        assert!(
+            packets
+                .iter()
+                .all(|packet| packet.len() <= MAX_PLAINTEXT_SIZE)
+        );
+        assert_eq!(packets.len(), 3);
+    }
+
+    #[test]
+    fn transport_datagram_size_must_fit_media_v1() {
+        assert_eq!(
+            packetize_with_max_datagram_size(request(&[1], 5), HEADER_SIZE),
+            Err(PacketizeError::InvalidDatagramSize),
+        );
+        assert_eq!(
+            packetize_with_max_datagram_size(request(&[1], 5), MAX_DATAGRAM_SIZE + 1),
+            Err(PacketizeError::InvalidDatagramSize),
+        );
     }
 }

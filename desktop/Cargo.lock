@@ -405,6 +405,9 @@ version = "0.1.0"
 [[package]]
 name = "bridgepad-media-protocol"
 version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+]
 
 [[package]]
 name = "bridgepad-protocol"
@@ -414,6 +417,8 @@ version = "0.1.0"
 name = "bridgepad-transport-spike"
 version = "0.1.0"
 dependencies = [
+ "bridgepad-media",
+ "bridgepad-media-protocol",
  "quinn",
  "rcgen 0.14.10",
  "rustls",

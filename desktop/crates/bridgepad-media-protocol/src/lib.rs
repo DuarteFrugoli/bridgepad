@@ -6,6 +6,7 @@
 use std::fmt;
 
 pub mod control;
+pub mod security;
 
 pub const MAGIC: [u8; 4] = *b"BPM1";
 pub const MAJOR_VERSION: u8 = 1;

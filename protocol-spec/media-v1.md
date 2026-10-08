@@ -129,6 +129,47 @@ independent lifecycle and is not stopped or recreated by these messages.
 - Unknown flags, malformed lengths and unknown required message kinds are
   rejected. New mandatory semantics require a new major version.
 
+## Raw UDP authenticated envelope
+
+This envelope belongs only to the raw UDP+AEAD transport candidate. QUIC
+DATAGRAM already provides authenticated encryption through TLS 1.3 and carries
+the Media v1 datagram directly.
+
+Raw UDP uses AES-256-GCM with a distinct, ephemeral 32-byte traffic key for each
+direction. The complete UDP payload, including this envelope and the GCM tag,
+remains at most 1200 bytes. Consequently, an enclosed Media v1 datagram is at
+most 1164 bytes while this candidate is active.
+
+The 20-byte authenticated header is:
+
+| Offset | Size | Field | Meaning |
+| ---: | ---: | --- | --- |
+| 0 | 4 | magic | ASCII `BPA1` |
+| 4 | 1 | major | `1` |
+| 5 | 1 | minor | `0` |
+| 6 | 1 | header size | `20` |
+| 7 | 1 | flags | Zero in v1.0 |
+| 8 | 4 | key epoch | Non-zero epoch selected by the authenticated control plane |
+| 12 | 8 | packet counter | Monotonic counter within the directional traffic key |
+| 20 | variable | ciphertext | One complete encoded Media v1 datagram |
+| final 16 | 16 | authentication tag | AES-GCM 128-bit tag |
+
+The entire 20-byte header is additional authenticated data. The 96-bit GCM
+nonce is `key epoch || packet counter`, both in network byte order. A sender
+starts at counter zero and must stop using the key after counter `0xffffffff`;
+it never persists or restores a traffic key/counter pair. Every new media
+session receives new directional keys, even if it reuses a numeric key epoch.
+
+Receivers authenticate before changing replay state. They accept a packet only
+once inside a 256-packet sliding window and reject older, duplicate, malformed,
+wrong-epoch or unauthenticated packets before frame assembly. Authentication
+failure never advances the window.
+
+The authenticated control plane will derive and install the ephemeral
+directional keys before opening media sockets. The exact key-agreement and HKDF
+transcript are deliberately not frozen by this increment and must be specified
+and implemented before the raw UDP candidate can pass Gate T1.
+
 ## Golden vector
 
 The normative vector is also stored in
@@ -143,6 +184,10 @@ first of two H.264 keyframe packets with a two-byte payload `aa bb`:
 The file also contains the normative v1.0 Offer vector. Both Kotlin and Rust
 suites must encode these exact byte sequences and decode them back to the same
 fields.
+
+It also contains a deterministic raw UDP+AEAD vector. Its key is test material
+only and must never be used by a real session. Kotlin and Rust must produce the
+same envelope and reject any mutation or replay.
 
 ## Deliberately not frozen yet
 

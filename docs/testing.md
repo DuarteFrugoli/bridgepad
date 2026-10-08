@@ -903,3 +903,18 @@ WebRTC reference and once with BridgePad Media v1. Save at least 60 seconds of
 Desktop rolling latency metrics and matching Android decode/presentation
 statistics for each run. Promotion requires the comparison rules in the frozen
 baseline, including clean Wi-Fi/USB teardown and no input regression.
+
+### BridgePad Media v1 transport preflight
+
+Before installing either transport candidate in the Android diagnostic flow,
+run the shared synthetic workload in a release Desktop build:
+
+```powershell
+cd desktop
+cargo run --release -p bridgepad-transport-spike --bin media_bakeoff -- --seconds 5
+```
+
+Both candidates must receive every packet and complete every synthetic frame.
+Compare their p95/p99/maximum arrival gaps, but do not use loopback results to
+select a winner. Gate T1 still requires the Android release build over real
+Wi-Fi and USB routes, including CPU, battery, teardown and route-change tests.

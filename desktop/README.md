@@ -22,17 +22,28 @@ Run all current desktop checks with:
 cargo test --manifest-path desktop/Cargo.toml
 ```
 
-Run the first encrypted transport measurement with:
+Run the encrypted control-transport measurement with:
 
 ```sh
 cargo run --release --manifest-path desktop/Cargo.toml \
   -p bridgepad-transport-spike -- --iterations 2000 --payload-size 64
 ```
 
-The spike compares TLS 1.3/TCP against a diagnostic plaintext TCP baseline on
-loopback. It does not select the production transport by itself; QUIC and real
-Android/Wi-Fi measurements are still required. Plaintext is never a product
-mode.
+That command compares TLS 1.3/TCP against a diagnostic plaintext TCP baseline
+on loopback. Plaintext is never a product mode.
+
+Run the Media v1 transport preflight in release mode with:
+
+```sh
+cargo run --release --manifest-path desktop/Cargo.toml \
+  -p bridgepad-transport-spike --bin media_bakeoff -- --seconds 5
+```
+
+This second binary sends the same paced 720p60/8 Mbps synthetic Media v1 load
+through QUIC DATAGRAM and raw UDP with the normative AES-256-GCM envelope. It
+checks packet delivery, complete frame assembly and arrival-gap percentiles. It
+is only a desktop loopback preflight; the winner is selected only after the
+Android release build passes the Wi-Fi and USB Gate T1 matrix.
 
 ## Android-to-desktop Wi-Fi connection
 
