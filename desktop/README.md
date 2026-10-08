@@ -45,6 +45,20 @@ checks packet delivery, complete frame assembly and arrival-gap percentiles. It
 is only a desktop loopback preflight; the winner is selected only after the
 Android release build passes the Wi-Fi and USB Gate T1 matrix.
 
+Run the raw UDP+AEAD LAN sender for the matching Android diagnostic with:
+
+```sh
+cargo run --release --manifest-path desktop/Cargo.toml \
+  -p bridgepad-transport-spike --bin media_udp_server
+```
+
+It listens on UDP `39495`, accepts one 1–300 second diagnostic request and then
+exits. In Android, open **Settings > Tests > Media v1 transport test**, enter the
+PC address for the route being tested and use the same port. The screen reports
+the actual Android local address/interface, packet and frame delivery, rejected
+packets and arrival-gap percentiles. This diagnostic intentionally uses public
+fixed test material; it is never a product session or an authentication model.
+
 ## Android-to-desktop Wi-Fi connection
 
 ### Graphical app

@@ -170,6 +170,8 @@ pub struct FrameAssembler {
     max_in_flight_frames: usize,
     frames: BTreeMap<u32, IncompleteFrame>,
     insertion_order: VecDeque<u32>,
+    terminal_frames: VecDeque<u32>,
+    max_terminal_frames: usize,
     metrics: AssemblyMetrics,
 }
 
@@ -195,6 +197,8 @@ impl FrameAssembler {
             max_in_flight_frames,
             frames: BTreeMap::new(),
             insertion_order: VecDeque::new(),
+            terminal_frames: VecDeque::new(),
+            max_terminal_frames: max_in_flight_frames.saturating_mul(4).max(32),
             metrics: AssemblyMetrics::default(),
         }
     }
@@ -219,6 +223,10 @@ impl FrameAssembler {
         }
 
         let frame_id = datagram.header.frame_id;
+        if self.terminal_frames.contains(&frame_id) {
+            self.metrics.duplicate_packets = self.metrics.duplicate_packets.saturating_add(1);
+            return Ok(None);
+        }
         if !self.frames.contains_key(&frame_id) {
             self.make_room();
             self.insertion_order.push_back(frame_id);
@@ -246,6 +254,7 @@ impl FrameAssembler {
             || frame.packets.len() != usize::from(datagram.header.frame_packet_count)
         {
             self.remove(frame_id);
+            self.mark_terminal(frame_id);
             return Err(AssemblyError::InconsistentFrameMetadata);
         }
 
@@ -265,6 +274,7 @@ impl FrameAssembler {
             return Err(AssemblyError::InconsistentFrameMetadata);
         };
         self.remove_from_order(frame_id);
+        self.mark_terminal(frame_id);
         let mut payload = Vec::with_capacity(frame.original_frame_bytes as usize);
         for packet in frame.packets {
             let Some(packet) = packet else {
@@ -295,6 +305,7 @@ impl FrameAssembler {
             .collect();
         for frame_id in expired {
             self.remove(frame_id);
+            self.mark_terminal(frame_id);
             self.metrics.expired_frames = self.metrics.expired_frames.saturating_add(1);
         }
     }
@@ -318,6 +329,7 @@ impl FrameAssembler {
         while self.frames.len() >= self.max_in_flight_frames {
             if let Some(frame_id) = self.insertion_order.pop_front() {
                 if self.frames.remove(&frame_id).is_some() {
+                    self.mark_terminal(frame_id);
                     self.metrics.capacity_dropped_frames =
                         self.metrics.capacity_dropped_frames.saturating_add(1);
                 }
@@ -335,6 +347,13 @@ impl FrameAssembler {
     fn remove_from_order(&mut self, frame_id: u32) {
         if let Some(position) = self.insertion_order.iter().position(|id| *id == frame_id) {
             self.insertion_order.remove(position);
+        }
+    }
+
+    fn mark_terminal(&mut self, frame_id: u32) {
+        self.terminal_frames.push_back(frame_id);
+        while self.terminal_frames.len() > self.max_terminal_frames {
+            self.terminal_frames.pop_front();
         }
     }
 }
@@ -387,6 +406,24 @@ mod tests {
         assembler.expire(1_100);
         assert_eq!(assembler.metrics().duplicate_packets, 1);
         assert_eq!(assembler.metrics().expired_frames, 1);
+        assert!(assembler.push(&packets[1], 1_200).unwrap().is_none());
+        assembler.expire(2_200);
+        assert_eq!(assembler.metrics().duplicate_packets, 2);
+        assert_eq!(assembler.metrics().expired_frames, 1);
+    }
+
+    #[test]
+    fn late_duplicate_cannot_resurrect_a_completed_frame() {
+        let payload = vec![1; MAX_PAYLOAD_SIZE + 1];
+        let packets = packetize(request(&payload, 6)).unwrap();
+        let mut assembler = FrameAssembler::new(7, 9, 1_000, 1);
+        assert!(assembler.push(&packets[0], 100).unwrap().is_none());
+        assert!(assembler.push(&packets[1], 200).unwrap().is_some());
+        assert!(assembler.push(&packets[0], 300).unwrap().is_none());
+        assembler.expire(1_300);
+        assert_eq!(assembler.metrics().completed_frames, 1);
+        assert_eq!(assembler.metrics().duplicate_packets, 1);
+        assert_eq!(assembler.metrics().expired_frames, 0);
     }
 
     #[test]

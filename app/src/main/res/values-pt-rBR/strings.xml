@@ -367,4 +367,24 @@
     <string name="synthetic_stream_active">%1$d × %2$d a %3$d fps</string>
     <string name="synthetic_stream_stopped">Vídeo encerrado. As sessões de input não foram afetadas.</string>
     <string name="synthetic_stream_failed">O streaming falhou: %1$s</string>
+    <string name="media_transport_test_title">Teste de transporte Media v1</string>
+    <string name="media_transport_test_settings_description">Meça o candidato dedicado de mídia UDP+AEAD por uma rota Wi-Fi ou ancoragem USB real.</string>
+    <string name="media_transport_test_open">Abrir teste Media v1</string>
+    <string name="media_transport_test_description">Execute no computador o emissor diagnóstico UDP+AEAD para Android e digite o endereço mostrado pela rota Wi-Fi ou USB escolhida. Este diagnóstico usa uma chave fixa e não é uma sessão de produção.</string>
+    <string name="media_transport_test_duration">Duração em segundos</string>
+    <string name="media_transport_test_duration_hint">De 1 a 300 segundos. Use um APK release para medições válidas de desempenho.</string>
+    <string name="media_transport_test_start">Testar UDP+AEAD</string>
+    <string name="media_transport_test_stop">Parar teste</string>
+    <string name="media_transport_test_status">Estado do teste</string>
+    <string name="media_transport_test_idle">Pronto para iniciar. O QUIC no Android ainda não está conectado a esta tela.</string>
+    <string name="media_transport_test_connecting">Abrindo a rota de rede escolhida…</string>
+    <string name="media_transport_test_receiving">Recebendo por %1$s em %2$s</string>
+    <string name="media_transport_test_completed">Teste UDP+AEAD concluído</string>
+    <string name="media_transport_test_failed">O teste falhou: %1$s</string>
+    <string name="media_transport_test_stopped">Teste encerrado</string>
+    <string name="media_transport_test_route">Rota real: %1$s em %2$s</string>
+    <string name="media_transport_test_packets">Pacotes: %1$d/%2$d recebidos · %3$d rejeitados</string>
+    <string name="media_transport_test_frames">Quadros: %1$d/%2$d completos · %3$d expirados</string>
+    <string name="media_transport_test_gaps">Intervalo de chegada p95/p99/máximo: %1$d/%2$d/%3$d µs</string>
+    <string name="media_transport_test_bytes">%1$d bytes recebidos em %2$d ms</string>
 </resources>

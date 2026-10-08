@@ -90,6 +90,7 @@ import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.UsbAccessoryDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.DesktopStreamingScreen
+import dev.jonalakas.bridgepad.ui.settings.MediaTransportDiagnosticScreen
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbe
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
 import dev.jonalakas.bridgepad.transport.usb.accessory.UsbAccessoryProbe
@@ -133,6 +134,7 @@ class MainActivity : ComponentActivity() {
                 var showBluetoothDesktopDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showUsbAccessoryDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showDesktopStreaming by rememberSaveable { mutableStateOf(false) }
+                var showMediaTransportDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showGameplayStreaming by rememberSaveable { mutableStateOf(false) }
                 var returnToStreamingAfterKeyboard by rememberSaveable { mutableStateOf(false) }
                 var gameplayStreamingPeerId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -683,6 +685,13 @@ class MainActivity : ComponentActivity() {
                             showTests = true
                         },
                     )
+                } else if (showMediaTransportDiagnostic) {
+                    MediaTransportDiagnosticScreen(
+                        onBack = {
+                            showMediaTransportDiagnostic = false
+                            showTests = true
+                        },
+                    )
                 } else if (showNetworkDiagnostic || showUsbNetworkDiagnostic) {
                     NetworkDiagnosticScreen(
                         usbTetheringMode = showUsbNetworkDiagnostic,
@@ -732,6 +741,10 @@ class MainActivity : ComponentActivity() {
                         onOpenDesktopStreaming = {
                             showTests = false
                             showDesktopStreaming = true
+                        },
+                        onOpenMediaTransportDiagnostic = {
+                            showTests = false
+                            showMediaTransportDiagnostic = true
                         },
                         onCopyDiagnostics = {
                             val report = DiagnosticReport.create(

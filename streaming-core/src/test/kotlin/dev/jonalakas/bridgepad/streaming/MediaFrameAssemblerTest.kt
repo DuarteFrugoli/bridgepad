@@ -26,6 +26,23 @@ class MediaFrameAssemblerTest {
         assembler.expire(1_100)
         assertEquals(1, assembler.metrics.duplicatePackets)
         assertEquals(1, assembler.metrics.expiredFrames)
+        assertNull(assembler.push(packets[1], 1_200))
+        assembler.expire(2_200)
+        assertEquals(2, assembler.metrics.duplicatePackets)
+        assertEquals(1, assembler.metrics.expiredFrames)
+    }
+
+    @Test
+    fun `late duplicate cannot resurrect a completed frame`() {
+        val packets = packets(byteArrayOf(1), byteArrayOf(2))
+        val assembler = MediaFrameAssembler(7, 9, deadlineMicros = 1_000, maxInFlightFrames = 1)
+        assertNull(assembler.push(packets[0], 100))
+        assembler.push(packets[1], 200)
+        assertNull(assembler.push(packets[0], 300))
+        assembler.expire(1_300)
+        assertEquals(1, assembler.metrics.completedFrames)
+        assertEquals(1, assembler.metrics.duplicatePackets)
+        assertEquals(0, assembler.metrics.expiredFrames)
     }
 
     private fun packets(vararg payloads: ByteArray): List<ByteArray> {

@@ -36,6 +36,8 @@ class MediaFrameAssembler(
     )
 
     private val frames = linkedMapOf<Long, IncompleteFrame>()
+    private val terminalFrames = linkedSetOf<Long>()
+    private val maxTerminalFrames = maxOf(MIN_TERMINAL_FRAMES, maxInFlightFrames * 4)
     private var mutableMetrics = MediaAssemblyMetrics()
 
     val metrics: MediaAssemblyMetrics
@@ -58,6 +60,12 @@ class MediaFrameAssembler(
         if (header.fecSourceCount != 0 || header.fecRepairCount != 0) {
             throw MediaAssemblyException("FEC assembly is not implemented")
         }
+        if (header.frameId in terminalFrames) {
+            mutableMetrics = mutableMetrics.copy(
+                duplicatePackets = mutableMetrics.duplicatePackets + 1,
+            )
+            return null
+        }
 
         val frame = frames[header.frameId] ?: createFrame(header, receivedAtMicros).also {
             makeRoom()
@@ -73,6 +81,7 @@ class MediaFrameAssembler(
             frame.packets.size != header.framePacketCount
         ) {
             frames.remove(header.frameId)
+            markTerminal(header.frameId)
             throw MediaAssemblyException("Inconsistent frame metadata")
         }
 
@@ -91,6 +100,7 @@ class MediaFrameAssembler(
         if (frame.received != frame.packets.size) return null
 
         frames.remove(header.frameId)
+        markTerminal(header.frameId)
         val payloadSize = frame.packets.sumOf { it?.size ?: 0 }
         if (payloadSize.toLong() != frame.originalFrameBytes) {
             throw MediaAssemblyException("Reassembled frame size does not match metadata")
@@ -118,7 +128,10 @@ class MediaFrameAssembler(
     fun expire(nowMicros: Long) {
         val expired = frames.filterValues { it.expiresAtMicros <= nowMicros }.keys
         if (expired.isEmpty()) return
-        expired.forEach(frames::remove)
+        expired.forEach { frameId ->
+            frames.remove(frameId)
+            markTerminal(frameId)
+        }
         mutableMetrics = mutableMetrics.copy(
             expiredFrames = mutableMetrics.expiredFrames + expired.size,
         )
@@ -141,8 +154,20 @@ class MediaFrameAssembler(
         if (frames.size < maxInFlightFrames) return
         val oldest = frames.keys.firstOrNull() ?: return
         frames.remove(oldest)
+        markTerminal(oldest)
         mutableMetrics = mutableMetrics.copy(
             capacityDroppedFrames = mutableMetrics.capacityDroppedFrames + 1,
         )
+    }
+
+    private fun markTerminal(frameId: Long) {
+        terminalFrames += frameId
+        while (terminalFrames.size > maxTerminalFrames) {
+            terminalFrames.remove(terminalFrames.first())
+        }
+    }
+
+    private companion object {
+        const val MIN_TERMINAL_FRAMES = 32
     }
 }

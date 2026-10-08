@@ -367,4 +367,24 @@
     <string name="synthetic_stream_active">%1$d × %2$d at %3$d fps</string>
     <string name="synthetic_stream_stopped">Video stopped. Input sessions are unaffected.</string>
     <string name="synthetic_stream_failed">Streaming failed: %1$s</string>
+    <string name="media_transport_test_title">Media v1 transport test</string>
+    <string name="media_transport_test_settings_description">Measure the dedicated UDP+AEAD media candidate over a real Wi-Fi or USB tethering route.</string>
+    <string name="media_transport_test_open">Open Media v1 test</string>
+    <string name="media_transport_test_description">Run the UDP+AEAD Android diagnostic sender on the computer, then enter the address shown by the selected Wi-Fi or USB route. This fixed-key diagnostic is not a product session.</string>
+    <string name="media_transport_test_duration">Duration in seconds</string>
+    <string name="media_transport_test_duration_hint">From 1 to 300 seconds. Use a release APK for valid performance measurements.</string>
+    <string name="media_transport_test_start">Test UDP+AEAD</string>
+    <string name="media_transport_test_stop">Stop test</string>
+    <string name="media_transport_test_status">Test status</string>
+    <string name="media_transport_test_idle">Ready to start. QUIC on Android is not connected to this screen yet.</string>
+    <string name="media_transport_test_connecting">Opening the selected network route…</string>
+    <string name="media_transport_test_receiving">Receiving through %1$s on %2$s</string>
+    <string name="media_transport_test_completed">UDP+AEAD test completed</string>
+    <string name="media_transport_test_failed">Test failed: %1$s</string>
+    <string name="media_transport_test_stopped">Test stopped</string>
+    <string name="media_transport_test_route">Actual route: %1$s on %2$s</string>
+    <string name="media_transport_test_packets">Packets: %1$d/%2$d received · %3$d rejected</string>
+    <string name="media_transport_test_frames">Frames: %1$d/%2$d complete · %3$d expired</string>
+    <string name="media_transport_test_gaps">Arrival gap p95/p99/max: %1$d/%2$d/%3$d µs</string>
+    <string name="media_transport_test_bytes">Received %1$d bytes in %2$d ms</string>
 </resources>

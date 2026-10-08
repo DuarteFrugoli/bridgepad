@@ -40,6 +40,7 @@ fun TestsScreen(
     onOpenBluetoothDesktopDiagnostic: () -> Unit,
     onOpenUsbAccessoryDiagnostic: () -> Unit,
     onOpenDesktopStreaming: () -> Unit,
+    onOpenMediaTransportDiagnostic: () -> Unit,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
     onBack: () -> Unit,
@@ -100,6 +101,15 @@ fun TestsScreen(
                 SettingsSectionCard(title = stringResource(R.string.synthetic_stream_title)) {
                     Text(stringResource(R.string.synthetic_stream_settings_description))
                     TestActionButton(stringResource(R.string.synthetic_stream_open), onOpenDesktopStreaming)
+                }
+            }
+            item {
+                SettingsSectionCard(title = stringResource(R.string.media_transport_test_title)) {
+                    Text(stringResource(R.string.media_transport_test_settings_description))
+                    TestActionButton(
+                        stringResource(R.string.media_transport_test_open),
+                        onOpenMediaTransportDiagnostic,
+                    )
                 }
             }
             item {
