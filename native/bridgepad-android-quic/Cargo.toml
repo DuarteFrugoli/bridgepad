@@ -1,0 +1,26 @@
+[package]
+name = "bridgepad-android-quic"
+description = "Android JNI QUIC DATAGRAM diagnostic for BridgePad Media v1"
+publish = false
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+bridgepad-media = { path = "../../desktop/crates/bridgepad-media" }
+bridgepad-media-protocol = { path = "../../desktop/crates/bridgepad-media-protocol" }
+jni = "0.21.1"
+quinn = { version = "=0.11.12", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "std"] }
+tokio = { version = "1.48", features = ["io-util", "net", "rt", "time"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = 3
+panic = "abort"
+strip = true

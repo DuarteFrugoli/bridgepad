@@ -10,16 +10,22 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
-sealed interface UdpMediaProbeStatus {
-    data object Idle : UdpMediaProbeStatus
-    data object Connecting : UdpMediaProbeStatus
-    data class Receiving(val localAddress: String, val interfaceName: String) : UdpMediaProbeStatus
-    data class Completed(val result: UdpMediaProbeResult) : UdpMediaProbeStatus
-    data class Failed(val detail: String) : UdpMediaProbeStatus
-    data object Stopped : UdpMediaProbeStatus
+enum class MediaTransportKind {
+    UDP_AEAD,
+    QUIC_DATAGRAM,
 }
 
-data class UdpMediaProbeResult(
+sealed interface MediaTransportProbeStatus {
+    data object Idle : MediaTransportProbeStatus
+    data object Connecting : MediaTransportProbeStatus
+    data class Receiving(val localAddress: String, val interfaceName: String) : MediaTransportProbeStatus
+    data class Completed(val result: MediaTransportProbeResult) : MediaTransportProbeStatus
+    data class Failed(val detail: String) : MediaTransportProbeStatus
+    data object Stopped : MediaTransportProbeStatus
+}
+
+data class MediaTransportProbeResult(
+    val transport: MediaTransportKind,
     val localAddress: String,
     val interfaceName: String,
     val receivedPackets: Long,
@@ -27,9 +33,11 @@ data class UdpMediaProbeResult(
     val completedFrames: Long,
     val expectedFrames: Long,
     val expiredFrames: Long,
+    val duplicatePackets: Long,
     val rejectedPackets: Long,
     val receivedBytes: Long,
     val elapsedMillis: Long,
+    val handshakeMillis: Long?,
     val arrivalGapP95Micros: Long,
     val arrivalGapP99Micros: Long,
     val arrivalGapMaxMicros: Long,
@@ -40,20 +48,20 @@ class UdpAeadMediaProbe(
     private val host: String,
     private val port: Int,
     private val durationSeconds: Int,
-    private val onStatus: (UdpMediaProbeStatus) -> Unit,
+    private val onStatus: (MediaTransportProbeStatus) -> Unit,
 ) : AutoCloseable {
     private val stopping = AtomicBoolean(false)
     @Volatile private var socket: DatagramSocket? = null
 
     fun start() {
-        onStatus(UdpMediaProbeStatus.Connecting)
+        onStatus(MediaTransportProbeStatus.Connecting)
         Thread(::runProbe, "BridgePad-media-udp-probe").apply { isDaemon = true }.start()
     }
 
     override fun close() {
         if (!stopping.compareAndSet(false, true)) return
         socket?.close()
-        onStatus(UdpMediaProbeStatus.Stopped)
+        onStatus(MediaTransportProbeStatus.Stopped)
     }
 
     private fun runProbe() {
@@ -68,7 +76,7 @@ class UdpAeadMediaProbe(
                 val interfaceName = runCatching {
                     NetworkInterface.getByInetAddress(localSocket.localAddress)?.displayName
                 }.getOrNull().orEmpty().ifBlank { "unknown" }
-                onStatus(UdpMediaProbeStatus.Receiving(localAddress, interfaceName))
+                onStatus(MediaTransportProbeStatus.Receiving(localAddress, interfaceName))
                 localSocket.send(
                     DatagramPacket(
                         hello(durationSeconds),
@@ -76,14 +84,14 @@ class UdpAeadMediaProbe(
                     ),
                 )
                 onStatus(
-                    UdpMediaProbeStatus.Completed(
+                    MediaTransportProbeStatus.Completed(
                         receiveWorkload(localSocket, localAddress, interfaceName),
                     ),
                 )
             }
         } catch (error: Throwable) {
             if (!stopping.get()) {
-                onStatus(UdpMediaProbeStatus.Failed(error.message ?: "UDP media probe failed"))
+                onStatus(MediaTransportProbeStatus.Failed(error.message ?: "UDP media probe failed"))
             }
         } finally {
             socket = null
@@ -94,7 +102,7 @@ class UdpAeadMediaProbe(
         localSocket: DatagramSocket,
         localAddress: String,
         interfaceName: String,
-    ): UdpMediaProbeResult {
+    ): MediaTransportProbeResult {
         val receiver = UdpAeadReceiver(TEST_KEY, KEY_EPOCH)
         val assembler = MediaFrameAssembler(
             sessionId = SESSION_ID,
@@ -149,7 +157,8 @@ class UdpAeadMediaProbe(
         val elapsedMicros = (System.nanoTime() - startedNanos).coerceAtLeast(0) / 1_000
         assembler.expire(elapsedMicros + ASSEMBLY_DEADLINE_MICROS)
         arrivalGapsMicros.sort()
-        return UdpMediaProbeResult(
+        return MediaTransportProbeResult(
+            transport = MediaTransportKind.UDP_AEAD,
             localAddress = localAddress,
             interfaceName = interfaceName,
             receivedPackets = receivedPackets,
@@ -157,9 +166,11 @@ class UdpAeadMediaProbe(
             completedFrames = assembler.metrics.completedFrames,
             expectedFrames = expectedFrames,
             expiredFrames = assembler.metrics.expiredFrames,
+            duplicatePackets = assembler.metrics.duplicatePackets,
             rejectedPackets = rejectedPackets,
             receivedBytes = receivedBytes,
             elapsedMillis = elapsedMicros / 1_000,
+            handshakeMillis = null,
             arrivalGapP95Micros = percentile(arrivalGapsMicros, 95),
             arrivalGapP99Micros = percentile(arrivalGapsMicros, 99),
             arrivalGapMaxMicros = arrivalGapsMicros.lastOrNull() ?: 0,

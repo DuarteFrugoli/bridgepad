@@ -36,9 +36,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
+import dev.jonalakas.bridgepad.streaming.MediaTransportKind
+import dev.jonalakas.bridgepad.streaming.MediaTransportProbeResult
+import dev.jonalakas.bridgepad.streaming.MediaTransportProbeStatus
+import dev.jonalakas.bridgepad.streaming.QuicMediaProbe
 import dev.jonalakas.bridgepad.streaming.UdpAeadMediaProbe
-import dev.jonalakas.bridgepad.streaming.UdpMediaProbeResult
-import dev.jonalakas.bridgepad.streaming.UdpMediaProbeStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,16 +50,51 @@ fun MediaTransportDiagnosticScreen(
 ) {
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     var host by rememberSaveable { mutableStateOf("") }
-    var port by rememberSaveable { mutableStateOf("39495") }
     var duration by rememberSaveable { mutableStateOf("5") }
-    var status by remember { mutableStateOf<UdpMediaProbeStatus>(UdpMediaProbeStatus.Idle) }
-    var probe by remember { mutableStateOf<UdpAeadMediaProbe?>(null) }
+    var status by remember {
+        mutableStateOf<MediaTransportProbeStatus>(MediaTransportProbeStatus.Idle)
+    }
+    var probe by remember { mutableStateOf<AutoCloseable?>(null) }
     var generation by remember { mutableLongStateOf(0L) }
 
     fun stop() {
         generation += 1
         probe?.close()
         probe = null
+    }
+
+    fun start(transport: MediaTransportKind) {
+        val parsedDuration = duration.toIntOrNull()
+        if (host.isBlank() || parsedDuration == null) {
+            status = MediaTransportProbeStatus.Failed("invalid_parameters")
+            return
+        }
+        stop()
+        val currentGeneration = ++generation
+        val callback: (MediaTransportProbeStatus) -> Unit = { update ->
+            mainHandler.post {
+                if (generation == currentGeneration) status = update
+            }
+        }
+        val created = when (transport) {
+            MediaTransportKind.UDP_AEAD -> UdpAeadMediaProbe(
+                host = host,
+                port = UDP_AEAD_PORT,
+                durationSeconds = parsedDuration,
+                onStatus = callback,
+            )
+            MediaTransportKind.QUIC_DATAGRAM -> QuicMediaProbe(
+                host = host,
+                port = QUIC_DATAGRAM_PORT,
+                durationSeconds = parsedDuration,
+                onStatus = callback,
+            )
+        }
+        probe = created
+        when (created) {
+            is UdpAeadMediaProbe -> created.start()
+            is QuicMediaProbe -> created.start()
+        }
     }
 
     DisposableEffect(Unit) { onDispose(::stop) }
@@ -104,14 +141,6 @@ fun MediaTransportDiagnosticScreen(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         OutlinedTextField(
-                            value = port,
-                            onValueChange = { port = it.filter(Char::isDigit) },
-                            label = { Text(stringResource(R.string.network_port)) },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        OutlinedTextField(
                             value = duration,
                             onValueChange = { duration = it.filter(Char::isDigit) },
                             label = { Text(stringResource(R.string.media_transport_test_duration)) },
@@ -126,43 +155,35 @@ fun MediaTransportDiagnosticScreen(
                 }
             }
             item {
-                val running = status is UdpMediaProbeStatus.Connecting ||
-                    status is UdpMediaProbeStatus.Receiving
-                Button(
-                    onClick = {
-                        if (running) {
-                            stop()
-                            status = UdpMediaProbeStatus.Stopped
-                        } else {
-                            val parsedPort = port.toIntOrNull()
-                            val parsedDuration = duration.toIntOrNull()
-                            if (host.isBlank() || parsedPort == null || parsedDuration == null) {
-                                status = UdpMediaProbeStatus.Failed("invalid_parameters")
-                            } else {
-                                val currentGeneration = ++generation
-                                val created = UdpAeadMediaProbe(
-                                    host = host,
-                                    port = parsedPort,
-                                    durationSeconds = parsedDuration,
-                                ) { update ->
-                                    mainHandler.post {
-                                        if (generation == currentGeneration) status = update
-                                    }
-                                }
-                                probe = created
-                                created.start()
-                            }
+                val running = status is MediaTransportProbeStatus.Connecting ||
+                    status is MediaTransportProbeStatus.Receiving
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (running) {
+                        Button(
+                            onClick = {
+                                stop()
+                                status = MediaTransportProbeStatus.Stopped
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.media_transport_test_stop))
                         }
-                    },
-                    enabled = host.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        stringResource(
-                            if (running) R.string.media_transport_test_stop
-                            else R.string.media_transport_test_start,
-                        ),
-                    )
+                    } else {
+                        Button(
+                            onClick = { start(MediaTransportKind.QUIC_DATAGRAM) },
+                            enabled = host.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.media_transport_test_start_quic))
+                        }
+                        Button(
+                            onClick = { start(MediaTransportKind.UDP_AEAD) },
+                            enabled = host.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.media_transport_test_start_udp))
+                        }
+                    }
                 }
             }
             item {
@@ -176,7 +197,7 @@ fun MediaTransportDiagnosticScreen(
                             style = MaterialTheme.typography.titleMedium,
                         )
                         Text(status.label())
-                        (status as? UdpMediaProbeStatus.Completed)?.result?.let { result ->
+                        (status as? MediaTransportProbeStatus.Completed)?.result?.let { result ->
                             ProbeResult(result)
                         }
                     }
@@ -187,21 +208,32 @@ fun MediaTransportDiagnosticScreen(
 }
 
 @Composable
-private fun UdpMediaProbeStatus.label(): String = when (this) {
-    UdpMediaProbeStatus.Idle -> stringResource(R.string.media_transport_test_idle)
-    UdpMediaProbeStatus.Connecting -> stringResource(R.string.media_transport_test_connecting)
-    is UdpMediaProbeStatus.Receiving -> stringResource(
+private fun MediaTransportProbeStatus.label(): String = when (this) {
+    MediaTransportProbeStatus.Idle -> stringResource(R.string.media_transport_test_idle)
+    MediaTransportProbeStatus.Connecting -> stringResource(R.string.media_transport_test_connecting)
+    is MediaTransportProbeStatus.Receiving -> stringResource(
         R.string.media_transport_test_receiving,
         localAddress,
         interfaceName,
     )
-    is UdpMediaProbeStatus.Completed -> stringResource(R.string.media_transport_test_completed)
-    is UdpMediaProbeStatus.Failed -> stringResource(R.string.media_transport_test_failed, detail)
-    UdpMediaProbeStatus.Stopped -> stringResource(R.string.media_transport_test_stopped)
+    is MediaTransportProbeStatus.Completed -> stringResource(R.string.media_transport_test_completed)
+    is MediaTransportProbeStatus.Failed -> stringResource(R.string.media_transport_test_failed, detail)
+    MediaTransportProbeStatus.Stopped -> stringResource(R.string.media_transport_test_stopped)
 }
 
 @Composable
-private fun ProbeResult(result: UdpMediaProbeResult) {
+private fun ProbeResult(result: MediaTransportProbeResult) {
+    Text(
+        stringResource(
+            R.string.media_transport_test_transport,
+            stringResource(
+                when (result.transport) {
+                    MediaTransportKind.UDP_AEAD -> R.string.media_transport_udp_aead
+                    MediaTransportKind.QUIC_DATAGRAM -> R.string.media_transport_quic
+                },
+            ),
+        ),
+    )
     Text(
         stringResource(
             R.string.media_transport_test_route,
@@ -215,6 +247,7 @@ private fun ProbeResult(result: UdpMediaProbeResult) {
             result.receivedPackets,
             result.expectedPackets,
             result.rejectedPackets,
+            result.duplicatePackets,
         ),
     )
     Text(
@@ -240,4 +273,10 @@ private fun ProbeResult(result: UdpMediaProbeResult) {
             result.elapsedMillis,
         ),
     )
+    result.handshakeMillis?.let { handshakeMillis ->
+        Text(stringResource(R.string.media_transport_test_handshake, handshakeMillis))
+    }
 }
+
+private const val UDP_AEAD_PORT = 39495
+private const val QUIC_DATAGRAM_PORT = 39496

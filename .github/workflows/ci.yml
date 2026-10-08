@@ -20,6 +20,17 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Set up Rust for Android QUIC
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Install Android NDK
+        run: sdkmanager "ndk;28.2.13676358"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
@@ -41,6 +52,17 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: Set up Rust for Android QUIC
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: aarch64-linux-android
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --version 4.1.2 --locked
+
+      - name: Install Android NDK
+        run: sdkmanager "ndk;28.2.13676358"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5

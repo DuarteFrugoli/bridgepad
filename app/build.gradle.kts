@@ -3,8 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val rustQuicJniDirectory = layout.buildDirectory.dir("generated/rustJni")
+
 android {
     namespace = "dev.jonalakas.bridgepad"
+    ndkVersion = "28.2.13676358"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -38,6 +41,9 @@ android {
         buildConfig = true
         compose = true
     }
+    sourceSets.getByName("main").jniLibs.directories.add(
+        rustQuicJniDirectory.get().asFile.absolutePath,
+    )
 }
 
 dependencies {
@@ -66,4 +72,43 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+val buildRustQuic by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Builds the arm64 Android QUIC JNI library with cargo-ndk"
+    val manifest = rootProject.file("native/bridgepad-android-quic/Cargo.toml")
+    val outputDirectory = rustQuicJniDirectory.get().asFile
+    val cargoTargetDirectory = rootProject.layout.buildDirectory
+        .dir("rust-target/android-quic")
+        .get()
+        .asFile
+    inputs.files(
+        manifest,
+        rootProject.file("native/bridgepad-android-quic/Cargo.lock"),
+    )
+    inputs.dir(rootProject.file("native/bridgepad-android-quic/src"))
+    inputs.dir(rootProject.file("desktop/crates/bridgepad-media/src"))
+    inputs.dir(rootProject.file("desktop/crates/bridgepad-media-protocol/src"))
+    outputs.dir(outputDirectory)
+    workingDir(manifest.parentFile)
+    environment("CARGO_TARGET_DIR", cargoTargetDirectory.absolutePath)
+    commandLine(
+        "cargo",
+        "ndk",
+        "-t",
+        "arm64-v8a",
+        "-P",
+        "28",
+        "-o",
+        outputDirectory.absolutePath,
+        "build",
+        "--release",
+        "--locked",
+        "--lib",
+    )
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(buildRustQuic)
 }

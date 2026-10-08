@@ -919,31 +919,45 @@ Compare their p95/p99/maximum arrival gaps, but do not use loopback results to
 select a winner. Gate T1 still requires the Android release build over real
 Wi-Fi and USB routes, including CPU, battery, teardown and route-change tests.
 
-#### UDP+AEAD Android route diagnostic
+#### QUIC and UDP+AEAD Android route diagnostics
 
-1. Start the release sender on the PC:
+1. Start one release sender on the PC. For UDP+AEAD:
 
    ```powershell
    cd desktop
    cargo run --release -p bridgepad-transport-spike --bin media_udp_server
    ```
 
-2. Allow this diagnostic executable through Windows Firewall on the network
-   profile under test. It listens on UDP `39495` and exits after one run.
+   For QUIC DATAGRAM:
+
+   ```powershell
+   cd desktop
+   cargo run --release -p bridgepad-transport-spike --bin media_quic_server
+   ```
+
+2. Allow both diagnostic executables through Windows Firewall on the network
+   profile under test. UDP+AEAD listens on UDP `39495`, QUIC listens on UDP
+   `39496`, and each executable exits after one run.
 3. In Android, open **Settings > Tests > Media v1 transport test**. Enter the PC
-   IPv4 address belonging to the desired Wi-Fi or USB-tethering interface, keep
-   port `39495`, choose 5 seconds and start.
-4. Confirm 300/300 complete frames and 4800/4800 received packets, zero rejected
-   packets and zero expired frames. Record p95/p99/maximum arrival gaps and the
-   actual Android local address/interface shown by the screen.
+   IPv4 address belonging to the desired route, choose 5 seconds and select the
+   transport matching the running sender. Ports are selected automatically.
+4. Record complete frames, received/rejected/late packets, p95/p99/maximum
+   arrival gaps, the actual Android local address/interface and QUIC handshake
+   time. Zero expiration is the target, but a frame beyond the strict 10 ms
+   assembly deadline is a measured deadline miss rather than packet loss.
 5. Repeat with 60 and 300 seconds. A debug APK is sufficient for functional
    checks; performance comparisons require a release APK.
-6. Repeat with Wi-Fi disabled and USB tethering active, using the Desktop's USB
-   interface address. Then test with Wi-Fi and USB both enabled and confirm the
-   reported local address follows the destination route rather than switching
-   during the run.
+6. Stop one sender and start the other. Repeat the same duration on the same
+   route before comparing results. Do not run both workloads simultaneously.
+7. USB testing is additional to the initial Wi-Fi decision: when scheduled,
+   repeat with Wi-Fi disabled and tethering active, using the Desktop USB
+   interface address. Then enable both routes and confirm the reported local
+   address follows the destination instead of switching during the run.
 
-The probe's fixed key and hello message are public diagnostic material. Passing
-this test validates delivery, AES-GCM interoperability, replay checks and frame
-assembly only. Production key agreement and authenticated session negotiation
-remain mandatory before Gate T1.
+The UDP fixed key and QUIC's ephemeral self-signed identity are diagnostic
+material. The QUIC client skips chain trust only on this test path while still
+verifying handshake signatures. Passing these tests validates transport
+delivery and frame assembly;
+UDP additionally validates AES-GCM interoperability and replay checks. Product
+identity, key agreement and authenticated session negotiation remain mandatory
+before Gate T1. The native QUIC diagnostic currently targets `arm64-v8a`.
