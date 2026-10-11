@@ -16,6 +16,8 @@ bridgepad-media-protocol = { path = "../../desktop/crates/bridgepad-media-protoc
 jni = "0.21.1"
 quinn = { version = "=0.11.12", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rustls = { version = "0.23.45", default-features = false, features = ["ring", "std"] }
+sha2 = "0.10.9"
+subtle = "2.6.1"
 socket2 = "0.6.1"
 tokio = { version = "1.48", features = ["io-util", "net", "rt", "time"] }
 

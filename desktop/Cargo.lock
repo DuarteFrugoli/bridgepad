@@ -357,6 +357,8 @@ dependencies = [
 name = "bridgepad-daemon"
 version = "0.1.0"
 dependencies = [
+ "bridgepad-media",
+ "bridgepad-media-protocol",
  "bridgepad-protocol",
  "bridgepad-virtual-device",
  "bridgepad-webrtc",
@@ -366,10 +368,13 @@ dependencies = [
  "bridgepad-windows-vigem",
  "futures-executor",
  "mdns-sd",
+ "quinn",
  "rcgen 0.14.10",
  "ring",
  "rustls",
  "sha2",
+ "subtle",
+ "tokio",
  "windows 0.62.2",
 ]
 

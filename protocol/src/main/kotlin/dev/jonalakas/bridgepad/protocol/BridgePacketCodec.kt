@@ -202,6 +202,11 @@ object BridgePacketCodec {
                     is BridgeMessage.MediaStop -> output.writeByte(message.reason.code)
                     is BridgeMessage.WebRtcOffer -> output.write(message.sdp.toByteArray(Charsets.UTF_8))
                     is BridgeMessage.WebRtcAnswer -> output.write(message.sdp.toByteArray(Charsets.UTF_8))
+                    BridgeMessage.QuicOffer -> Unit
+                    is BridgeMessage.QuicReady -> {
+                        output.writeShort(message.port)
+                        output.write(message.token)
+                    }
                 }
             }
             bytes.toByteArray()
@@ -325,6 +330,11 @@ object BridgePacketCodec {
                     )
                     BridgeMessageType.WEBRTC_ANSWER -> BridgeMessage.WebRtcAnswer(
                         input.readSizedBytes(input.available()).toString(Charsets.UTF_8),
+                    )
+                    BridgeMessageType.QUIC_OFFER -> BridgeMessage.QuicOffer
+                    BridgeMessageType.QUIC_READY -> BridgeMessage.QuicReady(
+                        port = input.readUnsignedShort(),
+                        token = input.readSizedBytes(32),
                     )
                 }
                 if (input.available() != 0) {

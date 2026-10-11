@@ -1,11 +1,12 @@
 use bridgepad_media::assembly::FrameAssembler;
 use bridgepad_media_protocol::security::UdpAeadReceiver;
 use jni::JNIEnv;
-use jni::objects::{JClass, JString};
+use jni::objects::{JByteArray, JClass, JObject, JString, JValue};
 use jni::sys::{jint, jlong, jstring};
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{ClientConfig, Endpoint, TransportConfig};
 use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use sha2::{Digest, Sha256};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::io;
 use std::net::{IpAddr, SocketAddr, ToSocketAddrs, UdpSocket};
@@ -16,6 +17,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
 use std::thread;
 use std::time::{Duration, Instant};
+use subtle::ConstantTimeEq;
 use tokio::time::timeout;
 
 const FRAMES_PER_SECOND: u64 = 60;
@@ -38,6 +40,8 @@ const QUIC_HELLO_MAGIC: [u8; 8] = *b"BPTQHELO";
 const QUIC_DONE_MAGIC: [u8; 8] = *b"BPTQDONE";
 const QUIC_REPORT_MAGIC: [u8; 8] = *b"BPTQRPT!";
 const TEST_SERVER_NAME: &str = "bridgepad.test";
+const PLAY_SERVER_NAME: &str = "bridgepad.local";
+const PLAY_HELLO_MAGIC: [u8; 8] = *b"BPMQPLAY";
 
 static ACTIVE_RUN_ID: AtomicU64 = AtomicU64::new(0);
 static CANCELLED_RUN_ID: AtomicU64 = AtomicU64::new(0);
@@ -92,11 +96,264 @@ pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNati
     _class: JClass,
     operation_id: jlong,
 ) {
+    cancel_operation(operation_id);
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNative_cancelPlayable(
+    _env: JNIEnv,
+    _class: JClass,
+    operation_id: jlong,
+) {
+    cancel_operation(operation_id);
+}
+
+fn cancel_operation(operation_id: jlong) {
     if let Ok(operation_id) = u64::try_from(operation_id)
         && operation_id != 0
-        && ACTIVE_RUN_ID.load(Ordering::Acquire) == operation_id
     {
-        CANCELLED_RUN_ID.store(operation_id, Ordering::Release);
+        let active = ACTIVE_RUN_ID.load(Ordering::Acquire);
+        if active == 0 || active == operation_id {
+            CANCELLED_RUN_ID.store(operation_id, Ordering::Release);
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNative_runQuicPlayable(
+    mut env: JNIEnv,
+    _class: JClass,
+    operation_id: jlong,
+    host: JString,
+    port: jint,
+    certificate_sha256: JString,
+    token: JByteArray,
+    session_id: jlong,
+    callback: JObject,
+) -> jstring {
+    let result = catch_unwind(AssertUnwindSafe(|| -> Result<(), AnyError> {
+        let operation_id = u64::try_from(operation_id).map_err(|_| "invalid operation ID")?;
+        if operation_id == 0 || !(1..=u16::MAX.into()).contains(&port) || session_id <= 0 {
+            return Err("invalid playable QUIC session parameters".into());
+        }
+        let host: String = env.get_string(&host)?.into();
+        let fingerprint: String = env.get_string(&certificate_sha256)?.into();
+        let fingerprint = parse_fingerprint(&fingerprint)?;
+        let token = env.convert_byte_array(token)?;
+        let token: [u8; 32] = token.try_into().map_err(|_| "invalid media token length")?;
+        let _run = ActiveRun::acquire(operation_id)?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        runtime.block_on(run_quic_playable(
+            &mut env,
+            callback,
+            &host,
+            port as u16,
+            fingerprint,
+            token,
+            session_id as u64,
+            operation_id,
+        ))
+    }));
+    let message = match result {
+        Ok(Ok(())) => "OK".to_owned(),
+        Ok(Err(error)) => encode_error(&error.to_string()),
+        Err(_) => encode_error("native playable QUIC receiver panicked"),
+    };
+    env.new_string(message)
+        .map_or(ptr::null_mut(), JString::into_raw)
+}
+
+fn parse_fingerprint(value: &str) -> Result<[u8; 32], AnyError> {
+    let hex: String = value
+        .chars()
+        .filter(|character| *character != ':' && *character != '-' && !character.is_whitespace())
+        .collect();
+    if hex.len() != 64 {
+        return Err("invalid Desktop certificate fingerprint".into());
+    }
+    let mut bytes = [0_u8; 32];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        *byte = u8::from_str_radix(&hex[index * 2..index * 2 + 2], 16)?;
+    }
+    Ok(bytes)
+}
+
+async fn run_quic_playable(
+    env: &mut JNIEnv<'_>,
+    callback: JObject<'_>,
+    host: &str,
+    port: u16,
+    fingerprint: [u8; 32],
+    token: [u8; 32],
+    session_id: u64,
+    operation_id: u64,
+) -> Result<(), AnyError> {
+    if is_cancelled(operation_id) {
+        return Ok(());
+    }
+    let remote = resolve_remote_async(host, port).await?;
+    let mut endpoint = Endpoint::client(unspecified_address(remote))?;
+    endpoint.set_default_client_config(pinned_client_config(fingerprint)?);
+    let mut connecting = Box::pin(endpoint.connect(remote, PLAY_SERVER_NAME)?);
+    let connect_deadline = Instant::now() + Duration::from_secs(7);
+    let connection = loop {
+        if is_cancelled(operation_id) {
+            return Ok(());
+        }
+        if Instant::now() >= connect_deadline {
+            return Err("QUIC media handshake timed out after 7 seconds".into());
+        }
+        match timeout(Duration::from_millis(100), &mut connecting).await {
+            Ok(result) => break result?,
+            Err(_) => continue,
+        }
+    };
+    let mut hello = Vec::with_capacity(48);
+    hello.extend_from_slice(&PLAY_HELLO_MAGIC);
+    hello.extend_from_slice(&session_id.to_be_bytes());
+    hello.extend_from_slice(&token);
+    let mut stream = timeout(Duration::from_secs(2), connection.open_uni()).await??;
+    stream.write_all(&hello).await?;
+    stream.finish()?;
+
+    let mut video = FrameAssembler::new(session_id, 1, 100_000, 16);
+    let mut audio = FrameAssembler::new(session_id, 2, 100_000, 16);
+    let started = Instant::now();
+    while !is_cancelled(operation_id) {
+        let bytes = match timeout(Duration::from_millis(100), connection.read_datagram()).await {
+            Ok(Ok(bytes)) => bytes,
+            Ok(Err(error)) => return Err(error.into()),
+            Err(_) => continue,
+        };
+        let received_at = duration_micros(&started.elapsed());
+        let datagram = match bridgepad_media_protocol::decode_datagram(&bytes) {
+            Ok(datagram) if datagram.header.session_id == session_id => datagram,
+            _ => continue,
+        };
+        let assembler = match datagram.header.kind {
+            bridgepad_media_protocol::PacketKind::Video => &mut video,
+            bridgepad_media_protocol::PacketKind::Audio => &mut audio,
+        };
+        let Ok(Some(frame)) = assembler.push(&bytes, received_at) else {
+            continue;
+        };
+        let payload = JObject::from(env.byte_array_from_slice(&frame.payload)?);
+        match frame.kind {
+            bridgepad_media_protocol::PacketKind::Video => {
+                env.call_method(
+                    &callback,
+                    "onVideoFrame",
+                    "([BJZ)V",
+                    &[
+                        JValue::Object(&payload),
+                        JValue::Long(i64::try_from(frame.presentation_timestamp_micros)?),
+                        JValue::Bool(
+                            if frame
+                                .flags
+                                .contains(bridgepad_media_protocol::PacketFlags::KEYFRAME)
+                            {
+                                1
+                            } else {
+                                0
+                            },
+                        ),
+                    ],
+                )?;
+            }
+            bridgepad_media_protocol::PacketKind::Audio => {
+                env.call_method(
+                    &callback,
+                    "onAudioFrame",
+                    "([BJ)V",
+                    &[
+                        JValue::Object(&payload),
+                        JValue::Long(i64::try_from(frame.presentation_timestamp_micros)?),
+                    ],
+                )?;
+            }
+        }
+        env.delete_local_ref(payload)?;
+    }
+    connection.close(0_u32.into(), b"session stopped");
+    endpoint.close(0_u32.into(), b"session stopped");
+    Ok(())
+}
+
+fn pinned_client_config(fingerprint: [u8; 32]) -> Result<ClientConfig, AnyError> {
+    let crypto = rustls::ClientConfig::builder()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(PinnedCertificateVerifier {
+            provider: Arc::new(rustls::crypto::ring::default_provider()),
+            fingerprint,
+        }))
+        .with_no_client_auth();
+    let mut config = ClientConfig::new(Arc::new(QuicClientConfig::try_from(crypto)?));
+    let mut transport = TransportConfig::default();
+    transport.datagram_receive_buffer_size(Some(SOCKET_RECEIVE_BUFFER_SIZE));
+    transport.datagram_send_buffer_size(SOCKET_RECEIVE_BUFFER_SIZE);
+    transport.max_idle_timeout(Some(quinn::IdleTimeout::try_from(Duration::from_secs(10))?));
+    config.transport_config(Arc::new(transport));
+    Ok(config)
+}
+
+#[derive(Debug)]
+struct PinnedCertificateVerifier {
+    provider: Arc<rustls::crypto::CryptoProvider>,
+    fingerprint: [u8; 32],
+}
+
+impl rustls::client::danger::ServerCertVerifier for PinnedCertificateVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp: &[u8],
+        _now: UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        let actual: [u8; 32] = Sha256::digest(end_entity.as_ref()).into();
+        if !bool::from(actual.ct_eq(&self.fingerprint)) {
+            return Err(rustls::Error::General(
+                "Desktop certificate fingerprint does not match pairing".into(),
+            ));
+        }
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        certificate: &CertificateDer<'_>,
+        signed: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            certificate,
+            signed,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        certificate: &CertificateDer<'_>,
+        signed: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            certificate,
+            signed,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -204,7 +461,9 @@ impl ActiveRun {
                 Ordering::Acquire,
             ) {
                 Ok(_) => {
-                    CANCELLED_RUN_ID.store(0, Ordering::Release);
+                    if CANCELLED_RUN_ID.load(Ordering::Acquire) != operation_id {
+                        CANCELLED_RUN_ID.store(0, Ordering::Release);
+                    }
                     return Ok(Self(operation_id));
                 }
                 Err(active_id)
@@ -213,7 +472,7 @@ impl ActiveRun {
                 {
                     std::thread::sleep(Duration::from_millis(5));
                 }
-                Err(_) => return Err("another native media diagnostic is already running".into()),
+                Err(_) => return Err("another native media operation is already running".into()),
             }
         }
     }
@@ -827,5 +1086,18 @@ mod tests {
         };
 
         assert_eq!(measurement.encode().split('\t').nth(11), Some("-1"));
+    }
+
+    #[test]
+    fn playable_fingerprint_parser_accepts_the_paired_desktop_format() {
+        let fingerprint = (0_u8..32)
+            .map(|byte| format!("{byte:02X}"))
+            .collect::<Vec<_>>()
+            .join(":");
+        assert_eq!(
+            parse_fingerprint(&fingerprint).unwrap(),
+            std::array::from_fn(|i| i as u8)
+        );
+        assert!(parse_fingerprint("not-a-fingerprint").is_err());
     }
 }

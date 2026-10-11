@@ -287,4 +287,17 @@ sealed interface BridgeMessage {
             require(sdp.toByteArray(Charsets.UTF_8).size <= BridgeProtocol.MAX_PAYLOAD_SIZE)
         }
     }
+
+    data object QuicOffer : BridgeMessage {
+        override val type = BridgeMessageType.QUIC_OFFER
+    }
+
+    data class QuicReady(val port: Int, val token: ByteArray) : BridgeMessage {
+        override val type = BridgeMessageType.QUIC_READY
+
+        init {
+            require(port in 1..0xffff)
+            require(token.size == 32)
+        }
+    }
 }

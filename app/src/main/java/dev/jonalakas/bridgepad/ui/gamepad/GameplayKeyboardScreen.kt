@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +35,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -134,18 +137,7 @@ fun GameplayKeyboardScreen(
             )
             OutlinedTextField(
                 value = editorValue,
-                onValueChange = { next ->
-                    when {
-                        next.text.startsWith(DELETE_GUARD) -> {
-                            state.update(next.withoutDeleteGuard())
-                        }
-                        next.text.isEmpty() && state.value.text.isEmpty() -> {
-                            state.submit(KeyboardKey.BACKSPACE)
-                        }
-                        else -> state.update(next)
-                    }
-                    editorValue = state.value.withDeleteGuard()
-                },
+                onValueChange = { editorValue = state.acceptEditorValue(it) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester),
@@ -176,6 +168,41 @@ fun GameplayKeyboardScreen(
             }
         }
     }
+}
+
+/** Keeps the native IME active over the stream without navigating to the keyboard screen. */
+@Composable
+internal fun StreamingKeyboardInput(state: GameplayKeyboardState) {
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    var editorValue by remember { mutableStateOf(state.value.withDeleteGuard()) }
+
+    DisposableEffect(Unit) {
+        onDispose { keyboardController?.hide() }
+    }
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+    BasicTextField(
+        value = editorValue,
+        onValueChange = { editorValue = state.acceptEditorValue(it) },
+        modifier = Modifier.size(1.dp).alpha(0f).focusRequester(focusRequester),
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+        keyboardActions = KeyboardActions(
+            onSend = { state.submit(KeyboardKey.ENTER) },
+        ),
+    )
+}
+
+private fun GameplayKeyboardState.acceptEditorValue(next: TextFieldValue): TextFieldValue {
+    when {
+        next.text.startsWith(DELETE_GUARD) -> update(next.withoutDeleteGuard())
+        next.text.isEmpty() && value.text.isEmpty() -> submit(KeyboardKey.BACKSPACE)
+        else -> update(next)
+    }
+    return value.withDeleteGuard()
 }
 
 private const val DELETE_GUARD = "\u200B"

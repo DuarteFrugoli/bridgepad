@@ -69,7 +69,8 @@ enum class BridgeMessageType(val code: Int) {
     PING(0x20), PONG(0x21), STATUS(0x30), ERROR(0x31),
     RUMBLE(0x40),
     MEDIA_OFFER(0x50), MEDIA_ANSWER(0x51), VIDEO_CHUNK(0x52),
-    MEDIA_FEEDBACK(0x53), MEDIA_STOP(0x54), WEBRTC_OFFER(0x55), WEBRTC_ANSWER(0x56);
+    MEDIA_FEEDBACK(0x53), MEDIA_STOP(0x54), WEBRTC_OFFER(0x55), WEBRTC_ANSWER(0x56),
+    QUIC_OFFER(0x57), QUIC_READY(0x58);
 
     companion object {
         fun fromCode(code: Int): BridgeMessageType = entries.firstOrNull { it.code == code }

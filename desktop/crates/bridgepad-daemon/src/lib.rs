@@ -3,6 +3,7 @@
 mod auth;
 pub mod bluetooth;
 mod discovery;
+mod quic_media;
 mod trust;
 
 use auth::{
@@ -122,11 +123,12 @@ impl DesktopServer {
         let peer_id: [u8; PEER_ID_SIZE] = certificate_fingerprint[..PEER_ID_SIZE]
             .try_into()
             .expect("fingerprint contains a peer id");
+        let identity = Arc::new(identity);
         let config = ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(
-                vec![CertificateDer::from(identity.certificate)],
-                PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.private_key)),
+                vec![CertificateDer::from(identity.certificate.clone())],
+                PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(identity.private_key.clone())),
             )?;
         let listener = TcpListener::bind(&options.address)?;
         listener.set_nonblocking(true)?;
@@ -137,6 +139,7 @@ impl DesktopServer {
         let state = Arc::new(ServerState {
             peer_id,
             certificate_fingerprint,
+            identity,
             desktop_name: options.desktop_name.clone(),
             listen_address: local_address.to_string(),
             media_listen_address: media_local_address.to_string(),
@@ -269,6 +272,7 @@ impl Drop for DesktopServer {
 struct ServerState {
     peer_id: [u8; PEER_ID_SIZE],
     certificate_fingerprint: [u8; 32],
+    identity: Arc<DiagnosticIdentity>,
     desktop_name: String,
     listen_address: String,
     media_listen_address: String,
@@ -690,7 +694,7 @@ fn serve(
                     .sock
                     .set_read_timeout(Some(Duration::from_secs(20)))?;
                 let media_session = MediaSessionLease::replace(&state, connection_id)?;
-                return negotiate_and_stream_webrtc(
+                return negotiate_and_stream_media(
                     &mut stream,
                     packet.header,
                     CaptureConfig {
@@ -704,6 +708,7 @@ fn serve(
                     maximum_bitrate,
                     peer,
                     media_session.cancel_token(),
+                    &state.identity,
                 );
             }
             MessageType::GamepadSnapshot => {
@@ -791,18 +796,34 @@ fn serve(
     }
 }
 
-fn negotiate_and_stream_webrtc(
+fn negotiate_and_stream_media(
     stream: &mut StreamOwned<ServerConnection, TcpStream>,
     request: PacketHeader,
     capture_config: CaptureConfig,
     maximum_bitrate: u32,
     peer: std::net::SocketAddr,
     cancelled: &AtomicBool,
+    identity: &DiagnosticIdentity,
 ) -> Result<(), AnyError> {
     let Some(bytes) = read_packet(stream)? else {
         return Err("client disconnected before sending its WebRTC offer".into());
     };
     let offer_packet = decode_packet(&bytes)?;
+    if offer_packet.header.session_id == request.session_id
+        && offer_packet.header.message_type == MessageType::QuicOffer
+    {
+        if !offer_packet.payload.is_empty() {
+            return Err("QUIC offer payload must be empty".into());
+        }
+        return quic_media::run(
+            stream,
+            offer_packet.header,
+            capture_config,
+            peer,
+            cancelled,
+            identity,
+        );
+    }
     if offer_packet.header.session_id != request.session_id
         || offer_packet.header.message_type != MessageType::WebRtcOffer
     {

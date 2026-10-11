@@ -919,6 +919,29 @@ Compare their p95/p99/maximum arrival gaps, but do not use loopback results to
 select a winner. Gate T1 still requires the Android release build over real
 Wi-Fi and USB routes, including CPU, battery, teardown and route-change tests.
 
+#### First playable QUIC stream (Wi-Fi)
+
+1. Run `cargo run --release -p bridgepad-desktop` in `desktop/`. Install the
+   matching Android build with `./gradlew installDebug` and keep the phone and
+   PC on the same reachable network. Allow the Desktop executable through the
+   Windows firewall for the current network profile. Its QUIC media endpoint
+   binds a per-session UDP port, while TLS media negotiation uses TCP `39394`.
+2. In the Android home flow choose streaming, Wi-Fi, physical controller and
+   start the session. The full-screen video should appear, PC audio should
+   play, the connected controller should affect the game, and the entire
+   image should operate as a mousepad.
+3. Stop and start the session several times. Check that the Desktop prints
+   `QUIC media authenticated`, `QUIC playable stream started`, and then
+   `QUIC playable stream stopped`; a new attempt must connect without
+   restarting the Desktop. Repeat once after changing the PC display or
+   starting a game to check keyframe recovery.
+
+This is a first practical transport trial. Record visible freezes, sound
+interruptions or delay, and any `QUIC media` counters or errors printed by
+the Desktop. The synthetic WebRTC screen remains available under Tests for
+comparison. The diagnostic transport ports below are separate from this
+authenticated playable session.
+
 #### QUIC and UDP+AEAD Android route diagnostics
 
 1. Start one release sender on the PC. For UDP+AEAD:

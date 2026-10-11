@@ -210,6 +210,19 @@ H.264 directly to a `Surface` with an application-owned low-latency
 presentation policy. The WebRTC path stays available as the measured reference
 until the dedicated path meets or beats it.
 
+The playable local streaming screen now exercises the first QUIC DATAGRAM
+path. Its existing authenticated TCP/TLS media connection negotiates H.264,
+Opus and a one-use 32-byte session token. The Desktop starts a per-session UDP
+endpoint, presents its persistent paired certificate there, and accepts media
+only after the QUIC client proves possession of the token and session ID. The
+Android JNI receiver pins that certificate's SHA-256 fingerprint, assembles
+Media v1 video/audio separately, and hands complete access units to Android
+MediaCodec H.264/Opus decoders. H.264 renders directly to a Surface and decoded
+PCM goes to AudioTrack. Input remains on its independent connection. The
+synthetic WebRTC test remains available as the reference path. This QUIC
+playable path is an experimental validation stage: feedback-driven bitrate,
+loss recovery, and measured audio/video synchronization are not complete.
+
 The first BridgePad Media v1 increment is intentionally transport independent.
 `bridgepad-media-protocol` owns the fixed 1200-byte datagram contract and Rust
 codec; `:streaming-core` contains the matching Kotlin codec and shared golden
@@ -237,10 +250,11 @@ buffer, avoiding JVM allocation and cipher-creation costs in the comparison.
 Its socket reader runs independently from authentication and frame assembly so
 processing one packet cannot delay the recorded arrival time of the following
 packet.
-This is intentionally not a permanent JNI API yet. The QUIC sender creates an
-ephemeral self-signed identity and the test-only client skips chain trust while
-retaining TLS handshake signature verification. This exception is confined to
-the public diagnostic on UDP `39496` and is forbidden in product sessions.
+The diagnostic JNI calls are separate from the playable media JNI call. The
+diagnostic QUIC sender creates an ephemeral self-signed identity and its
+test-only client skips chain trust while retaining TLS handshake signature
+verification. This exception is confined to the public diagnostic on UDP
+`39496`; the playable receiver requires the paired certificate fingerprint.
 UDP+AEAD remains on `39495`; both candidates carry the same Media v1 inner
 datagrams and use the same strict assembly deadline.
 

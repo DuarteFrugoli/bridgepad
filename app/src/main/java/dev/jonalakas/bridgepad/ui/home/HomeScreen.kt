@@ -295,6 +295,8 @@ fun HomeScreen(
                             busy = busy,
                             onTypeChanged = onStreamingControllerTypeChanged,
                             onCaptureModeChanged = onPhysicalCaptureModeChanged,
+                            orientationMode = sessionOrientationMode,
+                            onOrientationModeChanged = onSessionOrientationModeChanged,
                         )
                     } else {
                         InputCard(
@@ -660,24 +662,22 @@ private fun InputCard(
     val physicalConnected = physical.devices.isNotEmpty() || usb.active
     SetupCard(R.string.step_input) {
         Text(stringResource(R.string.automatic_input_description))
-        Text(stringResource(R.string.session_orientation), style = MaterialTheme.typography.titleSmall)
-        SessionOrientationSelector(
-            selected = orientationMode,
-            enabled = !busy,
-            onSelected = onOrientationModeChanged,
-        )
-        Text(stringResource(R.string.session_orientation_description), style = MaterialTheme.typography.bodySmall)
+        SessionOrientationChoice(orientationMode, busy, onOrientationModeChanged)
         HorizontalDivider()
         Text(stringResource(R.string.virtual_controller), style = MaterialTheme.typography.titleSmall)
         OutlinedButton(onClick = onEditLayout, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.edit_controller_layout))
         }
+        HorizontalDivider()
+        Text(
+            stringResource(R.string.physical_controller),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (physicalConnected) 1f else 0.38f),
+        )
         if (!physicalConnected) {
             Text(stringResource(R.string.automatic_input_virtual_ready), style = MaterialTheme.typography.bodySmall)
             return@SetupCard
         }
-        HorizontalDivider()
-        Text(stringResource(R.string.physical_controller), style = MaterialTheme.typography.titleSmall)
         val names = physical.devices.joinToString { it.name }
         Text(usb.deviceName ?: names, style = MaterialTheme.typography.bodyMedium)
         Text(stringResource(R.string.capture_mode), style = MaterialTheme.typography.titleSmall)
@@ -723,10 +723,14 @@ private fun StreamingInputCard(
     busy: Boolean,
     onTypeChanged: (PlayControllerType) -> Unit,
     onCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
+    orientationMode: SessionOrientationMode,
+    onOrientationModeChanged: (SessionOrientationMode) -> Unit,
 ) {
     val names = physical.devices.joinToString { it.name }
     val physicalConnected = physical.devices.isNotEmpty() || usb.active
     SetupCard(R.string.step_streaming_input) {
+        SessionOrientationChoice(orientationMode, busy, onOrientationModeChanged)
+        HorizontalDivider()
         Choice(
             selected = selectedType == PlayControllerType.PHYSICAL,
             label = R.string.physical_controller,
@@ -766,6 +770,21 @@ private fun StreamingInputCard(
             }
         }
     }
+}
+
+@Composable
+private fun SessionOrientationChoice(
+    orientationMode: SessionOrientationMode,
+    busy: Boolean,
+    onOrientationModeChanged: (SessionOrientationMode) -> Unit,
+) {
+    Text(stringResource(R.string.session_orientation), style = MaterialTheme.typography.titleSmall)
+    SessionOrientationSelector(
+        selected = orientationMode,
+        enabled = !busy,
+        onSelected = onOrientationModeChanged,
+    )
+    Text(stringResource(R.string.session_orientation_description), style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable

@@ -136,7 +136,6 @@ class MainActivity : ComponentActivity() {
                 var showDesktopStreaming by rememberSaveable { mutableStateOf(false) }
                 var showMediaTransportDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showGameplayStreaming by rememberSaveable { mutableStateOf(false) }
-                var returnToStreamingAfterKeyboard by rememberSaveable { mutableStateOf(false) }
                 var gameplayStreamingPeerId by rememberSaveable { mutableStateOf<String?>(null) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var onboardingComplete by rememberSaveable {
@@ -638,14 +637,9 @@ class MainActivity : ComponentActivity() {
                         peerId = checkNotNull(gameplayStreamingPeerId),
                         requestFor = networkDesktopCoordinator::mediaRequest,
                         useDisplayCutoutArea = useDisplayCutoutArea,
-                        onOpenKeyboard = {
-                            returnToStreamingAfterKeyboard = true
-                            showGameplayStreaming = false
-                            sessionUiViewModel.dispatch(SessionUiEvent.KeyboardOpened)
-                        },
+                        keyboardState = gameplayKeyboardState,
                         onExit = {
                             showGameplayStreaming = false
-                            returnToStreamingAfterKeyboard = false
                             sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
                         },
                     )
@@ -869,10 +863,6 @@ class MainActivity : ComponentActivity() {
                         state = gameplayKeyboardState,
                         onClose = {
                             sessionUiViewModel.dispatch(SessionUiEvent.KeyboardClosed)
-                            if (returnToStreamingAfterKeyboard && gameplayStreamingPeerId != null) {
-                                showGameplayStreaming = true
-                            }
-                            returnToStreamingAfterKeyboard = false
                         },
                     )
                 } else HomeScreen(
@@ -1075,7 +1065,6 @@ class MainActivity : ComponentActivity() {
                     },
                     onStopHid = {
                         showGameplayStreaming = false
-                        returnToStreamingAfterKeyboard = false
                         gameplayStreamingPeerId = null
                         gameplayKeyboardState.reset()
                         captureModeName = PhysicalCaptureMode.COMPATIBILITY.name

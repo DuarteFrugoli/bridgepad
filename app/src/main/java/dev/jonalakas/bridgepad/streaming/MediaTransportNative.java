@@ -15,4 +15,10 @@ public final class MediaTransportNative {
             long operationId, String host, String interfaceName, int port, int durationSeconds);
 
     public static native void cancelProbe(long operationId);
+
+    public static native String runQuicPlayable(
+            long operationId, String host, int port, String certificateSha256,
+            byte[] token, long sessionId, QuicFrameCallback callback);
+
+    public static native void cancelPlayable(long operationId);
 }

@@ -44,6 +44,8 @@ pub enum MessageType {
     MediaStop = 0x54,
     WebRtcOffer = 0x55,
     WebRtcAnswer = 0x56,
+    QuicOffer = 0x57,
+    QuicReady = 0x58,
 }
 
 impl TryFrom<u8> for MessageType {
@@ -79,6 +81,8 @@ impl TryFrom<u8> for MessageType {
             0x54 => Ok(Self::MediaStop),
             0x55 => Ok(Self::WebRtcOffer),
             0x56 => Ok(Self::WebRtcAnswer),
+            0x57 => Ok(Self::QuicOffer),
+            0x58 => Ok(Self::QuicReady),
             _ => Err(ProtocolError::UnknownMessageType(value)),
         }
     }

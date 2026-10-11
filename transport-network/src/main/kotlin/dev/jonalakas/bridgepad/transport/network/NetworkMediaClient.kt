@@ -43,6 +43,17 @@ data class WebRtcMediaNegotiation(
 )
 
 data class NetworkMediaPreparation(
+    val host: String,
+    val format: VideoFormat,
+    val roundTripMicros: Long,
+)
+
+data class QuicMediaNegotiation(
+    val host: String,
+    val port: Int,
+    val certificateSha256: String,
+    val token: ByteArray,
+    val sessionId: Long,
     val format: VideoFormat,
     val roundTripMicros: Long,
 )
@@ -126,6 +137,7 @@ class NetworkMediaSignalingClient(private val request: NetworkMediaRequest) : Au
         check(answer.codec == BridgeVideoCodec.H264) { "Desktop did not select H.264" }
 
         val preparation = NetworkMediaPreparation(
+            host = host,
             format = VideoFormat(
                 codec = VideoCodec.H264,
                 width = answer.width,
@@ -157,6 +169,27 @@ class NetworkMediaSignalingClient(private val request: NetworkMediaRequest) : Au
             ?: error("Desktop did not return a WebRTC answer")
         return WebRtcMediaNegotiation(
             answerSdp = webRtcAnswer.sdp,
+            format = current.preparation.format,
+            roundTripMicros = current.preparation.roundTripMicros,
+        )
+    }
+
+    fun startQuic(): QuicMediaNegotiation {
+        val current = checkNotNull(active) { "Media signalling was not prepared" }
+        current.sequence = writeBridgePacket(
+            current.socket,
+            current.sessionId,
+            current.sequence,
+            BridgeMessage.QuicOffer,
+        )
+        val ready = readBridgePacket(current.input).message as? BridgeMessage.QuicReady
+            ?: error("Desktop did not start the QUIC media endpoint")
+        return QuicMediaNegotiation(
+            host = current.preparation.host,
+            port = ready.port,
+            certificateSha256 = request.certificateSha256,
+            token = ready.token,
+            sessionId = current.sessionId,
             format = current.preparation.format,
             roundTripMicros = current.preparation.roundTripMicros,
         )
