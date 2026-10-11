@@ -8,6 +8,7 @@ members = [
     "crates/bridgepad-media-metrics",
     "crates/bridgepad-media-protocol",
     "crates/bridgepad-protocol",
+    "crates/bridgepad-system-power",
     "crates/bridgepad-transport-spike",
     "crates/bridgepad-usb-spike",
     "crates/bridgepad-virtual-device",

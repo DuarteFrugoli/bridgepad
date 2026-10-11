@@ -383,6 +383,7 @@ name = "bridgepad-desktop"
 version = "0.1.0"
 dependencies = [
  "bridgepad-daemon",
+ "bridgepad-system-power",
  "serde",
  "tauri",
  "tauri-build",
@@ -417,6 +418,13 @@ dependencies = [
 [[package]]
 name = "bridgepad-protocol"
 version = "0.1.0"
+
+[[package]]
+name = "bridgepad-system-power"
+version = "0.1.0"
+dependencies = [
+ "windows 0.62.2",
+]
 
 [[package]]
 name = "bridgepad-transport-spike"

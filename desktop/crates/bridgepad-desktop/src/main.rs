@@ -34,10 +34,12 @@ struct DesktopStatusDto {
     connected_clients: usize,
     active_sessions: usize,
     error: Option<String>,
+    low_battery_percentage: Option<u8>,
 }
 
 #[tauri::command]
 fn desktop_status(state: State<'_, DesktopState>) -> Result<DesktopStatusDto, String> {
+    let low_battery_percentage = bridgepad_system_power::low_battery_percentage();
     let server = state
         .server
         .lock()
@@ -58,6 +60,7 @@ fn desktop_status(state: State<'_, DesktopState>) -> Result<DesktopStatusDto, St
             connected_clients: 0,
             active_sessions: 0,
             error: Some(error),
+            low_battery_percentage,
         });
     };
     let snapshot = server.snapshot().map_err(|error| error.to_string())?;
@@ -93,6 +96,7 @@ fn desktop_status(state: State<'_, DesktopState>) -> Result<DesktopStatusDto, St
         connected_clients,
         active_sessions,
         error: snapshot.last_error,
+        low_battery_percentage,
     })
 }
 

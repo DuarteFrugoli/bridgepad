@@ -7,6 +7,7 @@ const invoke = window.__TAURI__?.core?.invoke || (async (command) => {
       pairingExpiresInSeconds: 527,
       trustedDevices: [],
       error: null,
+      lowBatteryPercentage: null,
     };
   }
   return true;
@@ -15,6 +16,7 @@ const invoke = window.__TAURI__?.core?.invoke || (async (command) => {
 const translations = {
   en: {
     languageButton: "PT",
+    lowBattery: "Notebook battery at {percent}%. Streaming may slow down; connect the charger for better performance.",
     ready: "Ready to connect",
     connected: "Phone connected",
     playing: "Controller active",
@@ -41,6 +43,7 @@ const translations = {
   },
   pt: {
     languageButton: "EN",
+    lowBattery: "Bateria do notebook em {percent}%. O streaming pode ficar mais lento; conecte o carregador para melhorar o desempenho.",
     ready: "Pronto para conectar",
     connected: "Celular conectado",
     playing: "Controle ativo",
@@ -76,6 +79,7 @@ const elements = Object.fromEntries(
     "errorTitle", "errorText", "pairEyebrow", "pairTitle", "pairTimer", "pairingCode",
     "copyCodeButton", "copyHint", "pairHelp", "newCodeButton", "devicesEyebrow", "devicesTitle",
     "deviceCount", "deviceList", "emptyDevices", "emptyTitle", "emptyText", "trayHint", "firewallNote",
+    "batteryPanel", "batteryText",
   ].map((id) => [id, document.getElementById(id)]),
 );
 
@@ -150,6 +154,12 @@ function render(status) {
   elements.pairTimer.textContent = formatTimer(status.pairingExpiresInSeconds);
   elements.errorPanel.hidden = !status.error;
   elements.errorText.textContent = status.error || "";
+  const lowBattery = Number(status.lowBatteryPercentage);
+  elements.batteryPanel.hidden = status.lowBatteryPercentage == null || !Number.isFinite(lowBattery);
+  if (!elements.batteryPanel.hidden) {
+    const warning = t("lowBattery").replace("{percent}", String(lowBattery));
+    if (elements.batteryText.textContent !== warning) elements.batteryText.textContent = warning;
+  }
   renderDevices(status.trustedDevices || []);
 }
 

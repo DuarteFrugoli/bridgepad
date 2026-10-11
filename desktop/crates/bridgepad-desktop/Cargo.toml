@@ -13,6 +13,7 @@ tauri-build = { version = "2.5.4", features = [] }
 
 [dependencies]
 bridgepad-daemon = { path = "../bridgepad-daemon" }
+bridgepad-system-power = { path = "../bridgepad-system-power" }
 serde = { version = "1.0.228", features = ["derive"] }
 tauri = { version = "2.11.5", features = ["tray-icon"] }
 

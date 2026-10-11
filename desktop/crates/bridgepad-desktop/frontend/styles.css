@@ -107,6 +107,16 @@ button { font: inherit; }
 }
 .error-panel p { margin: 4px 0 0; font-size: 13px; }
 
+.battery-panel {
+  margin: 0 0 16px;
+  padding: 14px 17px;
+  border: 1px solid rgba(244, 184, 82, 0.48);
+  border-radius: 14px;
+  background: rgba(109, 69, 19, 0.28);
+  color: #ffe1a8;
+}
+.battery-panel p { margin: 0; font-size: 13px; line-height: 1.5; }
+
 .content-grid { display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr); gap: 16px; }
 .pairing-panel, .devices-panel { min-height: 330px; padding: 24px; }
 .section-heading { justify-content: space-between; gap: 16px; }

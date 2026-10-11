@@ -1,0 +1,12 @@
+[package]
+name = "bridgepad-system-power"
+description = "Host power status for BridgePad's performance guidance"
+publish = false
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = ["Win32_System_Power"] }
