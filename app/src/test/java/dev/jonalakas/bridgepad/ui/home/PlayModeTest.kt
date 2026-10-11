@@ -7,7 +7,19 @@ import org.junit.Test
 
 class PlayModeTest {
     @Test
-    fun streamingRequiresAnExplicitPhysicalControllerSelection() {
+    fun mouseAndKeyboardStreamingNeedsNoPhysicalControllerOrCaptureMode() {
+        assertTrue(
+            streamingInputReady(
+                controllerType = PlayControllerType.MOUSE_KEYBOARD,
+                captureMode = null,
+                compatibilityAvailable = false,
+                directUsbAvailable = false,
+            ),
+        )
+    }
+
+    @Test
+    fun streamingRequiresAnEnabledInputSelection() {
         assertFalse(
             streamingInputReady(
                 controllerType = null,

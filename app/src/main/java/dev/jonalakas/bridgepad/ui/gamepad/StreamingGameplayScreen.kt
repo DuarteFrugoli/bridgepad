@@ -3,17 +3,14 @@ package dev.jonalakas.bridgepad.ui.gamepad
 import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
-import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
@@ -31,8 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -55,27 +50,8 @@ fun StreamingGameplayScreen(
     val media: StreamingMediaViewModel = viewModel()
     val status by media.status.collectAsState()
     val activity = LocalContext.current.findActivity()
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     var surface by remember { mutableStateOf<Surface?>(null) }
     var keyboardOpen by remember { mutableStateOf(false) }
-    var keyboardWasVisible by remember { mutableStateOf(false) }
-
-    LaunchedEffect(imeVisible) {
-        if (imeVisible) keyboardWasVisible = true
-        else if (keyboardWasVisible) {
-            keyboardOpen = false
-            keyboardWasVisible = false
-        }
-    }
-    DisposableEffect(activity, keyboardOpen) {
-        val window = activity?.window
-        val previousMode = window?.attributes?.softInputMode
-        if (keyboardOpen) window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-        onDispose {
-            if (keyboardOpen && previousMode != null) window.setSoftInputMode(previousMode)
-        }
-    }
 
     DisposableEffect(media, activity) {
         onDispose {
@@ -84,13 +60,8 @@ fun StreamingGameplayScreen(
         }
     }
     BackHandler {
-        if (keyboardOpen) {
-            keyboardController?.hide()
-            keyboardOpen = false
-        } else {
-            media.stop()
-            onExit()
-        }
+        media.stop()
+        onExit()
     }
     LaunchedEffect(surface, peerId) {
         val target = surface ?: return@LaunchedEffect
@@ -154,7 +125,7 @@ fun StreamingGameplayScreen(
             transparent = true,
             onOpenKeyboard = { keyboardOpen = true },
         )
-        if (keyboardOpen) StreamingKeyboardInput(keyboardState)
+        if (keyboardOpen) GameplayKeyboardOverlay(keyboardState) { keyboardOpen = false }
     }
 }
 

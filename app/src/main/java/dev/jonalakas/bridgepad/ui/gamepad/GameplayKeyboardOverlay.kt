@@ -1,31 +1,25 @@
 package dev.jonalakas.bridgepad.ui.gamepad
 
+import android.view.WindowManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -34,10 +28,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
@@ -62,13 +58,15 @@ class GameplayKeyboardState {
         value = next.copy(selection = TextRange(next.text.length))
     }
 
-    fun clear() {
-        update(TextFieldValue())
-    }
-
     fun submit(key: KeyboardKey) {
         TouchMouseStore.notifyRegularInteraction()
         TouchKeyboardStore.submit(KeyboardInput.Key(key))
+    }
+
+    /** Send Enter to the computer and clear only the local text mirror. */
+    fun sendAndClear() {
+        submit(KeyboardKey.ENTER)
+        reset()
     }
 
     fun reset() {
@@ -76,9 +74,48 @@ class GameplayKeyboardState {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Shows the same native keyboard over a controller, touchpad, or stream. */
 @Composable
-fun GameplayKeyboardScreen(
+internal fun GameplayKeyboardOverlay(
+    state: GameplayKeyboardState,
+    onClose: () -> Unit,
+) {
+    val activity = LocalContext.current.findActivity()
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    var keyboardWasVisible by remember { mutableStateOf(false) }
+    val close = {
+        keyboardController?.hide()
+        onClose()
+    }
+
+    LaunchedEffect(imeVisible) {
+        if (imeVisible) keyboardWasVisible = true
+        else if (keyboardWasVisible) onClose()
+    }
+    DisposableEffect(activity) {
+        val window = activity?.window
+        val previousMode = window?.attributes?.softInputMode
+        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        onDispose {
+            if (previousMode != null) window?.setSoftInputMode(previousMode)
+        }
+    }
+    BackHandler(onBack = close)
+    Box(
+        modifier = Modifier.fillMaxSize().imePadding(),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        GameplayKeyboardInput(
+            state = state,
+            onClose = close,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun GameplayKeyboardInput(
     state: GameplayKeyboardState,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -86,96 +123,6 @@ fun GameplayKeyboardScreen(
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     var editorValue by remember { mutableStateOf(state.value.withDeleteGuard()) }
-    val closeKeyboardScreen = {
-        keyboardController?.hide()
-        onClose()
-    }
-
-    BackHandler(onBack = closeKeyboardScreen)
-    DisposableEffect(Unit) {
-        onDispose { keyboardController?.hide() }
-    }
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-        keyboardController?.show()
-    }
-    LaunchedEffect(state.value) {
-        if (editorValue.withoutDeleteGuard().text != state.value.text) {
-            editorValue = state.value.withDeleteGuard()
-        }
-    }
-
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.keyboard_button)) },
-                navigationIcon = {
-                    IconButton(onClick = closeKeyboardScreen) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.close_action),
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.keyboard_text_description),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            OutlinedTextField(
-                value = editorValue,
-                onValueChange = { editorValue = state.acceptEditorValue(it) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(focusRequester),
-                label = { Text(stringResource(R.string.keyboard_text_placeholder)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                keyboardActions = KeyboardActions(
-                    onSend = { state.submit(KeyboardKey.ENTER) },
-                ),
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = state::clear,
-                    enabled = state.value.text.isNotEmpty(),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(R.string.clear_action))
-                }
-                TextButton(
-                    onClick = closeKeyboardScreen,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(R.string.close_action))
-                }
-            }
-        }
-    }
-}
-
-/** Keeps the native IME active over the stream without navigating to the keyboard screen. */
-@Composable
-internal fun StreamingKeyboardInput(state: GameplayKeyboardState) {
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    var editorValue by remember { mutableStateOf(state.value.withDeleteGuard()) }
 
     DisposableEffect(Unit) {
         onDispose { keyboardController?.hide() }
@@ -184,14 +131,28 @@ internal fun StreamingKeyboardInput(state: GameplayKeyboardState) {
         focusRequester.requestFocus()
         keyboardController?.show()
     }
-    BasicTextField(
+    OutlinedTextField(
         value = editorValue,
         onValueChange = { editorValue = state.acceptEditorValue(it) },
-        modifier = Modifier.size(1.dp).alpha(0f).focusRequester(focusRequester),
+        modifier = modifier
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f), RoundedCornerShape(12.dp))
+            .focusRequester(focusRequester),
+        label = { Text(stringResource(R.string.keyboard_text_placeholder)) },
+        trailingIcon = {
+            IconButton(onClick = onClose) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.close_action),
+                )
+            }
+        },
         singleLine = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
         keyboardActions = KeyboardActions(
-            onSend = { state.submit(KeyboardKey.ENTER) },
+            onSend = {
+                state.sendAndClear()
+                editorValue = state.value.withDeleteGuard()
+            },
         ),
     )
 }

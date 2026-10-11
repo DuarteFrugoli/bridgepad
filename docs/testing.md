@@ -744,8 +744,11 @@ first test.
 6. Use the touchpad simultaneously with a gamepad stick and buttons.
 7. Pinch with two fingers in a browser or editor and confirm that spreading
    zooms in while closing the fingers zooms out through `Ctrl + wheel`.
-8. Tap with three fingers and confirm that the Android keyboard screen opens.
-   Close it and confirm that BridgePad returns to the same touchpad surface.
+8. Tap with three fingers and confirm that the Android keyboard and compact
+   local text field appear over the current touchpad, without opening another
+   screen. Type into a focused Windows field, tap Send, and confirm that Enter
+   reaches Windows while only the local text field clears. Close the keyboard
+   and confirm that the same touchpad and session remain active.
 9. Swipe up with three fingers and confirm that Windows opens Task View. Swipe
    down without selecting a window and confirm that Task View closes without
    minimizing the windows that were already open.

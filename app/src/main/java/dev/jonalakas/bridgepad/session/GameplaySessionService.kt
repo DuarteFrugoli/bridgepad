@@ -137,6 +137,7 @@ class GameplaySessionService : Service() {
                         peerIdHex = record.destinationId,
                         captureMode = record.captureMode,
                         connectionMethod = record.connectionMethod,
+                        gamepadEnabled = record.gamepadEnabled,
                     )
                 }
             }
@@ -260,7 +261,10 @@ class GameplaySessionService : Service() {
             ?: return null
         val destinationId = getStringExtra(EXTRA_DESTINATION_ID)?.takeIf(String::isNotBlank)
             ?: return null
-        return GameplaySessionRecord(transport, captureMode, connectionMethod, destinationId)
+        return GameplaySessionRecord(
+            transport, captureMode, connectionMethod, destinationId,
+            getBooleanExtra(EXTRA_GAMEPAD_ENABLED, true),
+        )
     }
 
     companion object {
@@ -270,6 +274,7 @@ class GameplaySessionService : Service() {
         private const val EXTRA_CAPTURE_MODE = "capture_mode"
         private const val EXTRA_CONNECTION_METHOD = "connection_method"
         private const val EXTRA_DESTINATION_ID = "destination_id"
+        private const val EXTRA_GAMEPAD_ENABLED = "gamepad_enabled"
         private const val CHANNEL_ID = "bridgepad_gameplay_session"
         private const val NOTIFICATION_ID = 1_002
         @Volatile
@@ -280,6 +285,7 @@ class GameplaySessionService : Service() {
             captureMode: PhysicalCaptureMode,
             connectionMethod: ConnectionMethod,
             peerIdHex: String,
+            gamepadEnabled: Boolean = true,
         ) {
             require(connectionMethod == ConnectionMethod.WIFI || connectionMethod == ConnectionMethod.USB)
             start(
@@ -289,6 +295,7 @@ class GameplaySessionService : Service() {
                     captureMode,
                     connectionMethod,
                     peerIdHex,
+                    gamepadEnabled,
                 ),
             )
         }
@@ -329,7 +336,8 @@ class GameplaySessionService : Service() {
                     .putExtra(EXTRA_TRANSPORT, record.transport.name)
                     .putExtra(EXTRA_CAPTURE_MODE, record.captureMode.name)
                     .putExtra(EXTRA_CONNECTION_METHOD, record.connectionMethod.name)
-                    .putExtra(EXTRA_DESTINATION_ID, record.destinationId),
+                    .putExtra(EXTRA_DESTINATION_ID, record.destinationId)
+                    .putExtra(EXTRA_GAMEPAD_ENABLED, record.gamepadEnabled),
             )
         }
     }
@@ -345,9 +353,11 @@ private data class GameplaySessionRecord(
     val captureMode: PhysicalCaptureMode,
     val connectionMethod: ConnectionMethod,
     val destinationId: String,
+    val gamepadEnabled: Boolean = true,
 ) {
     fun sameTransportAs(other: GameplaySessionRecord): Boolean =
-        transport == other.transport && destinationId == other.destinationId
+        transport == other.transport && destinationId == other.destinationId &&
+            gamepadEnabled == other.gamepadEnabled
 }
 
 private class GameplaySessionRecordStore(context: Context) {
@@ -362,6 +372,7 @@ private class GameplaySessionRecordStore(context: Context) {
             .putString(KEY_CAPTURE_MODE, record.captureMode.name)
             .putString(KEY_CONNECTION_METHOD, record.connectionMethod.name)
             .putString(KEY_DESTINATION_ID, record.destinationId)
+            .putBoolean(KEY_GAMEPAD_ENABLED, record.gamepadEnabled)
             .apply()
     }
 
@@ -378,7 +389,10 @@ private class GameplaySessionRecordStore(context: Context) {
         val destinationId = preferences.getString(KEY_DESTINATION_ID, null)
             ?.takeIf(String::isNotBlank)
             ?: return null
-        return GameplaySessionRecord(transport, captureMode, connectionMethod, destinationId)
+        return GameplaySessionRecord(
+            transport, captureMode, connectionMethod, destinationId,
+            preferences.getBoolean(KEY_GAMEPAD_ENABLED, true),
+        )
     }
 
     fun clear() {
@@ -391,6 +405,7 @@ private class GameplaySessionRecordStore(context: Context) {
         const val KEY_CAPTURE_MODE = "capture_mode"
         const val KEY_CONNECTION_METHOD = "connection_method"
         const val KEY_DESTINATION_ID = "destination_id"
+        const val KEY_GAMEPAD_ENABLED = "gamepad_enabled"
     }
 }
 

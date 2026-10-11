@@ -80,11 +80,12 @@ import kotlin.math.sign
 fun TouchscreenGamepadScreen(
     layout: TouchscreenLayout,
     useDisplayCutoutArea: Boolean,
-    onOpenKeyboard: () -> Unit,
+    keyboardState: GameplayKeyboardState,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val activity = LocalContext.current.findActivity()
+    var keyboardOpen by remember { mutableStateOf(false) }
     DisposableEffect(activity) {
         TouchGamepadStore.activate()
         onDispose {
@@ -109,10 +110,11 @@ fun TouchscreenGamepadScreen(
                 placement = layout.placement(control),
                 containerWidthPixels = widthPixels,
                 containerHeightPixels = heightPixels,
-                onKeyboardRequested = onOpenKeyboard,
+                onKeyboardRequested = { keyboardOpen = true },
                 onExit = onExit,
             )
         }
+        if (keyboardOpen) GameplayKeyboardOverlay(keyboardState) { keyboardOpen = false }
     }
 }
 
@@ -296,10 +298,11 @@ private fun AndroidKeyboardButton(
 @Composable
 fun MouseTouchpadScreen(
     useDisplayCutoutArea: Boolean,
-    onOpenKeyboard: () -> Unit,
+    keyboardState: GameplayKeyboardState,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var keyboardOpen by remember { mutableStateOf(false) }
     BackHandler(onBack = onExit)
 
     Box(
@@ -310,7 +313,7 @@ fun MouseTouchpadScreen(
     ) {
         MouseTouchpad(
             modifier = Modifier.fillMaxSize(),
-            onOpenKeyboard = onOpenKeyboard,
+            onOpenKeyboard = { keyboardOpen = true },
         )
         Text(
             text = stringResource(R.string.mouse_touchpad_back_hint),
@@ -320,6 +323,7 @@ fun MouseTouchpadScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.labelSmall,
         )
+        if (keyboardOpen) GameplayKeyboardOverlay(keyboardState) { keyboardOpen = false }
     }
 }
 

@@ -154,6 +154,7 @@ class NetworkDesktopCoordinator(
         peerIdHex: String,
         captureMode: PhysicalCaptureMode,
         connectionMethod: ConnectionMethod,
+        gamepadEnabled: Boolean = true,
     ) {
         require(connectionMethod == ConnectionMethod.WIFI || connectionMethod == ConnectionMethod.USB)
         val trusted = trustedStore.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
@@ -198,12 +199,14 @@ class NetworkDesktopCoordinator(
                 reconnectAttempts = null,
             ),
             physicalCaptureMode = captureMode,
+            gamepadEnabled = gamepadEnabled,
         )
         GameplaySessionService.startNetwork(
             applicationContext,
             captureMode,
             connectionMethod,
             peerIdHex,
+            gamepadEnabled,
         )
     }
 

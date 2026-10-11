@@ -76,7 +76,6 @@ import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.StreamingGameplayScreen
 import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardState
-import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutEditorScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutOrientation
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayoutStore
@@ -841,9 +840,7 @@ class MainActivity : ComponentActivity() {
                     TouchscreenGamepadScreen(
                         layout = touchscreenLayout,
                         useDisplayCutoutArea = useDisplayCutoutArea,
-                        onOpenKeyboard = {
-                            sessionUiViewModel.dispatch(SessionUiEvent.KeyboardOpened)
-                        },
+                        keyboardState = gameplayKeyboardState,
                         onExit = {
                             sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
                         },
@@ -851,18 +848,9 @@ class MainActivity : ComponentActivity() {
                 } else if (sessionUiState.surface == SessionSurface.MOUSE_TOUCHPAD) {
                     MouseTouchpadScreen(
                         useDisplayCutoutArea = useDisplayCutoutArea,
-                        onOpenKeyboard = {
-                            sessionUiViewModel.dispatch(SessionUiEvent.KeyboardOpened)
-                        },
+                        keyboardState = gameplayKeyboardState,
                         onExit = {
                             sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
-                        },
-                    )
-                } else if (sessionUiState.surface == SessionSurface.KEYBOARD) {
-                    GameplayKeyboardScreen(
-                        state = gameplayKeyboardState,
-                        onClose = {
-                            sessionUiViewModel.dispatch(SessionUiEvent.KeyboardClosed)
                         },
                     )
                 } else HomeScreen(
@@ -981,8 +969,12 @@ class MainActivity : ComponentActivity() {
                                 )
                                 networkDesktopCoordinator.startGameplay(
                                     peerId,
-                                    effectiveCaptureMode,
+                                    if (playMode == PlayMode.STREAMING &&
+                                        streamingControllerType == PlayControllerType.MOUSE_KEYBOARD
+                                    ) PhysicalCaptureMode.COMPATIBILITY else effectiveCaptureMode,
                                     effectiveConnectionMethod,
+                                    gamepadEnabled = playMode != PlayMode.STREAMING ||
+                                        streamingControllerType != PlayControllerType.MOUSE_KEYBOARD,
                                 )
                                 if (playMode == PlayMode.STREAMING) {
                                     gameplayStreamingPeerId = peerId

@@ -25,7 +25,6 @@ import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.ui.gamepad.MouseTouchpadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.TouchscreenGamepadScreen
 import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardState
-import dev.jonalakas.bridgepad.ui.gamepad.GameplayKeyboardScreen
 import dev.jonalakas.bridgepad.ui.gamepad.layout.TouchscreenLayout
 
 @Composable
@@ -50,32 +49,19 @@ internal fun DiagnosticGameplaySession(
             },
         )
     }
-    var keyboardReturnSurfaceName by rememberSaveable {
-        mutableStateOf(DiagnosticGameplaySurface.GAMEPAD.name)
-    }
-    when (DiagnosticGameplaySurface.valueOf(surfaceName)) {
+    when (DiagnosticGameplaySurface.entries.firstOrNull { it.name == surfaceName }
+        ?: DiagnosticGameplaySurface.GAMEPAD) {
         DiagnosticGameplaySurface.GAMEPAD -> TouchscreenGamepadScreen(
             layout = touchscreenLayout,
             useDisplayCutoutArea = useDisplayCutoutArea,
-            onOpenKeyboard = {
-                keyboardReturnSurfaceName = surfaceName
-                surfaceName = DiagnosticGameplaySurface.KEYBOARD.name
-            },
+            keyboardState = keyboardState,
             onExit = { surfaceName = DiagnosticGameplaySurface.MENU.name },
             modifier = modifier,
         )
         DiagnosticGameplaySurface.TOUCHPAD -> MouseTouchpadScreen(
             useDisplayCutoutArea = useDisplayCutoutArea,
-            onOpenKeyboard = {
-                keyboardReturnSurfaceName = surfaceName
-                surfaceName = DiagnosticGameplaySurface.KEYBOARD.name
-            },
+            keyboardState = keyboardState,
             onExit = { surfaceName = DiagnosticGameplaySurface.MENU.name },
-            modifier = modifier,
-        )
-        DiagnosticGameplaySurface.KEYBOARD -> GameplayKeyboardScreen(
-            state = keyboardState,
-            onClose = { surfaceName = keyboardReturnSurfaceName },
             modifier = modifier,
         )
         DiagnosticGameplaySurface.MENU -> DiagnosticSessionMenu(
@@ -133,4 +119,4 @@ private fun DiagnosticSessionMenu(
     }
 }
 
-private enum class DiagnosticGameplaySurface { GAMEPAD, TOUCHPAD, KEYBOARD, MENU }
+private enum class DiagnosticGameplaySurface { GAMEPAD, TOUCHPAD, MENU }

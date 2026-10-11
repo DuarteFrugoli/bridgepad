@@ -736,12 +736,23 @@ private fun StreamingInputCard(
             label = R.string.physical_controller,
             enabled = physicalConnected && !busy,
         ) { onTypeChanged(PlayControllerType.PHYSICAL) }
-        if (physicalConnected) {
+        if (physicalConnected && selectedType == PlayControllerType.PHYSICAL) {
             Text(usb.deviceName ?: names, style = MaterialTheme.typography.bodyMedium)
-        } else {
+        } else if (!physicalConnected && selectedType != PlayControllerType.MOUSE_KEYBOARD) {
             NoticeCard(
                 stringResource(R.string.streaming_physical_controller_required),
                 NoticeTone.WARNING,
+            )
+        }
+        Choice(
+            selected = selectedType == PlayControllerType.MOUSE_KEYBOARD,
+            label = R.string.streaming_mouse_keyboard,
+            enabled = !busy,
+        ) { onTypeChanged(PlayControllerType.MOUSE_KEYBOARD) }
+        if (selectedType == PlayControllerType.MOUSE_KEYBOARD) {
+            Text(
+                stringResource(R.string.streaming_mouse_keyboard_description),
+                style = MaterialTheme.typography.bodySmall,
             )
         }
         Choice(

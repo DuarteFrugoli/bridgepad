@@ -30,6 +30,7 @@ class NetworkGameplayController(
     fun start(
         request: NetworkGamepadRequest,
         physicalCaptureMode: PhysicalCaptureMode,
+        gamepadEnabled: Boolean = true,
     ) {
         stopCurrent(immediate = true)
         val nextOwnership = outputSessionOwner.claim(OutputSessionOwner.Kind.NETWORK_DESKTOP) {
@@ -42,8 +43,12 @@ class NetworkGameplayController(
         synchronized(this) {
             ownership = nextOwnership
             client = nextClient
-            inputSubscription = inputRouter.observe(physicalCaptureMode) { routed ->
-                nextClient.send(routed.gamepad)
+            inputSubscription = if (gamepadEnabled) {
+                inputRouter.observe(physicalCaptureMode) { routed ->
+                    nextClient.send(routed.gamepad)
+                }
+            } else {
+                null
             }
             pointerJob = scope.launch {
                 while (isActive) {

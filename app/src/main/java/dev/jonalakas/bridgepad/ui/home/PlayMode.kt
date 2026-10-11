@@ -12,6 +12,7 @@ enum class PlayMode {
 enum class PlayControllerType {
     PHYSICAL,
     VIRTUAL,
+    MOUSE_KEYBOARD,
 }
 
 internal fun streamingInputReady(
@@ -19,8 +20,12 @@ internal fun streamingInputReady(
     captureMode: PhysicalCaptureMode?,
     compatibilityAvailable: Boolean,
     directUsbAvailable: Boolean,
-): Boolean = controllerType == PlayControllerType.PHYSICAL && when (captureMode) {
-    PhysicalCaptureMode.COMPATIBILITY -> compatibilityAvailable
-    PhysicalCaptureMode.BACKGROUND_USB -> directUsbAvailable
-    null -> false
+): Boolean = when (controllerType) {
+    PlayControllerType.MOUSE_KEYBOARD -> true
+    PlayControllerType.PHYSICAL -> when (captureMode) {
+        PhysicalCaptureMode.COMPATIBILITY -> compatibilityAvailable
+        PhysicalCaptureMode.BACKGROUND_USB -> directUsbAvailable
+        null -> false
+    }
+    PlayControllerType.VIRTUAL, null -> false
 }

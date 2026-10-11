@@ -56,12 +56,14 @@
     <string name="step_transport">2 · Conexão</string>
     <string name="step_input">3 · Controles</string>
     <string name="step_streaming_transport">2 · Conexão</string>
-    <string name="step_streaming_input">3 · Controle</string>
+    <string name="step_streaming_input">3 · Entrada</string>
     <string name="play_mode_controller">Usar o celular como controle</string>
     <string name="play_mode_streaming">Fazer streaming e jogar no celular</string>
     <string name="play_mode_description">O streaming envia a tela e o áudio do PC ao celular enquanto os inputs usam uma conexão independente.</string>
     <string name="streaming_physical_controller_required">Conecte um controle físico para continuar.</string>
     <string name="streaming_virtual_controller_later">Controle virtual — próxima etapa</string>
+    <string name="streaming_mouse_keyboard">Mouse e teclado</string>
+    <string name="streaming_mouse_keyboard_description">Use a tela inteira como mousepad e abra o teclado do Android com um toque de três dedos. Não precisa de controle.</string>
     <string name="start_streaming_session">Iniciar sessão com streaming</string>
     <string name="open_streaming_session">Abrir streaming em tela cheia</string>
     <string name="streaming_gameplay_connecting">Conectando vídeo e áudio…</string>
@@ -337,8 +339,6 @@
     <string name="capture_button">Captura</string>
     <string name="keyboard_button">Teclado</string>
     <string name="keyboard_text_placeholder">Texto enviado ao computador</string>
-    <string name="keyboard_text_description">Este campo mostra o que o BridgePad enviou durante esta sessão. Ele pode não corresponder ao texto exibido atualmente no computador.</string>
-    <string name="clear_action">Limpar</string>
     <string name="close_action">Fechar</string>
     <string name="control_interaction">Comportamento do botão</string>
     <string name="control_interaction_hold">Segurar</string>
