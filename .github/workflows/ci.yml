@@ -20,7 +20,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Rust for Android QUIC
+      - name: Set up Rust for Android media transports
         uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: aarch64-linux-android
@@ -53,7 +53,7 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Rust for Android QUIC
+      - name: Set up Rust for Android media transports
         uses: dtolnay/rust-toolchain@1.88.0
         with:
           targets: aarch64-linux-android

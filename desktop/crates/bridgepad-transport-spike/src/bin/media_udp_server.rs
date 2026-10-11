@@ -6,6 +6,8 @@
 use bridgepad_media::assembly::{PacketizeRequest, packetize_with_max_datagram_size};
 use bridgepad_media_protocol::security::{MAX_PLAINTEXT_SIZE, UdpAeadSender};
 use bridgepad_media_protocol::{PacketFlags, PacketKind};
+use bridgepad_transport_spike::print_android_report;
+use std::io;
 use std::net::{SocketAddr, UdpSocket};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -18,6 +20,7 @@ const STREAM_ID: u32 = 1;
 const KEY_EPOCH: u32 = 1;
 const HELLO_MAGIC: [u8; 8] = *b"BPT1HELO";
 const DONE_MAGIC: [u8; 8] = *b"BPT1DONE";
+const REPORT_MAGIC: [u8; 8] = *b"BPT1RPT!";
 const TEST_KEY: [u8; 32] = [
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
@@ -46,7 +49,38 @@ fn main() -> Result<(), AnyError> {
         measurement.sent_frames,
         measurement.elapsed.as_secs_f64(),
     );
+    match receive_android_report(&socket, remote)? {
+        Some(report) => print_android_report("UDP+AEAD", &report)?,
+        None => println!("Android result was not returned within 7 seconds"),
+    }
     Ok(())
+}
+
+fn receive_android_report(
+    socket: &UdpSocket,
+    remote: SocketAddr,
+) -> Result<Option<String>, AnyError> {
+    socket.set_read_timeout(Some(Duration::from_secs(7)))?;
+    let mut buffer = [0_u8; 512];
+    loop {
+        match socket.recv_from(&mut buffer) {
+            Ok((size, source)) if source == remote && buffer[..size].starts_with(&REPORT_MAGIC) => {
+                return Ok(Some(String::from_utf8(
+                    buffer[REPORT_MAGIC.len()..size].to_vec(),
+                )?));
+            }
+            Ok(_) => {}
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) =>
+            {
+                return Ok(None);
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
 }
 
 fn wait_for_probe(socket: &UdpSocket) -> Result<(SocketAddr, u16), AnyError> {

@@ -6,7 +6,8 @@
 use bridgepad_media::assembly::{PacketizeRequest, packetize_with_max_datagram_size};
 use bridgepad_media_protocol::security::MAX_PLAINTEXT_SIZE;
 use bridgepad_media_protocol::{PacketFlags, PacketKind};
-use quinn::{Endpoint, ServerConfig, TransportConfig};
+use bridgepad_transport_spike::print_android_report;
+use quinn::{ConnectionError, Endpoint, SendDatagramError, ServerConfig, TransportConfig};
 use rcgen::{CertifiedKey, generate_simple_self_signed};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::io;
@@ -21,6 +22,7 @@ const SESSION_ID: u64 = 0x4250_4d45_4449_4131;
 const STREAM_ID: u32 = 1;
 const HELLO_MAGIC: [u8; 8] = *b"BPTQHELO";
 const DONE_MAGIC: [u8; 8] = *b"BPTQDONE";
+const REPORT_MAGIC: [u8; 8] = *b"BPTQRPT!";
 
 type AnyError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -33,34 +35,87 @@ async fn main() -> Result<(), AnyError> {
     println!("Open Settings > Tests > Media v1 transport test on Android.");
     println!("This diagnostic uses an ephemeral test identity and is not a product session.\n");
 
-    let incoming = endpoint
-        .accept()
-        .await
-        .ok_or_else(|| io::Error::new(io::ErrorKind::ConnectionAborted, "QUIC endpoint closed"))?;
-    let connecting_started = Instant::now();
-    let connection = timeout(Duration::from_secs(10), incoming).await??;
-    let handshake = connecting_started.elapsed();
-    let remote = connection.remote_address();
-    let seconds = receive_hello(&connection).await?;
-    println!(
-        "Android QUIC client connected from {remote}; handshake={:.3}ms; duration={seconds}s",
-        handshake.as_secs_f64() * 1_000.0,
-    );
-    let measurement = send_workload(&connection, seconds).await?;
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    for _ in 0..3 {
-        let _ = connection.send_datagram(DONE_MAGIC.to_vec().into());
+    loop {
+        let incoming = endpoint.accept().await.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::ConnectionAborted, "QUIC endpoint closed")
+        })?;
+        let connecting_started = Instant::now();
+        let connection = timeout(Duration::from_secs(10), incoming).await??;
+        let handshake = connecting_started.elapsed();
+        let remote = connection.remote_address();
+        let seconds = match receive_hello(&connection).await {
+            Ok(seconds) => seconds,
+            Err(error) if client_cancelled(&error) => {
+                println!("Android cancelled the QUIC diagnostic before it started; waiting again");
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        println!(
+            "Android QUIC client connected from {remote}; handshake={:.3}ms; duration={seconds}s",
+            handshake.as_secs_f64() * 1_000.0,
+        );
+        let measurement = match send_workload(&connection, seconds).await {
+            Ok(measurement) => measurement,
+            Err(error) if client_cancelled(&error) => {
+                println!("Android cancelled the QUIC diagnostic; waiting for another attempt");
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        for _ in 0..3 {
+            let _ = connection.send_datagram(DONE_MAGIC.to_vec().into());
+        }
+        println!(
+            "Sent {} QUIC datagrams / {} frames in {:.3}s",
+            measurement.sent_packets,
+            measurement.sent_frames,
+            measurement.elapsed.as_secs_f64(),
+        );
+        match receive_android_report(&connection).await? {
+            Some(report) => print_android_report("QUIC DATAGRAM", &report)?,
+            None => println!("Android result was not returned within 7 seconds"),
+        }
+        connection.close(0_u32.into(), b"diagnostic complete");
+        endpoint.wait_idle().await;
+        return Ok(());
     }
-    println!(
-        "Sent {} QUIC datagrams / {} frames in {:.3}s",
-        measurement.sent_packets,
-        measurement.sent_frames,
-        measurement.elapsed.as_secs_f64(),
-    );
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    connection.close(0_u32.into(), b"diagnostic complete");
-    endpoint.wait_idle().await;
-    Ok(())
+}
+
+async fn receive_android_report(
+    connection: &quinn::Connection,
+) -> Result<Option<String>, AnyError> {
+    let mut stream = match timeout(Duration::from_secs(7), connection.accept_uni()).await {
+        Ok(result) => result?,
+        Err(_) => return Ok(None),
+    };
+    let report = timeout(Duration::from_secs(2), stream.read_to_end(4_096)).await??;
+    if !report.starts_with(&REPORT_MAGIC) {
+        return Err("invalid QUIC Android report magic".into());
+    }
+    Ok(Some(String::from_utf8(
+        report[REPORT_MAGIC.len()..].to_vec(),
+    )?))
+}
+
+fn client_cancelled(error: &AnyError) -> bool {
+    if let Some(error) = error.downcast_ref::<ConnectionError>() {
+        return connection_error_cancelled(error);
+    }
+    error
+        .downcast_ref::<SendDatagramError>()
+        .is_some_and(|error| match error {
+            SendDatagramError::ConnectionLost(error) => connection_error_cancelled(error),
+            _ => false,
+        })
+}
+
+fn connection_error_cancelled(error: &ConnectionError) -> bool {
+    matches!(
+        error,
+        ConnectionError::ApplicationClosed(close) if close.reason.as_ref() == b"cancelled"
+    )
 }
 
 fn server_config() -> Result<ServerConfig, AnyError> {

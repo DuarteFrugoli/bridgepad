@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val rustQuicJniDirectory = layout.buildDirectory.dir("generated/rustJni")
+val rustMediaJniDirectory = layout.buildDirectory.dir("generated/rustJni")
 
 android {
     namespace = "dev.jonalakas.bridgepad"
@@ -42,7 +42,7 @@ android {
         compose = true
     }
     sourceSets.getByName("main").jniLibs.directories.add(
-        rustQuicJniDirectory.get().asFile.absolutePath,
+        rustMediaJniDirectory.get().asFile.absolutePath,
     )
 }
 
@@ -74,25 +74,29 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-val buildRustQuic by tasks.registering(Exec::class) {
+val buildRustMedia by tasks.registering(Exec::class) {
     group = "build"
-    description = "Builds the arm64 Android QUIC JNI library with cargo-ndk"
-    val manifest = rootProject.file("native/bridgepad-android-quic/Cargo.toml")
-    val outputDirectory = rustQuicJniDirectory.get().asFile
+    description = "Builds the arm64 Android Media v1 JNI library with cargo-ndk"
+    val manifest = rootProject.file("native/bridgepad-android-media/Cargo.toml")
+    val outputDirectory = rustMediaJniDirectory.get().asFile
     val cargoTargetDirectory = rootProject.layout.buildDirectory
-        .dir("rust-target/android-quic")
+        .dir("rust-target/android-media")
         .get()
         .asFile
     inputs.files(
         manifest,
-        rootProject.file("native/bridgepad-android-quic/Cargo.lock"),
+        rootProject.file("native/bridgepad-android-media/Cargo.lock"),
     )
-    inputs.dir(rootProject.file("native/bridgepad-android-quic/src"))
+    inputs.dir(rootProject.file("native/bridgepad-android-media/src"))
     inputs.dir(rootProject.file("desktop/crates/bridgepad-media/src"))
     inputs.dir(rootProject.file("desktop/crates/bridgepad-media-protocol/src"))
     outputs.dir(outputDirectory)
     workingDir(manifest.parentFile)
     environment("CARGO_TARGET_DIR", cargoTargetDirectory.absolutePath)
+    doFirst {
+        delete(outputDirectory)
+        outputDirectory.mkdirs()
+    }
     commandLine(
         "cargo",
         "ndk",
@@ -110,5 +114,5 @@ val buildRustQuic by tasks.registering(Exec::class) {
 }
 
 tasks.named("preBuild").configure {
-    dependsOn(buildRustQuic)
+    dependsOn(buildRustMedia)
 }

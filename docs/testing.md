@@ -937,14 +937,16 @@ Wi-Fi and USB routes, including CPU, battery, teardown and route-change tests.
 
 2. Allow both diagnostic executables through Windows Firewall on the network
    profile under test. UDP+AEAD listens on UDP `39495`, QUIC listens on UDP
-   `39496`, and each executable exits after one run.
+   `39496`, and each executable exits after one completed run.
 3. In Android, open **Settings > Tests > Media v1 transport test**. Enter the PC
    IPv4 address belonging to the desired route, choose 5 seconds and select the
    transport matching the running sender. Ports are selected automatically.
 4. Record complete frames, received/rejected/late packets, p95/p99/maximum
    arrival gaps, the actual Android local address/interface and QUIC handshake
-   time. Zero expiration is the target, but a frame beyond the strict 10 ms
-   assembly deadline is a measured deadline miss rather than packet loss.
+   time. The Android receiver returns this same report to the sender, which
+   prints it in the terminal for copyable test evidence. Zero expiration is the
+   target, but a frame beyond the strict 10 ms assembly deadline is a measured
+   deadline miss rather than packet loss.
 5. Repeat with 60 and 300 seconds. A debug APK is sufficient for functional
    checks; performance comparisons require a release APK.
 6. Stop one sender and start the other. Repeat the same duration on the same
@@ -960,4 +962,6 @@ verifying handshake signatures. Passing these tests validates transport
 delivery and frame assembly;
 UDP additionally validates AES-GCM interoperability and replay checks. Product
 identity, key agreement and authenticated session negotiation remain mandatory
-before Gate T1. The native QUIC diagnostic currently targets `arm64-v8a`.
+before Gate T1. Both native Android transport diagnostics currently target
+`arm64-v8a`. Their per-run identifiers also ensure that cancelling or closing
+an older test cannot cancel a later one.

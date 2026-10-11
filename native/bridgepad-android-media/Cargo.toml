@@ -1,6 +1,6 @@
 [package]
-name = "bridgepad-android-quic"
-description = "Android JNI QUIC DATAGRAM diagnostic for BridgePad Media v1"
+name = "bridgepad-android-media"
+description = "Android JNI transport diagnostics for BridgePad Media v1"
 publish = false
 version = "0.1.0"
 edition = "2024"
@@ -16,6 +16,7 @@ bridgepad-media-protocol = { path = "../../desktop/crates/bridgepad-media-protoc
 jni = "0.21.1"
 quinn = { version = "=0.11.12", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rustls = { version = "0.23.45", default-features = false, features = ["ring", "std"] }
+socket2 = "0.6.1"
 tokio = { version = "1.48", features = ["io-util", "net", "rt", "time"] }
 
 [profile.release]

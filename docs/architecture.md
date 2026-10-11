@@ -229,14 +229,20 @@ ephemeral keys, monotonic nonces and a bounded replay window; it is not a second
 encryption layer for QUIC. Socket ownership and key agreement remain outside
 the protocol codec so neither candidate can leak into capture, decode or UI.
 
-The Android QUIC bake-off endpoint uses Quinn compiled as an isolated Rust JNI
-library for `arm64-v8a`; the Desktop endpoint uses the same Quinn protocol
-stack. This is intentionally not a permanent JNI API yet. The sender creates an
+Both Android bake-off receivers run in the same isolated Rust JNI library for
+`arm64-v8a` and share the Rust frame assembler, timing model and lifecycle.
+QUIC uses Quinn on Android and Desktop. Raw UDP uses the Rust AES-256-GCM
+receiver from `bridgepad-media-protocol` and requests a 4 MiB socket receive
+buffer, avoiding JVM allocation and cipher-creation costs in the comparison.
+Its socket reader runs independently from authentication and frame assembly so
+processing one packet cannot delay the recorded arrival time of the following
+packet.
+This is intentionally not a permanent JNI API yet. The QUIC sender creates an
 ephemeral self-signed identity and the test-only client skips chain trust while
 retaining TLS handshake signature verification. This exception is confined to
 the public diagnostic on UDP `39496` and is forbidden in product sessions.
-UDP+AEAD remains on `39495`, and both
-candidates carry the same Media v1 inner datagrams and assembly deadline.
+UDP+AEAD remains on `39495`; both candidates carry the same Media v1 inner
+datagrams and use the same strict assembly deadline.
 
 Control/input currently remains on TCP/TLS `39393` and never shares a media
 socket, worker, queue or lifecycle. Its future low-latency transport will be

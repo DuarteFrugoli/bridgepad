@@ -38,7 +38,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bridgepad-android-quic"
+name = "bridgepad-android-media"
 version = "0.1.0"
 dependencies = [
  "bridgepad-media",
@@ -46,6 +46,7 @@ dependencies = [
  "jni",
  "quinn",
  "rustls",
+ "socket2",
  "tokio",
 ]
 

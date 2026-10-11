@@ -56,24 +56,38 @@ fun MediaTransportDiagnosticScreen(
     }
     var probe by remember { mutableStateOf<AutoCloseable?>(null) }
     var generation by remember { mutableLongStateOf(0L) }
+    var probeRunning by remember { mutableStateOf(false) }
 
     fun stop() {
         generation += 1
         probe?.close()
         probe = null
+        probeRunning = false
     }
 
     fun start(transport: MediaTransportKind) {
+        if (probeRunning) return
         val parsedDuration = duration.toIntOrNull()
         if (host.isBlank() || parsedDuration == null) {
             status = MediaTransportProbeStatus.Failed("invalid_parameters")
             return
         }
         stop()
+        probeRunning = true
+        status = MediaTransportProbeStatus.Connecting
         val currentGeneration = ++generation
         val callback: (MediaTransportProbeStatus) -> Unit = { update ->
             mainHandler.post {
-                if (generation == currentGeneration) status = update
+                if (generation == currentGeneration) {
+                    status = update
+                    if (update is MediaTransportProbeStatus.Completed ||
+                        update is MediaTransportProbeStatus.Failed ||
+                        update is MediaTransportProbeStatus.Stopped
+                    ) {
+                        probeRunning = false
+                        probe = null
+                    }
+                }
             }
         }
         val created = when (transport) {
@@ -155,10 +169,8 @@ fun MediaTransportDiagnosticScreen(
                 }
             }
             item {
-                val running = status is MediaTransportProbeStatus.Connecting ||
-                    status is MediaTransportProbeStatus.Receiving
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (running) {
+                    if (probeRunning) {
                         Button(
                             onClick = {
                                 stop()

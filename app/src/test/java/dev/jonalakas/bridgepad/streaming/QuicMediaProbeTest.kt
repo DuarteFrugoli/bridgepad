@@ -31,4 +31,18 @@ class QuicMediaProbeTest {
 
         assertEquals("connection timed out", error.message)
     }
+
+    @Test
+    fun `native UDP result has no handshake measurement`() {
+        val result = parseNativeMediaProbeResult(
+            "OK\t192.168.0.196\t4800\t4800\t300\t300\t0\t0\t0\t5441400\t5035\t-1\t5705\t15066\t20021",
+            "wlan0",
+            MediaTransportKind.UDP_AEAD,
+        )
+
+        assertEquals(MediaTransportKind.UDP_AEAD, result.transport)
+        assertEquals(4_800L, result.receivedPackets)
+        assertEquals(300L, result.completedFrames)
+        assertEquals(null, result.handshakeMillis)
+    }
 }
