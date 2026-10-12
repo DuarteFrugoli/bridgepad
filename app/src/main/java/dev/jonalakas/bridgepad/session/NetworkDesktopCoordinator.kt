@@ -7,6 +7,7 @@ import dev.jonalakas.bridgepad.core.session.PhysicalCaptureMode
 import dev.jonalakas.bridgepad.core.session.ConnectionMethod
 import dev.jonalakas.bridgepad.transport.network.NetworkAuthenticationException
 import dev.jonalakas.bridgepad.transport.network.NetworkCredentials
+import dev.jonalakas.bridgepad.transport.network.NetworkDesktopReachabilityProbe
 import dev.jonalakas.bridgepad.transport.network.NetworkFailureReason
 import dev.jonalakas.bridgepad.transport.network.NetworkGamepadRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaRequest
@@ -16,11 +17,18 @@ import dev.jonalakas.bridgepad.transport.network.NetworkPairingRequest
 import dev.jonalakas.bridgepad.transport.network.PairingRejectedException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.security.cert.CertificateException
 
@@ -43,6 +51,13 @@ sealed interface NetworkPairingStatus {
     ) : NetworkPairingStatus
 }
 
+enum class DesktopAvailabilityStatus { CHECKING, ONLINE, OFFLINE }
+
+data class DesktopAvailability(
+    val status: DesktopAvailabilityStatus,
+    val verifiedHost: String? = null,
+)
+
 class NetworkDesktopCoordinator(
     context: Context,
     private val gameplay: NetworkGameplayController,
@@ -58,12 +73,19 @@ class NetworkDesktopCoordinator(
     private val mutablePairingStatus = MutableStateFlow<NetworkPairingStatus>(NetworkPairingStatus.Idle)
 
     val discoveredDesktops: StateFlow<List<DiscoveredDesktop>> = discovery.desktops
+    private val mutableAvailability = MutableStateFlow<Map<String, DesktopAvailability>>(emptyMap())
+    val desktopAvailability: StateFlow<Map<String, DesktopAvailability>> =
+        mutableAvailability.asStateFlow()
+    val discoveryDiagnosticEvents: StateFlow<List<DiscoveryDiagnosticEvent>> =
+        discovery.diagnosticEvents
     val trustedDesktops: StateFlow<List<TrustedDesktop>> = trustedStore.desktops
     val discoveryError: StateFlow<String?> = discovery.error
     val pairingStatus: StateFlow<NetworkPairingStatus> = mutablePairingStatus.asStateFlow()
     val gameplayStatus: StateFlow<NetworkGamepadStatus> = gameplay.status
     @Volatile
     private var activePeerIdHex: String? = null
+    private var availabilityJob: Job? = null
+    @Volatile private var availabilityGeneration = 0L
 
     init {
         scope.launch {
@@ -82,9 +104,103 @@ class NetworkDesktopCoordinator(
         }
     }
 
-    fun startDiscovery() = discovery.start()
+    @Synchronized
+    fun startDiscovery() {
+        discovery.start()
+        if (availabilityJob?.isActive == true) return
+        mutableAvailability.value = availabilityTargets().associate {
+            it.peerIdHex to DesktopAvailability(DesktopAvailabilityStatus.CHECKING)
+        }
+        discovery.recordAvailability("reachability monitoring started")
+        val generation = ++availabilityGeneration
+        availabilityJob = scope.launch(Dispatchers.IO) { monitorAvailability(generation) }
+    }
 
-    fun stopDiscovery() = discovery.stop()
+    @Synchronized
+    fun stopDiscovery() {
+        availabilityGeneration++
+        availabilityJob?.cancel()
+        availabilityJob = null
+        discovery.recordAvailability("reachability monitoring stopped")
+        discovery.stop()
+    }
+
+    private suspend fun monitorAvailability(generation: Long) {
+        while (kotlin.coroutines.coroutineContext.isActive && generation == availabilityGeneration) {
+            val targets = availabilityTargets()
+            kotlin.coroutines.coroutineContext.ensureActive()
+            if (generation != availabilityGeneration) return
+            val previousAvailability = mutableAvailability.value
+            mutableAvailability.value = targets.associate { target ->
+                target.peerIdHex to (previousAvailability[target.peerIdHex]
+                    ?: DesktopAvailability(DesktopAvailabilityStatus.CHECKING))
+            }
+            val results = coroutineScope {
+                targets.map { target ->
+                    async(Dispatchers.IO) {
+                        target to NetworkDesktopReachabilityProbe.firstReachableHost(
+                            target.hosts,
+                            target.port,
+                            target.certificateSha256,
+                        )
+                    }
+                }.awaitAll()
+            }
+            results.forEach { (target, host) ->
+                kotlin.coroutines.coroutineContext.ensureActive()
+                if (generation != availabilityGeneration) return
+                val next = DesktopAvailability(
+                    if (host == null) DesktopAvailabilityStatus.OFFLINE
+                    else DesktopAvailabilityStatus.ONLINE,
+                    host,
+                )
+                val previous = mutableAvailability.value[target.peerIdHex]
+                if (previous != next) {
+                    mutableAvailability.value = mutableAvailability.value + (target.peerIdHex to next)
+                    discovery.recordAvailability(
+                        "reachability ${target.name} ${next.status} host=${host ?: "none"}",
+                    )
+                }
+            }
+            delay(3_000)
+        }
+    }
+
+    private fun availabilityTargets(): List<AvailabilityTarget> {
+        val discovered = discovery.desktops.value.associateBy { it.peerIdHex }
+        val trusted = trustedStore.desktops.value
+        val trustedIds = trusted.mapTo(hashSetOf()) { it.peerIdHex }
+        val trustedTargets = trusted.map { saved ->
+            val current = discovered[saved.peerIdHex]
+            AvailabilityTarget(
+                saved.peerIdHex,
+                saved.name,
+                (current?.endpointHosts.orEmpty() + saved.endpointHosts).distinct(),
+                current?.port ?: saved.port,
+                saved.certificateSha256,
+            )
+        }
+        return trustedTargets + discovered.values
+            .filterNot { it.peerIdHex in trustedIds }
+            .map { current ->
+                AvailabilityTarget(
+                    current.peerIdHex, current.name, current.endpointHosts,
+                    current.port, current.certificateSha256,
+                )
+            }
+    }
+
+    private data class AvailabilityTarget(
+        val peerIdHex: String,
+        val name: String,
+        val hosts: List<String>,
+        val port: Int,
+        val certificateSha256: String,
+    )
+
+    fun markDiscoveryDiagnostics() = discovery.markDiagnostics()
+
+    fun clearDiscoveryDiagnostics() = discovery.clearDiagnostics()
 
     fun pair(peerIdHex: String, pairingCode: String) {
         val desktop = discovery.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
@@ -174,8 +290,9 @@ class NetworkDesktopCoordinator(
         }
         activePeerIdHex = peerIdHex
         if (discovered != null) trustedStore.updateEndpoint(discovered)
+        val verifiedHost = mutableAvailability.value[peerIdHex]?.verifiedHost
         val endpointHosts = (
-            discovered?.endpointHosts.orEmpty() + trusted.endpointHosts
+            listOfNotNull(verifiedHost) + discovered?.endpointHosts.orEmpty() + trusted.endpointHosts
             ).distinct()
         if (endpointHosts.isEmpty()) {
             gameplay.reportFailure(
@@ -226,7 +343,10 @@ class NetworkDesktopCoordinator(
             return null
         }
         if (discovered != null) trustedStore.updateEndpoint(discovered)
-        val hosts = (discovered?.endpointHosts.orEmpty() + trusted.endpointHosts).distinct()
+        val hosts = (
+            listOfNotNull(mutableAvailability.value[peerIdHex]?.verifiedHost) +
+                discovered?.endpointHosts.orEmpty() + trusted.endpointHosts
+            ).distinct()
         if (hosts.isEmpty()) return null
         return NetworkMediaRequest(
             host = hosts.first(),
@@ -247,7 +367,8 @@ class NetworkDesktopCoordinator(
 
     fun shutdown() {
         activePeerIdHex = null
-        discovery.stop()
+        stopDiscovery()
+        mutableAvailability.value = emptyMap()
         gameplay.shutdown()
         GameplaySessionService.stop(applicationContext)
     }
@@ -257,7 +378,8 @@ class NetworkDesktopCoordinator(
         pairingCode: String,
     ): PairingEndpointSuccess {
         var lastFailure: Throwable? = null
-        desktop.endpointHosts.forEach { host ->
+        (listOfNotNull(mutableAvailability.value[desktop.peerIdHex]?.verifiedHost) +
+            desktop.endpointHosts).distinct().forEach { host ->
             try {
                 val result = NetworkPairingClient.pair(
                     NetworkPairingRequest(

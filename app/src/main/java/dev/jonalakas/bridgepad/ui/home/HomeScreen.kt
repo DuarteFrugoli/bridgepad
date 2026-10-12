@@ -58,6 +58,7 @@ fun HomeScreen(
     onSelectHost: (String?) -> Unit,
     discoveredDesktops: List<DiscoveredDesktop>,
     trustedDesktops: List<TrustedDesktop>,
+    desktopAvailability: Map<String, DesktopAvailability>,
     selectedNetworkDesktopId: String?,
     networkPairingStatus: NetworkPairingStatus,
     networkGameplayStatus: NetworkGamepadStatus,
@@ -274,6 +275,7 @@ fun HomeScreen(
                                 onOpenUsbSettings,
                                 discoveredDesktops,
                                 trustedDesktops,
+                                desktopAvailability,
                                 selectedNetworkDesktopId,
                                 networkDiscoveryError,
                                 onSelectNetworkDesktop,
@@ -567,6 +569,7 @@ private fun NetworkDestinations(
     onOpenUsbSettings: () -> Unit,
     discovered: List<DiscoveredDesktop>,
     trusted: List<TrustedDesktop>,
+    availability: Map<String, DesktopAvailability>,
     selectedId: String?,
     discoveryError: String?,
     onSelect: (String?) -> Unit,
@@ -585,7 +588,6 @@ private fun NetworkDestinations(
         }
     }
     Text(stringResource(R.string.choose_destination_title), style = MaterialTheme.typography.titleSmall)
-    val discoveredIds = discovered.mapTo(hashSetOf()) { it.peerIdHex }
     if (connected) {
         val name = trusted.firstOrNull { it.peerIdHex == selectedId }?.name.orEmpty()
         Text(stringResource(R.string.connected_to, name))
@@ -600,12 +602,10 @@ private fun NetworkDestinations(
                 label = {
                     Text(
                         stringResource(
-                            when {
-                                usbSelected && desktop.peerIdHex in discoveredIds ->
-                                    R.string.usb_desktop_detected
-                                usbSelected -> R.string.usb_desktop_saved
-                                desktop.peerIdHex in discoveredIds -> R.string.wifi_desktop_online
-                                else -> R.string.wifi_desktop_offline
+                            when (availability[desktop.peerIdHex]?.status) {
+                                DesktopAvailabilityStatus.ONLINE -> R.string.network_desktop_available
+                                DesktopAvailabilityStatus.OFFLINE -> R.string.network_desktop_offline
+                                else -> R.string.network_desktop_checking
                             },
                             desktop.name,
                         ),
@@ -623,7 +623,8 @@ private fun NetworkDestinations(
         .forEach { desktop ->
             OutlinedButton(
                 onClick = { onPair(desktop.peerIdHex) },
-                enabled = !busy,
+                enabled = !busy &&
+                    availability[desktop.peerIdHex]?.status == DesktopAvailabilityStatus.ONLINE,
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(stringResource(R.string.wifi_pair_desktop, desktop.name)) }
         }
@@ -641,7 +642,7 @@ private fun NetworkDestinations(
     if (discoveryError != null && !usbSelected) {
         NoticeCard(stringResource(R.string.wifi_discovery_failed), NoticeTone.WARNING)
     }
-    if (!usbSelected && selectedId != null && selectedId !in discoveredIds) {
+    if (selectedId != null && availability[selectedId]?.status == DesktopAvailabilityStatus.OFFLINE) {
         NoticeCard(stringResource(R.string.network_desktop_offline_hint), NoticeTone.WARNING)
     }
 }

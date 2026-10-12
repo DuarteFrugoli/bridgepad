@@ -44,6 +44,18 @@
     <string name="mapping_optional_both_modes">Optional. Custom button mapping works with Compatibility and Background USB.</string>
     <string name="settings">Settings</string>
     <string name="tests_title">Tests</string>
+    <string name="discovery_test_title">PC discovery test</string>
+    <string name="discovery_test_description">Watch the same Android discovery used when choosing a PC, plus ongoing TLS reachability checks. Monitoring runs only on these screens.</string>
+    <string name="discovery_test_open">Open discovery timeline</string>
+    <string name="discovery_test_state">Current discovery and reachability</string>
+    <string name="discovery_test_explanation">Leave the Desktop running. Wait for it to disappear, then copy this report. You can leave and reopen BridgePad; events remain until the app process ends.</string>
+    <string name="discovery_test_visible">Visible PCs: %1$d</string>
+    <string name="discovery_test_saved">Saved PCs: %1$d</string>
+    <string name="discovery_test_error">Last discovery error: %1$s</string>
+    <string name="discovery_test_privacy">The report contains PC names and network addresses, but no pairing codes or secrets.</string>
+    <string name="discovery_test_mark">Mark now</string>
+    <string name="discovery_test_clear">Clear log</string>
+    <string name="discovery_test_events">Recent events (%1$d, newest first)</string>
     <string name="tests_settings_description">Network, USB, Bluetooth, streaming and technical diagnostic tools.</string>
     <string name="open_tests">Open tests</string>
     <string name="touchpad_settings">Mouse touchpad</string>
@@ -260,6 +272,9 @@
     <string name="wifi_discovery_failed">Automatic search failed. Check that the phone and desktop are on the same network and that BridgePad Desktop is running.</string>
     <string name="wifi_desktop_online">%1$s · Available</string>
     <string name="wifi_desktop_offline">%1$s · Offline</string>
+    <string name="network_desktop_available">%1$s · Available</string>
+    <string name="network_desktop_offline">%1$s · Offline</string>
+    <string name="network_desktop_checking">%1$s · Checking…</string>
     <string name="wifi_pair_desktop">Pair with %1$s</string>
     <string name="wifi_pair_title">Pair with %1$s</string>
     <string name="wifi_pair_description">Enter the 12-digit code shown by BridgePad Desktop. This securely confirms both devices.</string>
@@ -281,7 +296,7 @@
     <string name="wifi_connection_failed">Could not connect to BridgePad Desktop. Check the network and try again.</string>
     <string name="wifi_reconnecting">Connection interrupted. Reconnecting… (%1$d/%2$d)</string>
     <string name="network_waiting_to_reconnect">Connection interrupted. Waiting for the cable or network…</string>
-    <string name="network_desktop_offline_hint">Desktop discovery is temporarily unavailable. BridgePad will try its saved addresses.</string>
+    <string name="network_desktop_offline_hint">The Desktop did not respond to the latest check. BridgePad can still try its saved addresses.</string>
     <string name="virtual_controller">Virtual controller</string>
     <string name="physical_controller">Physical controller</string>
     <string name="physical_gamepad_settings">Physical controller</string>
@@ -339,6 +354,7 @@
     <string name="capture_button">Capture</string>
     <string name="keyboard_button">Keyboard</string>
     <string name="keyboard_text_placeholder">Text sent to the computer</string>
+    <string name="keyboard_send_action">Send</string>
     <string name="close_action">Close</string>
     <string name="control_interaction">Press behavior</string>
     <string name="control_interaction_hold">Hold</string>

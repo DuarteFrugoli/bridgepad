@@ -35,6 +35,7 @@ fun TestsScreen(
     deviceInfo: DeviceInfo,
     hidState: SessionState,
     physicalGamepadState: PhysicalGamepadState,
+    onOpenDiscoveryDiagnostic: () -> Unit,
     onOpenNetworkDiagnostic: () -> Unit,
     onOpenUsbNetworkDiagnostic: () -> Unit,
     onOpenBluetoothDesktopDiagnostic: () -> Unit,
@@ -70,6 +71,15 @@ fun TestsScreen(
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            item {
+                SettingsSectionCard(title = stringResource(R.string.discovery_test_title)) {
+                    Text(stringResource(R.string.discovery_test_description))
+                    TestActionButton(
+                        stringResource(R.string.discovery_test_open),
+                        onOpenDiscoveryDiagnostic,
+                    )
+                }
+            }
             item {
                 SettingsSectionCard(title = stringResource(R.string.network_diagnostic_title)) {
                     Text(stringResource(R.string.network_diagnostic_settings_description))

@@ -85,6 +85,7 @@ import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingInput
 import dev.jonalakas.bridgepad.ui.mapping.GamepadMappingScreen
 import dev.jonalakas.bridgepad.ui.settings.SettingsScreen
 import dev.jonalakas.bridgepad.ui.settings.TestsScreen
+import dev.jonalakas.bridgepad.ui.settings.DiscoveryDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.NetworkDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.UsbAccessoryDiagnosticScreen
@@ -128,6 +129,7 @@ class MainActivity : ComponentActivity() {
                 var showTouchscreenLayoutEditor by rememberSaveable { mutableStateOf(false) }
                 var showSettings by rememberSaveable { mutableStateOf(false) }
                 var showTests by rememberSaveable { mutableStateOf(false) }
+                var showDiscoveryDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showUsbNetworkDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showBluetoothDesktopDiagnostic by rememberSaveable { mutableStateOf(false) }
@@ -249,9 +251,50 @@ class MainActivity : ComponentActivity() {
                     bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Reconnecting ||
                     bluetoothDesktopGameplayStatus is BluetoothDesktopGamepadStatus.Active
                 val discoveredDesktops by networkDesktopCoordinator.discoveredDesktops.collectAsState()
+                val desktopAvailability by networkDesktopCoordinator.desktopAvailability.collectAsState()
+                val discoveryDiagnosticEvents by
+                    networkDesktopCoordinator.discoveryDiagnosticEvents.collectAsState()
                 val trustedDesktops by networkDesktopCoordinator.trustedDesktops.collectAsState()
                 val networkPairingStatus by networkDesktopCoordinator.pairingStatus.collectAsState()
                 val networkDiscoveryError by networkDesktopCoordinator.discoveryError.collectAsState()
+                val otherScreenOpen = showTouchscreenLayoutEditor || showGameplayStreaming ||
+                    showBluetoothDesktopDiagnostic || showUsbAccessoryDiagnostic ||
+                    showDesktopStreaming || showMediaTransportDiagnostic ||
+                    showNetworkDiagnostic || showUsbNetworkDiagnostic || showTests ||
+                    showSettings || showGamepadMapping
+                val choosingNetworkDesktop = onboardingComplete && !otherScreenOpen &&
+                    sessionUiState.surface == SessionSurface.NONE && !gameplaySessionActive &&
+                    connectionMethodName in listOf(ConnectionMethod.WIFI.name, ConnectionMethod.USB.name)
+                val discoveryNeeded = showDiscoveryDiagnostic || choosingNetworkDesktop
+                DisposableEffect(discoveryNeeded) {
+                    if (!discoveryNeeded) return@DisposableEffect onDispose {}
+                    var active = false
+                    fun startIfNeeded() {
+                        if (!active) {
+                            networkDesktopCoordinator.startDiscovery()
+                            active = true
+                        }
+                    }
+                    fun stopIfNeeded() {
+                        if (active) {
+                            networkDesktopCoordinator.stopDiscovery()
+                            active = false
+                        }
+                    }
+                    val observer = LifecycleEventObserver { _, event ->
+                        when (event) {
+                            Lifecycle.Event.ON_START -> startIfNeeded()
+                            Lifecycle.Event.ON_STOP -> stopIfNeeded()
+                            else -> Unit
+                        }
+                    }
+                    lifecycle.addObserver(observer)
+                    if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) startIfNeeded()
+                    onDispose {
+                        lifecycle.removeObserver(observer)
+                        stopIfNeeded()
+                    }
+                }
                 val touchscreenLayoutProfile by TouchscreenLayoutStore.profile.collectAsState()
                 val useDisplayCutoutArea by
                     TouchscreenDisplaySettingsStore.useDisplayCutoutArea.collectAsState()
@@ -642,6 +685,27 @@ class MainActivity : ComponentActivity() {
                             sessionUiViewModel.dispatch(SessionUiEvent.SurfaceClosed)
                         },
                     )
+                } else if (showDiscoveryDiagnostic) {
+                    DiscoveryDiagnosticScreen(
+                        appVersion = BuildConfig.VERSION_NAME,
+                        deviceInfo = deviceInfo,
+                        events = discoveryDiagnosticEvents,
+                        discovered = discoveredDesktops,
+                        trusted = trustedDesktops,
+                        availability = desktopAvailability,
+                        discoveryError = networkDiscoveryError,
+                        onMark = networkDesktopCoordinator::markDiscoveryDiagnostics,
+                        onClear = networkDesktopCoordinator::clearDiscoveryDiagnostics,
+                        onCopyReport = { report ->
+                            getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("BridgePad discovery", report))
+                            Toast.makeText(this, R.string.diagnostics_copied, Toast.LENGTH_SHORT).show()
+                        },
+                        onBack = {
+                            showDiscoveryDiagnostic = false
+                            showTests = true
+                        },
+                    )
                 } else if (showBluetoothDesktopDiagnostic) {
                     BluetoothDesktopDiagnosticScreen(
                         pairedHosts = pairedHosts,
@@ -715,6 +779,11 @@ class MainActivity : ComponentActivity() {
                         deviceInfo = deviceInfo,
                         hidState = hidState,
                         physicalGamepadState = physicalGamepadState,
+                        onOpenDiscoveryDiagnostic = {
+                            showTests = false
+                            showDiscoveryDiagnostic = true
+                            networkDesktopCoordinator.markDiscoveryDiagnostics()
+                        },
                         onOpenNetworkDiagnostic = {
                             showTests = false
                             showNetworkDiagnostic = true
@@ -930,6 +999,7 @@ class MainActivity : ComponentActivity() {
                     },
                     discoveredDesktops = discoveredDesktops,
                     trustedDesktops = trustedDesktops,
+                    desktopAvailability = desktopAvailability,
                     selectedNetworkDesktopId = selectedNetworkDesktopId,
                     networkPairingStatus = networkPairingStatus,
                     networkGameplayStatus = networkGameplayStatus,
@@ -1088,14 +1158,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        networkDesktopCoordinator.startDiscovery()
         gamepadController.start()
     }
 
     override fun onStop() {
         TouchGamepadStore.neutralize()
         gamepadController.stop()
-        networkDesktopCoordinator.stopDiscovery()
         super.onStop()
     }
 

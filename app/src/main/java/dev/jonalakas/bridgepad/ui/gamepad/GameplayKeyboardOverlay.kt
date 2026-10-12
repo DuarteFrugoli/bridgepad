@@ -4,6 +4,7 @@ import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,7 +12,6 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -20,6 +20,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.ports.KeyboardKey
+import dev.jonalakas.bridgepad.core.ports.KeyboardModifier
 import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
 import dev.jonalakas.bridgepad.input.touch.TouchMouseStore
 
@@ -54,8 +56,13 @@ class GameplayKeyboardState {
 
     fun update(next: TextFieldValue) {
         TouchMouseStore.notifyRegularInteraction()
-        keyboardInputsForChange(value.text, next.text).forEach(TouchKeyboardStore::submit)
-        value = next.copy(selection = TextRange(next.text.length))
+        val normalizedText = next.text.replace("\r\n", "\n").replace('\r', '\n')
+        keyboardInputsForChange(value.text, normalizedText).forEach(TouchKeyboardStore::submit)
+        value = next.copy(
+            text = normalizedText,
+            selection = TextRange(normalizedText.length),
+            composition = next.composition.takeIf { normalizedText == next.text },
+        )
     }
 
     fun submit(key: KeyboardKey) {
@@ -139,21 +146,24 @@ private fun GameplayKeyboardInput(
             .focusRequester(focusRequester),
         label = { Text(stringResource(R.string.keyboard_text_placeholder)) },
         trailingIcon = {
-            IconButton(onClick = onClose) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.close_action),
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = {
+                    state.sendAndClear()
+                    editorValue = state.value.withDeleteGuard()
+                }) {
+                    Text(stringResource(R.string.keyboard_send_action))
+                }
+                IconButton(onClick = onClose) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = stringResource(R.string.close_action),
+                    )
+                }
             }
         },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-        keyboardActions = KeyboardActions(
-            onSend = {
-                state.sendAndClear()
-                editorValue = state.value.withDeleteGuard()
-            },
-        ),
+        minLines = 2,
+        maxLines = 2,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
     )
 }
 
@@ -215,7 +225,11 @@ internal fun keyboardInputsForChange(previous: String, next: String): List<Keybo
                 text.append(character)
             } else {
                 flushText()
-                add(KeyboardInput.Key(key))
+                if (key == KeyboardKey.ENTER) {
+                    add(KeyboardInput.Shortcut(setOf(KeyboardModifier.SHIFT), key))
+                } else {
+                    add(KeyboardInput.Key(key))
+                }
             }
         }
         flushText()

@@ -3,6 +3,7 @@ package dev.jonalakas.bridgepad.ui.gamepad
 import androidx.compose.ui.text.input.TextFieldValue
 import dev.jonalakas.bridgepad.core.ports.KeyboardInput
 import dev.jonalakas.bridgepad.core.ports.KeyboardKey
+import dev.jonalakas.bridgepad.core.ports.KeyboardModifier
 import dev.jonalakas.bridgepad.input.touch.TouchKeyboardStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -56,11 +57,51 @@ class GameplayKeyboardOverlayTest {
     }
 
     @Test
+    fun pastedLineBreakDoesNotTriggerSendAndClear() {
+        TouchKeyboardStore.clear()
+        try {
+            val state = GameplayKeyboardState()
+            state.update(TextFieldValue("first\nsecond"))
+
+            assertEquals("first\nsecond", state.value.text)
+            assertEquals(KeyboardInput.Text("first"), TouchKeyboardStore.consume())
+            assertEquals(
+                KeyboardInput.Shortcut(setOf(KeyboardModifier.SHIFT), KeyboardKey.ENTER),
+                TouchKeyboardStore.consume(),
+            )
+            assertEquals(KeyboardInput.Text("second"), TouchKeyboardStore.consume())
+            assertFalse(TouchKeyboardStore.hasPending())
+        } finally {
+            TouchKeyboardStore.clear()
+        }
+    }
+
+    @Test
+    fun windowsLineEndingsBecomeOneLocalAndRemoteLineBreak() {
+        TouchKeyboardStore.clear()
+        try {
+            val state = GameplayKeyboardState()
+            state.update(TextFieldValue("first\r\nsecond"))
+
+            assertEquals("first\nsecond", state.value.text)
+            assertEquals(KeyboardInput.Text("first"), TouchKeyboardStore.consume())
+            assertEquals(
+                KeyboardInput.Shortcut(setOf(KeyboardModifier.SHIFT), KeyboardKey.ENTER),
+                TouchKeyboardStore.consume(),
+            )
+            assertEquals(KeyboardInput.Text("second"), TouchKeyboardStore.consume())
+            assertFalse(TouchKeyboardStore.hasPending())
+        } finally {
+            TouchKeyboardStore.clear()
+        }
+    }
+
+    @Test
     fun controlCharactersBecomeKeys() {
         assertEquals(
             listOf(
                 KeyboardInput.Text("a"),
-                KeyboardInput.Key(KeyboardKey.ENTER),
+                KeyboardInput.Shortcut(setOf(KeyboardModifier.SHIFT), KeyboardKey.ENTER),
                 KeyboardInput.Text("b"),
                 KeyboardInput.Key(KeyboardKey.TAB),
             ),
