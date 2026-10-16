@@ -4,6 +4,7 @@ mod auth;
 pub mod bluetooth;
 mod discovery;
 mod quic_media;
+mod udp_media;
 mod trust;
 
 use auth::{
@@ -809,6 +810,14 @@ fn negotiate_and_stream_media(
         return Err("client disconnected before sending its WebRTC offer".into());
     };
     let offer_packet = decode_packet(&bytes)?;
+    if offer_packet.header.session_id == request.session_id
+        && offer_packet.header.message_type == MessageType::UdpMediaOffer
+    {
+        if !offer_packet.payload.is_empty() {
+            return Err("UDP media offer payload must be empty".into());
+        }
+        return udp_media::run(stream, offer_packet.header, capture_config, peer, cancelled);
+    }
     if offer_packet.header.session_id == request.session_id
         && offer_packet.header.message_type == MessageType::QuicOffer
     {

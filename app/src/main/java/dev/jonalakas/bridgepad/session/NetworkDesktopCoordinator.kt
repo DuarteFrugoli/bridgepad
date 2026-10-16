@@ -86,6 +86,7 @@ class NetworkDesktopCoordinator(
     private var activePeerIdHex: String? = null
     private var availabilityJob: Job? = null
     @Volatile private var availabilityGeneration = 0L
+    private var availabilityMethod = ConnectionMethod.WIFI
 
     init {
         scope.launch {
@@ -107,13 +108,18 @@ class NetworkDesktopCoordinator(
     @Synchronized
     fun startDiscovery() {
         discovery.start()
-        if (availabilityJob?.isActive == true) return
-        mutableAvailability.value = availabilityTargets().associate {
-            it.peerIdHex to DesktopAvailability(DesktopAvailabilityStatus.CHECKING)
+        if (availabilityJob?.isActive != true) restartAvailabilityMonitoring()
+    }
+
+    @Synchronized
+    fun setDiscoveryRoute(connectionMethod: ConnectionMethod) {
+        require(connectionMethod == ConnectionMethod.WIFI || connectionMethod == ConnectionMethod.USB)
+        availabilityMethod = connectionMethod
+        if (availabilityJob?.isActive == true) {
+            restartAvailabilityMonitoring()
+        } else {
+            resetAvailabilityToChecking()
         }
-        discovery.recordAvailability("reachability monitoring started")
-        val generation = ++availabilityGeneration
-        availabilityJob = scope.launch(Dispatchers.IO) { monitorAvailability(generation) }
     }
 
     @Synchronized
@@ -125,7 +131,30 @@ class NetworkDesktopCoordinator(
         discovery.stop()
     }
 
-    private suspend fun monitorAvailability(generation: Long) {
+    private fun restartAvailabilityMonitoring() {
+        availabilityGeneration++
+        availabilityJob?.cancel()
+        resetAvailabilityToChecking()
+        val generation = availabilityGeneration
+        val connectionMethod = availabilityMethod
+        discovery.recordAvailability("reachability monitoring started via $connectionMethod")
+        availabilityJob = scope.launch(Dispatchers.IO) {
+            monitorAvailability(generation, connectionMethod)
+        }
+    }
+
+    private fun resetAvailabilityToChecking() {
+        mutableAvailability.value = availabilityTargets().associate {
+            it.peerIdHex to DesktopAvailability(DesktopAvailabilityStatus.CHECKING)
+        }
+    }
+
+    private suspend fun monitorAvailability(
+        generation: Long,
+        connectionMethod: ConnectionMethod,
+    ) {
+        // Give Compose one visible frame of CHECKING even on a very fast LAN.
+        delay(500)
         while (kotlin.coroutines.coroutineContext.isActive && generation == availabilityGeneration) {
             val targets = availabilityTargets()
             kotlin.coroutines.coroutineContext.ensureActive()
@@ -142,6 +171,9 @@ class NetworkDesktopCoordinator(
                             target.hosts,
                             target.port,
                             target.certificateSha256,
+                            acceptLocalAddress = { localAddress ->
+                                NetworkRouteClassifier.matches(connectionMethod, localAddress)
+                            },
                         )
                     }
                 }.awaitAll()
@@ -158,7 +190,8 @@ class NetworkDesktopCoordinator(
                 if (previous != next) {
                     mutableAvailability.value = mutableAvailability.value + (target.peerIdHex to next)
                     discovery.recordAvailability(
-                        "reachability ${target.name} ${next.status} host=${host ?: "none"}",
+                        "reachability ${target.name} ${next.status} via $connectionMethod " +
+                            "host=${host ?: "none"}",
                     )
                 }
             }
@@ -314,6 +347,9 @@ class NetworkDesktopCoordinator(
                 ),
                 connectTimeoutMillis = 1_000,
                 reconnectAttempts = null,
+                requiredLocalRoute = { localAddress ->
+                    NetworkRouteClassifier.matches(connectionMethod, localAddress)
+                },
             ),
             physicalCaptureMode = captureMode,
             gamepadEnabled = gamepadEnabled,
@@ -333,7 +369,10 @@ class NetworkDesktopCoordinator(
         GameplaySessionService.stop(applicationContext)
     }
 
-    fun mediaRequest(peerIdHex: String): NetworkMediaRequest? {
+    fun mediaRequest(
+        peerIdHex: String,
+        connectionMethod: ConnectionMethod? = null,
+    ): NetworkMediaRequest? {
         val trusted = trustedStore.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
             ?: return null
         val discovered = discovery.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
@@ -362,6 +401,9 @@ class NetworkDesktopCoordinator(
             // settle. A short attempt prevents an old Wi-Fi address from
             // blocking discovery of a newly-created USB tethering route.
             connectTimeoutMillis = 1_000,
+            requiredLocalRoute = connectionMethod?.let { method ->
+                { localAddress -> NetworkRouteClassifier.matches(method, localAddress) }
+            },
         )
     }
 

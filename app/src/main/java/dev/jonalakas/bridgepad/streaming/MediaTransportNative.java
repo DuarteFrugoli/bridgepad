@@ -17,8 +17,13 @@ public final class MediaTransportNative {
     public static native void cancelProbe(long operationId);
 
     public static native String runQuicPlayable(
-            long operationId, String host, int port, String certificateSha256,
-            byte[] token, long sessionId, QuicFrameCallback callback);
+            long operationId, String host, byte[] localAddress, int localScopeId,
+            int port, String certificateSha256,
+            byte[] token, long sessionId, MediaFrameCallback callback);
+
+    public static native String runUdpPlayable(
+            long operationId, String host, byte[] localAddress, int localScopeId,
+            int port, byte[] token, byte[] key, long sessionId, MediaFrameCallback callback);
 
     public static native void cancelPlayable(long operationId);
 }

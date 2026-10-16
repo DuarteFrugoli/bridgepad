@@ -7,6 +7,9 @@ import dev.jonalakas.bridgepad.protocol.BridgeVideoCodec
 import dev.jonalakas.bridgepad.streaming.VideoCodec
 import dev.jonalakas.bridgepad.streaming.VideoFormat
 import java.io.DataInputStream
+import java.net.InetAddress
+import java.net.Inet6Address
+import java.net.NoRouteToHostException
 import java.security.SecureRandom
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.net.ssl.SSLSocket
@@ -23,6 +26,7 @@ data class NetworkMediaRequest(
     val maxBitrateBitsPerSecond: Long = 8_000_000,
     val connectTimeoutMillis: Int = 5_000,
     val readTimeoutMillis: Int = 3_000,
+    val requiredLocalRoute: ((InetAddress) -> Boolean)? = null,
 ) {
     init {
         require(host.isNotBlank())
@@ -44,18 +48,33 @@ data class WebRtcMediaNegotiation(
 
 data class NetworkMediaPreparation(
     val host: String,
+    val localAddress: ByteArray,
+    val localScopeId: Int,
     val format: VideoFormat,
     val roundTripMicros: Long,
 )
 
 data class QuicMediaNegotiation(
     val host: String,
+    val localAddress: ByteArray,
+    val localScopeId: Int,
     val port: Int,
     val certificateSha256: String,
     val token: ByteArray,
     val sessionId: Long,
     val format: VideoFormat,
     val roundTripMicros: Long,
+)
+
+data class UdpMediaNegotiation(
+    val host: String,
+    val localAddress: ByteArray,
+    val localScopeId: Int,
+    val port: Int,
+    val token: ByteArray,
+    val key: ByteArray,
+    val sessionId: Long,
+    val format: VideoFormat,
 )
 
 /**
@@ -96,6 +115,9 @@ class NetworkMediaSignalingClient(private val request: NetworkMediaRequest) : Au
         )
         socket = connected
         connected.startHandshake()
+        if (request.requiredLocalRoute?.invoke(connected.localAddress) == false) {
+            throw NoRouteToHostException("The selected connection route is not available")
+        }
         val input = DataInputStream(connected.inputStream)
         sequence = authenticateNetworkSession(
             connected,
@@ -138,6 +160,8 @@ class NetworkMediaSignalingClient(private val request: NetworkMediaRequest) : Au
 
         val preparation = NetworkMediaPreparation(
             host = host,
+            localAddress = connected.localAddress.address,
+            localScopeId = (connected.localAddress as? Inet6Address)?.scopeId ?: 0,
             format = VideoFormat(
                 codec = VideoCodec.H264,
                 width = answer.width,
@@ -186,12 +210,36 @@ class NetworkMediaSignalingClient(private val request: NetworkMediaRequest) : Au
             ?: error("Desktop did not start the QUIC media endpoint")
         return QuicMediaNegotiation(
             host = current.preparation.host,
+            localAddress = current.preparation.localAddress,
+            localScopeId = current.preparation.localScopeId,
             port = ready.port,
             certificateSha256 = request.certificateSha256,
             token = ready.token,
             sessionId = current.sessionId,
             format = current.preparation.format,
             roundTripMicros = current.preparation.roundTripMicros,
+        )
+    }
+
+    fun startUdp(): UdpMediaNegotiation {
+        val current = checkNotNull(active) { "Media signalling was not prepared" }
+        current.sequence = writeBridgePacket(
+            current.socket,
+            current.sessionId,
+            current.sequence,
+            BridgeMessage.UdpMediaOffer,
+        )
+        val ready = readBridgePacket(current.input).message as? BridgeMessage.UdpMediaReady
+            ?: error("Desktop did not start the UDP media endpoint")
+        return UdpMediaNegotiation(
+            host = current.preparation.host,
+            localAddress = current.preparation.localAddress,
+            localScopeId = current.preparation.localScopeId,
+            port = ready.port,
+            token = ready.token,
+            key = ready.key,
+            sessionId = current.sessionId,
+            format = current.preparation.format,
         )
     }
 

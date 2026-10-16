@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
+import dev.jonalakas.bridgepad.streaming.PlayableMediaTransport
 import dev.jonalakas.bridgepad.ui.components.SessionOrientationSelector
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 
@@ -40,12 +41,14 @@ fun SettingsScreen(
     physicalControllerConnected: Boolean,
     mappingAvailable: Boolean,
     sessionOrientationMode: SessionOrientationMode,
+    mediaTransport: PlayableMediaTransport,
     invertedTouchpadScroll: Boolean,
     useDisplayCutoutArea: Boolean,
     onOpenTests: () -> Unit,
     onEditTouchscreenLayout: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
     onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
+    onMediaTransportChanged: (PlayableMediaTransport) -> Unit,
     onInvertedTouchpadScrollChanged: (Boolean) -> Unit,
     onUseDisplayCutoutAreaChanged: (Boolean) -> Unit,
     onLanguageSettings: (() -> Unit)?,
@@ -95,6 +98,29 @@ fun SettingsScreen(
                         selected = sessionOrientationMode,
                         onSelected = onSessionOrientationModeChanged,
                     )
+                }
+            }
+            item {
+                SettingsSectionCard(title = stringResource(R.string.media_transport_title)) {
+                    Text(stringResource(R.string.media_transport_description))
+                    PlayableMediaTransport.entries.forEach { option ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            androidx.compose.material3.RadioButton(
+                                selected = mediaTransport == option,
+                                onClick = { onMediaTransportChanged(option) },
+                            )
+                            Text(
+                                text = stringResource(
+                                    if (option == PlayableMediaTransport.QUIC)
+                                        R.string.media_transport_quic
+                                    else R.string.media_transport_udp_aead,
+                                ),
+                            )
+                        }
+                    }
                 }
             }
             item {

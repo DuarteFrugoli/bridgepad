@@ -84,6 +84,8 @@
     <string name="bluetooth_direct_description">Connects without BridgePad Desktop. Steam may require an initial controller mapping.</string>
     <string name="bluetooth_desktop_label">Bluetooth via BridgePad Desktop</string>
     <string name="bluetooth_desktop_description">Requires BridgePad Desktop and exposes an XInput controller that games recognize directly.</string>
+    <string name="bluetooth_desktop_pairing_hint">Make this phone visible, then add it in Windows Bluetooth settings. Return here and select the paired PC. Direct HID will stay off.</string>
+    <string name="bluetooth_desktop_pairing_cancelled">Phone visibility was not enabled. Tap Pair a new PC to try again.</string>
     <string name="choose_paired_pc_hint">Choose a paired PC. BridgePad Desktop must be open on that computer.</string>
     <string name="wifi_label">Wi-Fi</string>
     <string name="usb_connection_label">USB cable</string>
@@ -403,6 +405,8 @@
     <string name="media_transport_test_route">Actual route: %1$s on %2$s</string>
     <string name="media_transport_test_transport">Transport: %1$s</string>
     <string name="media_transport_quic">QUIC DATAGRAM</string>
+    <string name="media_transport_title">Playable streaming transport</string>
+    <string name="media_transport_description">Choose the video and audio transport for the next streaming session. Input stays on its separate connection. QUIC is the default; UDP+AEAD is experimental.</string>
     <string name="media_transport_udp_aead">UDP+AEAD</string>
     <string name="media_transport_test_packets">Packets: %1$d/%2$d received · %3$d rejected · %4$d late/duplicate</string>
     <string name="media_transport_test_frames">Frames: %1$d/%2$d complete · %3$d expired</string>

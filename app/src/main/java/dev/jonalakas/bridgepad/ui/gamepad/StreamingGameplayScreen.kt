@@ -35,6 +35,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaStatus
+import dev.jonalakas.bridgepad.streaming.PlayableMediaTransport
 import dev.jonalakas.bridgepad.ui.gamepad.layout.touchscreenContentInsets
 
 /** Full-screen playable stream. The complete image is also a relative mouse touchpad. */
@@ -42,6 +43,7 @@ import dev.jonalakas.bridgepad.ui.gamepad.layout.touchscreenContentInsets
 fun StreamingGameplayScreen(
     peerId: String,
     requestFor: (String) -> NetworkMediaRequest?,
+    mediaTransport: PlayableMediaTransport,
     useDisplayCutoutArea: Boolean,
     keyboardState: GameplayKeyboardState,
     onExit: () -> Unit,
@@ -63,9 +65,9 @@ fun StreamingGameplayScreen(
         media.stop()
         onExit()
     }
-    LaunchedEffect(surface, peerId) {
+    LaunchedEffect(surface, peerId, mediaTransport) {
         val target = surface ?: return@LaunchedEffect
-        media.attachSurface(peerId, target, requestFor)
+        media.attachSurface(peerId, mediaTransport, target, requestFor)
     }
 
     BoxWithConstraints(

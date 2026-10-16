@@ -25,6 +25,7 @@ pub const MAX_SIGNED_WIRE_VALUE: u64 = i64::MAX as u64;
 pub enum PacketKind {
     Video = 1,
     Audio = 2,
+    Control = 3,
 }
 
 impl TryFrom<u8> for PacketKind {
@@ -34,6 +35,7 @@ impl TryFrom<u8> for PacketKind {
         match value {
             1 => Ok(Self::Video),
             2 => Ok(Self::Audio),
+            3 => Ok(Self::Control),
             _ => Err(ProtocolError::UnknownPacketKind(value)),
         }
     }

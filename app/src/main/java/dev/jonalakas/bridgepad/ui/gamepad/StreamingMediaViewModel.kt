@@ -2,7 +2,8 @@ package dev.jonalakas.bridgepad.ui.gamepad
 
 import android.view.Surface
 import androidx.lifecycle.ViewModel
-import dev.jonalakas.bridgepad.streaming.AndroidQuicMediaClient
+import dev.jonalakas.bridgepad.streaming.AndroidPlayableMediaClient
+import dev.jonalakas.bridgepad.streaming.PlayableMediaTransport
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaRequest
 import dev.jonalakas.bridgepad.transport.network.NetworkMediaStatus
 import java.util.concurrent.atomic.AtomicLong
@@ -15,22 +16,26 @@ class StreamingMediaViewModel : ViewModel() {
     val status = mutableStatus.asStateFlow()
     private val generation = AtomicLong()
     private var activePeerId: String? = null
-    private var client: AndroidQuicMediaClient? = null
+    private var activeTransport: PlayableMediaTransport? = null
+    private var client: AndroidPlayableMediaClient? = null
 
     fun attachSurface(
         peerId: String,
+        transport: PlayableMediaTransport,
         surface: Surface,
         requestFor: (String) -> NetworkMediaRequest?,
     ) {
-        if (activePeerId == peerId && client != null) {
+        if (activePeerId == peerId && activeTransport == transport && client != null) {
             client?.setVideoSurface(surface)
             return
         }
         stop()
         activePeerId = peerId
+        activeTransport = transport
         val currentGeneration = generation.incrementAndGet()
-        val created = AndroidQuicMediaClient(
+        val created = AndroidPlayableMediaClient(
             requestProvider = { requestFor(peerId) },
+            transport = transport,
             surface = surface,
             onStatus = { update ->
                 if (generation.get() == currentGeneration) mutableStatus.value = update
@@ -49,6 +54,7 @@ class StreamingMediaViewModel : ViewModel() {
         client?.close()
         client = null
         activePeerId = null
+        activeTransport = null
         mutableStatus.value = NetworkMediaStatus.Idle
     }
 

@@ -19,12 +19,13 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-/** QUIC DATAGRAM media with hardware H.264 decoding and system Opus audio. */
-class AndroidQuicMediaClient(
+/** Selected media transport with shared hardware H.264 and system Opus decoders. */
+class AndroidPlayableMediaClient(
     private val requestProvider: () -> NetworkMediaRequest?,
+    private val transport: PlayableMediaTransport,
     surface: Surface,
     private val onStatus: (NetworkMediaStatus) -> Unit,
-) : AutoCloseable, QuicFrameCallback {
+) : AutoCloseable, MediaFrameCallback {
     private val stopping = AtomicBoolean(false)
     private val runId = nextRunId.incrementAndGet()
     private val videoQueue = ArrayBlockingQueue<VideoFrame>(8)
@@ -38,13 +39,13 @@ class AndroidQuicMediaClient(
 
     fun start() {
         onStatus(NetworkMediaStatus.Connecting)
-        worker = Thread(::runSession, "BridgePad-quic-media").apply {
+        worker = Thread(::runSession, "BridgePad-playable-media").apply {
             isDaemon = true
             start()
         }
     }
 
-    /** A display rotation replaces the Surface, but must not restart QUIC or audio. */
+    /** A display rotation replaces the Surface, but must not restart media or audio. */
     fun setVideoSurface(surface: Surface?) {
         if (videoSurface === surface) return
         videoSurface = surface
@@ -57,9 +58,16 @@ class AndroidQuicMediaClient(
     private fun runSession() {
         try {
             val localSignaling = prepareSignalingOnCurrentRoute()
-            val negotiation = localSignaling.startQuic()
+            val negotiation = when (transport) {
+                PlayableMediaTransport.QUIC -> localSignaling.startQuic()
+                PlayableMediaTransport.UDP_AEAD -> localSignaling.startUdp()
+            }
             videoWorker = Thread(
-                { decodeVideo(negotiation.format) },
+                { decodeVideo(when (negotiation) {
+                    is dev.jonalakas.bridgepad.transport.network.QuicMediaNegotiation -> negotiation.format
+                    is dev.jonalakas.bridgepad.transport.network.UdpMediaNegotiation -> negotiation.format
+                    else -> error("Unsupported media negotiation")
+                }) },
                 "BridgePad-h264-decode",
             ).apply { isDaemon = true; start() }
             audioWorker = Thread(::decodeAudio, "BridgePad-opus-decode").apply {
@@ -67,21 +75,28 @@ class AndroidQuicMediaClient(
                 start()
             }
             if (stopping.get()) return
-            val result = MediaTransportNative.runQuicPlayable(
-                runId,
-                negotiation.host,
-                negotiation.port,
-                negotiation.certificateSha256,
-                negotiation.token,
-                negotiation.sessionId,
-                this,
-            )
+            val result = when (negotiation) {
+                is dev.jonalakas.bridgepad.transport.network.QuicMediaNegotiation ->
+                    MediaTransportNative.runQuicPlayable(
+                        runId, negotiation.host, negotiation.localAddress,
+                        negotiation.localScopeId, negotiation.port,
+                        negotiation.certificateSha256, negotiation.token,
+                        negotiation.sessionId, this,
+                    )
+                is dev.jonalakas.bridgepad.transport.network.UdpMediaNegotiation ->
+                    MediaTransportNative.runUdpPlayable(
+                        runId, negotiation.host, negotiation.localAddress,
+                        negotiation.localScopeId, negotiation.port, negotiation.token,
+                        negotiation.key, negotiation.sessionId, this,
+                    )
+                else -> error("Unsupported media negotiation")
+            }
             if (!stopping.get() && result != "OK") {
                 onStatus(NetworkMediaStatus.Failed(result.removePrefix("ERR\t")))
             }
         } catch (error: Throwable) {
             if (!stopping.get()) {
-                onStatus(NetworkMediaStatus.Failed(error.message ?: "QUIC media session failed"))
+                onStatus(NetworkMediaStatus.Failed(error.message ?: "Media session failed"))
             }
         } finally {
             stopping.set(true)

@@ -210,18 +210,20 @@ H.264 directly to a `Surface` with an application-owned low-latency
 presentation policy. The WebRTC path stays available as the measured reference
 until the dedicated path meets or beats it.
 
-The playable local streaming screen now exercises the first QUIC DATAGRAM
-path. Its existing authenticated TCP/TLS media connection negotiates H.264,
-Opus and a one-use 32-byte session token. The Desktop starts a per-session UDP
-endpoint, presents its persistent paired certificate there, and accepts media
-only after the QUIC client proves possession of the token and session ID. The
-Android JNI receiver pins that certificate's SHA-256 fingerprint, assembles
-Media v1 video/audio separately, and hands complete access units to Android
-MediaCodec H.264/Opus decoders. H.264 renders directly to a Surface and decoded
-PCM goes to AudioTrack. Input remains on its independent connection. The
-synthetic WebRTC test remains available as the reference path. This QUIC
-playable path is an experimental validation stage: feedback-driven bitrate,
-loss recovery, and measured audio/video synchronization are not complete.
+The playable local streaming screen can select QUIC DATAGRAM (default) or
+UDP+AEAD in Android Settings. Both use the existing authenticated TCP/TLS media
+connection to negotiate H.264/Opus and a one-use 32-byte session token. QUIC
+also pins the Desktop's paired certificate on its per-session UDP endpoint.
+For raw UDP, TLS delivers a fresh random 256-bit media key; the Desktop accepts
+the one-use token only in an encrypted packet from the authenticated TLS peer's
+IP address, and all subsequent video/audio and client heartbeat/stop packets use the Media v1
+AES-256-GCM envelope with distinct directional nonce epochs and replay checks.
+The Android JNI receivers share frame assembly and the same MediaCodec H.264/
+Opus decoders. H.264 renders directly to a Surface and decoded PCM goes to
+AudioTrack. Input remains on its independent connection. The synthetic WebRTC
+test remains available as the reference path. These playable paths are still
+experimental: feedback-driven bitrate, loss recovery, and measured audio/video
+synchronization are not complete.
 
 The first BridgePad Media v1 increment is intentionally transport independent.
 `bridgepad-media-protocol` owns the fixed 1200-byte datagram contract and Rust
@@ -237,8 +239,8 @@ UI or Windows APIs.
 The S2 transport bake-off keeps the same inner Media v1 bytes. QUIC DATAGRAM
 authenticates those bytes with TLS 1.3. The raw UDP candidate wraps them in the
 normative AES-256-GCM `BPA1` envelope implemented by
-`bridgepad-media-protocol` and `:streaming-core`. The envelope uses directional
-ephemeral keys, monotonic nonces and a bounded replay window; it is not a second
+`bridgepad-media-protocol` and `:streaming-core`. The envelope uses ephemeral
+session keys, direction-separated monotonic nonces and a bounded replay window; it is not a second
 encryption layer for QUIC. Socket ownership and key agreement remain outside
 the protocol codec so neither candidate can leak into capture, decode or UI.
 

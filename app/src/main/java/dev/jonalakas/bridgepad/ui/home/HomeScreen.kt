@@ -71,6 +71,7 @@ fun HomeScreen(
     onDismissNetworkPairingStatus: () -> Unit,
     onPhysicalCaptureModeChanged: (PhysicalCaptureMode) -> Unit,
     onPrepareBluetooth: () -> Unit,
+    onPairNewBluetoothDesktop: () -> Unit,
     onPlay: () -> Unit,
     onConfigureGamepadMapping: () -> Unit,
     onEditTouchscreenLayout: () -> Unit,
@@ -263,8 +264,10 @@ fun HomeScreen(
                                 selectedAddress,
                                 pairNewPcSelected,
                                 directBluetoothSelected,
+                                desktopBluetoothSelected,
                                 onPrepareBluetooth,
                                 onSelectHost,
+                                onPairNewBluetoothDesktop,
                             )
                         }
                         if (networkSelected) {
@@ -511,8 +514,10 @@ private fun BluetoothDestinations(
     selectedAddress: String?,
     pairNewPcSelected: Boolean,
     allowNewPairing: Boolean,
+    allowDesktopPairing: Boolean,
     onPrepare: () -> Unit,
     onSelect: (String?) -> Unit,
+    onPairNewDesktop: () -> Unit,
 ) {
     HorizontalDivider()
     Text(stringResource(R.string.choose_destination_title), style = MaterialTheme.typography.titleSmall)
@@ -545,6 +550,16 @@ private fun BluetoothDestinations(
             }
             if (allowNewPairing) {
                 Choice(pairNewPcSelected, R.string.pair_new_pc, !busy) { onSelect(null) }
+            } else if (allowDesktopPairing) {
+                OutlinedButton(
+                    onClick = onPairNewDesktop,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(stringResource(R.string.pair_new_pc)) }
+                Text(
+                    stringResource(R.string.bluetooth_desktop_pairing_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
             if (selectedAddress == null && !pairNewPcSelected) {
                 Text(

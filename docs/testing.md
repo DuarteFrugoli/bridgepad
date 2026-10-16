@@ -107,8 +107,10 @@ BridgePad Desktop now starts the RFCOMM gamepad receiver automatically together
 with its Wi-Fi receiver. Run `cargo run -p bridgepad-desktop`, then use the
 normal Home flow on Android:
 
-1. Choose controller mode, **Bluetooth via BridgePad Desktop** and an already
-   paired computer.
+1. Choose controller mode and **Bluetooth via BridgePad Desktop**. On a new
+   phone, tap **Pair a new PC**, approve Bluetooth visibility, add the phone
+   from Windows Bluetooth settings, then return and select the paired PC.
+   Confirm this pairing step does not start direct HID.
 2. Tap **Connect and play**. Confirm Home reports a Desktop/XInput connection
    and does not start or register direct HID.
 3. Validate the virtual and physical controls in `joy.cpl`, Steam and a game.
@@ -922,14 +924,15 @@ Compare their p95/p99/maximum arrival gaps, but do not use loopback results to
 select a winner. Gate T1 still requires the Android release build over real
 Wi-Fi and USB routes, including CPU, battery, teardown and route-change tests.
 
-#### First playable QUIC stream (Wi-Fi)
+#### Playable QUIC and UDP+AEAD streams (Wi-Fi)
 
 1. Run `cargo run --release -p bridgepad-desktop` in `desktop/`. Install the
    matching Android build with `./gradlew installDebug` and keep the phone and
    PC on the same reachable network. Allow the Desktop executable through the
    Windows firewall for the current network profile. Its QUIC media endpoint
    binds a per-session UDP port, while TLS media negotiation uses TCP `39394`.
-2. In the Android home flow choose streaming, Wi-Fi, physical controller and
+2. In Android Settings, select QUIC DATAGRAM (the default). In the home flow
+   choose streaming, Wi-Fi, physical controller and
    start the session. The full-screen video should appear, PC audio should
    play, the connected controller should affect the game, and the entire
    image should operate as a mousepad.
@@ -938,8 +941,16 @@ Wi-Fi and USB routes, including CPU, battery, teardown and route-change tests.
    `QUIC playable stream stopped`; a new attempt must connect without
    restarting the Desktop. Repeat once after changing the PC display or
    starting a game to check keyframe recovery.
+4. In Settings select UDP+AEAD and repeat the same gameplay test. The Desktop
+   should print `UDP media authenticated`, `UDP playable stream started`, and
+   `UDP playable stream stopped`. Stop/start repeatedly without restarting the
+   Desktop. Confirm that video, audio, mouse and the controller all respond and
+   that stopping UDP does not leave a capture worker or extra XInput device.
+5. Compare both transports on the same Wi-Fi route, PC power state, game and
+   duration. Repeat on a second network before preferring either one. The
+   selected transport affects only video/audio; input remains independent.
 
-This is a first practical transport trial. Record visible freezes, sound
+This is a practical transport trial. Record visible freezes, sound
 interruptions or delay, and any `QUIC media` counters or errors printed by
 the Desktop. The synthetic WebRTC screen remains available under Tests for
 comparison. The diagnostic transport ports below are separate from this

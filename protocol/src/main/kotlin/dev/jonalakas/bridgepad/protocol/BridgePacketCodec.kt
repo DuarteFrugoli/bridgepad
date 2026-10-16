@@ -207,6 +207,12 @@ object BridgePacketCodec {
                         output.writeShort(message.port)
                         output.write(message.token)
                     }
+                    BridgeMessage.UdpMediaOffer -> Unit
+                    is BridgeMessage.UdpMediaReady -> {
+                        output.writeShort(message.port)
+                        output.write(message.token)
+                        output.write(message.key)
+                    }
                 }
             }
             bytes.toByteArray()
@@ -335,6 +341,12 @@ object BridgePacketCodec {
                     BridgeMessageType.QUIC_READY -> BridgeMessage.QuicReady(
                         port = input.readUnsignedShort(),
                         token = input.readSizedBytes(32),
+                    )
+                    BridgeMessageType.UDP_MEDIA_OFFER -> BridgeMessage.UdpMediaOffer
+                    BridgeMessageType.UDP_MEDIA_READY -> BridgeMessage.UdpMediaReady(
+                        port = input.readUnsignedShort(),
+                        token = input.readSizedBytes(32),
+                        key = input.readSizedBytes(32),
                     )
                 }
                 if (input.available() != 0) {

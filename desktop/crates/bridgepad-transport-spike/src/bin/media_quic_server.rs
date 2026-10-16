@@ -22,6 +22,7 @@ const SESSION_ID: u64 = 0x4250_4d45_4449_4131;
 const STREAM_ID: u32 = 1;
 const HELLO_MAGIC: [u8; 8] = *b"BPTQHELO";
 const DONE_MAGIC: [u8; 8] = *b"BPTQDONE";
+const SUMMARY_MAGIC: [u8; 8] = *b"BPTQSUM!";
 const REPORT_MAGIC: [u8; 8] = *b"BPTQRPT!";
 
 type AnyError = Box<dyn std::error::Error + Send + Sync>;
@@ -63,14 +64,16 @@ async fn main() -> Result<(), AnyError> {
             }
             Err(error) => return Err(error),
         };
+        send_summary(&connection, measurement.sent_packets).await?;
         tokio::time::sleep(Duration::from_millis(50)).await;
         for _ in 0..3 {
             let _ = connection.send_datagram(DONE_MAGIC.to_vec().into());
         }
         println!(
-            "Sent {} QUIC datagrams / {} frames in {:.3}s",
+            "Sent {} QUIC datagrams / {} complete frames ({} skipped after MTU changes) in {:.3}s",
             measurement.sent_packets,
             measurement.sent_frames,
+            measurement.skipped_frames,
             measurement.elapsed.as_secs_f64(),
         );
         match receive_android_report(&connection).await? {
@@ -81,6 +84,22 @@ async fn main() -> Result<(), AnyError> {
         endpoint.wait_idle().await;
         return Ok(());
     }
+}
+
+async fn send_summary(connection: &quinn::Connection, sent_packets: usize) -> Result<(), AnyError> {
+    let mut stream = timeout(Duration::from_secs(2), connection.open_uni()).await??;
+    stream
+        .write_all(&quic_summary(u64::try_from(sent_packets)?))
+        .await?;
+    stream.finish()?;
+    Ok(())
+}
+
+fn quic_summary(sent_packets: u64) -> [u8; 16] {
+    let mut summary = [0_u8; 16];
+    summary[..8].copy_from_slice(&SUMMARY_MAGIC);
+    summary[8..].copy_from_slice(&sent_packets.to_be_bytes());
+    summary
 }
 
 async fn receive_android_report(
@@ -164,10 +183,18 @@ async fn send_workload(
     pacing.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut sequence = 0_u32;
     let mut sent_packets = 0_usize;
+    let mut sent_frames = 0_usize;
+    let mut skipped_frames = 0_usize;
 
-    for frame_id in 0..frame_count {
+    'frames: for frame_id in 0..frame_count {
         pacing.tick().await;
         let frame_id = u32::try_from(frame_id)?;
+        // QUIC's payload budget includes its own packet overhead and can vary
+        // with the path MTU. The raw UDP+AEAD plaintext limit is only a cap.
+        let datagram_budget = connection
+            .max_datagram_size()
+            .ok_or("QUIC peer disabled datagrams")?
+            .min(MAX_PLAINTEXT_SIZE);
         let packets = packetize_with_max_datagram_size(
             PacketizeRequest {
                 kind: PacketKind::Video,
@@ -184,17 +211,30 @@ async fn send_workload(
                     / u64::from(FRAMES_PER_SECOND),
                 payload: &payload,
             },
-            MAX_PLAINTEXT_SIZE,
+            datagram_budget,
         )?;
         sequence = sequence.wrapping_add(u32::try_from(packets.len())?);
         for packet in packets {
-            connection.send_datagram(packet.into())?;
-            sent_packets += 1;
+            match connection.send_datagram(packet.into()) {
+                Ok(()) => sent_packets += 1,
+                // The path MTU can shrink between packetization and send.
+                // Discard this frame; the next one uses the updated budget.
+                Err(SendDatagramError::TooLarge) => {
+                    skipped_frames += 1;
+                    continue 'frames;
+                }
+                Err(error) => return Err(error.into()),
+            }
         }
+        sent_frames += 1;
+    }
+    if sent_packets == 0 {
+        return Err("QUIC path could not accommodate any media datagram".into());
     }
     Ok(SendMeasurement {
         sent_packets,
-        sent_frames: frame_count,
+        sent_frames,
+        skipped_frames,
         elapsed: started.elapsed(),
     })
 }
@@ -202,7 +242,41 @@ async fn send_workload(
 struct SendMeasurement {
     sent_packets: usize,
     sent_frames: usize,
+    skipped_frames: usize,
     elapsed: Duration,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn quic_summary_carries_the_actual_packet_count() {
+        let summary = quic_summary(5_137);
+        assert_eq!(&summary[..8], &SUMMARY_MAGIC);
+        assert_eq!(u64::from_be_bytes(summary[8..].try_into().unwrap()), 5_137);
+    }
+
+    #[test]
+    fn smaller_quic_path_budget_produces_more_bounded_packets() {
+        let payload = vec![0x5a; TARGET_BITRATE_BITS_PER_SECOND / 8 / FRAMES_PER_SECOND as usize];
+        let packets = packetize_with_max_datagram_size(
+            PacketizeRequest {
+                kind: PacketKind::Video,
+                flags: PacketFlags::NONE,
+                session_id: SESSION_ID,
+                stream_id: STREAM_ID,
+                first_sequence: 0,
+                frame_id: 0,
+                presentation_timestamp_micros: 0,
+                payload: &payload,
+            },
+            1_080,
+        )
+        .unwrap();
+        assert_eq!(packets.len(), 17);
+        assert!(packets.iter().all(|packet| packet.len() <= 1_080));
+    }
 }
 
 fn string_argument(name: &str) -> Option<String> {

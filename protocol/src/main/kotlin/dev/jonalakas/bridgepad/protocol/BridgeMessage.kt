@@ -300,4 +300,18 @@ sealed interface BridgeMessage {
             require(token.size == 32)
         }
     }
+
+    data object UdpMediaOffer : BridgeMessage {
+        override val type = BridgeMessageType.UDP_MEDIA_OFFER
+    }
+
+    data class UdpMediaReady(val port: Int, val token: ByteArray, val key: ByteArray) : BridgeMessage {
+        override val type = BridgeMessageType.UDP_MEDIA_READY
+
+        init {
+            require(port in 1..0xffff)
+            require(token.size == 32)
+            require(key.size == 32)
+        }
+    }
 }

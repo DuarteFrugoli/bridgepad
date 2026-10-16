@@ -84,6 +84,8 @@
     <string name="bluetooth_direct_description">Conecta sem o BridgePad Desktop. A Steam pode exigir um mapeamento inicial do controle.</string>
     <string name="bluetooth_desktop_label">Bluetooth via BridgePad Desktop</string>
     <string name="bluetooth_desktop_description">Requer o BridgePad Desktop e cria um controle XInput reconhecido diretamente pelos jogos.</string>
+    <string name="bluetooth_desktop_pairing_hint">Deixe este celular visível e adicione-o nas configurações de Bluetooth do Windows. Depois volte aqui e escolha o PC pareado. O HID direto ficará desligado.</string>
+    <string name="bluetooth_desktop_pairing_cancelled">A visibilidade do celular não foi ativada. Toque em Parear um novo PC para tentar novamente.</string>
     <string name="choose_paired_pc_hint">Escolha um PC pareado. O BridgePad Desktop precisa estar aberto nesse computador.</string>
     <string name="wifi_label">Wi-Fi</string>
     <string name="usb_connection_label">Cabo USB</string>
@@ -403,6 +405,8 @@
     <string name="media_transport_test_route">Rota real: %1$s em %2$s</string>
     <string name="media_transport_test_transport">Transporte: %1$s</string>
     <string name="media_transport_quic">QUIC DATAGRAM</string>
+    <string name="media_transport_title">Transporte do streaming jogável</string>
+    <string name="media_transport_description">Escolha o transporte de vídeo e áudio para a próxima sessão. Os comandos continuam em conexão separada. QUIC é o padrão; UDP+AEAD é experimental.</string>
     <string name="media_transport_udp_aead">UDP+AEAD</string>
     <string name="media_transport_test_packets">Pacotes: %1$d/%2$d recebidos · %3$d rejeitados · %4$d atrasados/duplicados</string>
     <string name="media_transport_test_frames">Quadros: %1$d/%2$d completos · %3$d expirados</string>

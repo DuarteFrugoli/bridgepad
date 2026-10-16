@@ -11,6 +11,7 @@ import dev.jonalakas.bridgepad.protocol.BridgeMessage
 import dev.jonalakas.bridgepad.protocol.BridgeStopReason
 import java.io.DataInputStream
 import java.net.ConnectException
+import java.net.InetAddress
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.security.SecureRandom
@@ -32,6 +33,7 @@ data class NetworkGamepadRequest(
     val connectTimeoutMillis: Int = 5_000,
     val readTimeoutMillis: Int = 2_000,
     val reconnectAttempts: Int? = 3,
+    val requiredLocalRoute: ((InetAddress) -> Boolean)? = null,
 ) {
     init {
         require(host.isNotBlank()) { "host must not be blank" }
@@ -271,6 +273,9 @@ class NetworkGamepadClient(
         socket = tlsSocket
         tlsSocket.use { connected ->
             connected.startHandshake()
+            if (request.requiredLocalRoute?.invoke(connected.localAddress) == false) {
+                throw NoRouteToHostException("The selected connection route is not available")
+            }
             if (stopping.get()) return@use
             val input = DataInputStream(connected.inputStream)
             request.credentials?.let { credentials ->

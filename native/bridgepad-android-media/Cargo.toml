@@ -19,7 +19,7 @@ rustls = { version = "0.23.45", default-features = false, features = ["ring", "s
 sha2 = "0.10.9"
 subtle = "2.6.1"
 socket2 = "0.6.1"
-tokio = { version = "1.48", features = ["io-util", "net", "rt", "time"] }
+tokio = { version = "1.48", features = ["io-util", "macros", "net", "rt", "time"] }
 
 [profile.release]
 codegen-units = 1

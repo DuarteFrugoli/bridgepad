@@ -224,6 +224,7 @@ class BridgePacketCodecTest {
             BridgeMessage.WebRtcOffer("v=0\r\n" + "a=candidate:test\r\n".repeat(300)),
             BridgeMessage.WebRtcAnswer("v=0\r\na=sendonly\r\n"),
             BridgeMessage.QuicOffer,
+            BridgeMessage.UdpMediaOffer,
         )
         messages.forEachIndexed { index, message ->
             val packet = BridgePacket(12, index.toLong(), 99, message)
@@ -236,6 +237,18 @@ class BridgePacketCodecTest {
         ).message as BridgeMessage.QuicReady
         assertEquals(ready.port, decodedReady.port)
         assertArrayEquals(ready.token, decodedReady.token)
+
+        val udpReady = BridgeMessage.UdpMediaReady(
+            39396,
+            ByteArray(32) { it.toByte() },
+            ByteArray(32) { (it + 32).toByte() },
+        )
+        val decodedUdpReady = BridgePacketCodec.decode(
+            BridgePacketCodec.encode(BridgePacket(12, 100, 99, udpReady)),
+        ).message as BridgeMessage.UdpMediaReady
+        assertEquals(udpReady.port, decodedUdpReady.port)
+        assertArrayEquals(udpReady.token, decodedUdpReady.token)
+        assertArrayEquals(udpReady.key, decodedUdpReady.key)
 
         val chunk = BridgeMessage.VideoChunk(
             frameId = 42,

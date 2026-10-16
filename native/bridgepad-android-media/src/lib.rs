@@ -1,5 +1,8 @@
-use bridgepad_media::assembly::FrameAssembler;
-use bridgepad_media_protocol::security::UdpAeadReceiver;
+use bridgepad_media::assembly::{
+    AssembledFrame, FrameAssembler, PacketizeRequest, packetize_with_max_datagram_size,
+};
+use bridgepad_media_protocol::security::{UdpAeadReceiver, UdpAeadSender};
+use bridgepad_media_protocol::{PacketFlags, PacketKind};
 use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass, JObject, JString, JValue};
 use jni::sys::{jint, jlong, jstring};
@@ -9,7 +12,9 @@ use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
 use sha2::{Digest, Sha256};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::io;
-use std::net::{IpAddr, SocketAddr, ToSocketAddrs, UdpSocket};
+use std::net::{
+    IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs, UdpSocket,
+};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 use std::sync::Arc;
@@ -38,10 +43,12 @@ const UDP_TEST_KEY: [u8; 32] = [
 ];
 const QUIC_HELLO_MAGIC: [u8; 8] = *b"BPTQHELO";
 const QUIC_DONE_MAGIC: [u8; 8] = *b"BPTQDONE";
+const QUIC_SUMMARY_MAGIC: [u8; 8] = *b"BPTQSUM!";
 const QUIC_REPORT_MAGIC: [u8; 8] = *b"BPTQRPT!";
 const TEST_SERVER_NAME: &str = "bridgepad.test";
 const PLAY_SERVER_NAME: &str = "bridgepad.local";
 const PLAY_HELLO_MAGIC: [u8; 8] = *b"BPMQPLAY";
+const PLAY_UDP_HELLO_MAGIC: [u8; 8] = *b"BPMUPLAY";
 
 static ACTIVE_RUN_ID: AtomicU64 = AtomicU64::new(0);
 static CANCELLED_RUN_ID: AtomicU64 = AtomicU64::new(0);
@@ -125,6 +132,8 @@ pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNati
     _class: JClass,
     operation_id: jlong,
     host: JString,
+    local_address: JByteArray,
+    local_scope_id: jint,
     port: jint,
     certificate_sha256: JString,
     token: JByteArray,
@@ -137,6 +146,8 @@ pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNati
             return Err("invalid playable QUIC session parameters".into());
         }
         let host: String = env.get_string(&host)?.into();
+        let local_address = env.convert_byte_array(local_address)?;
+        let local_bind = playable_local_bind(&local_address, local_scope_id)?;
         let fingerprint: String = env.get_string(&certificate_sha256)?.into();
         let fingerprint = parse_fingerprint(&fingerprint)?;
         let token = env.convert_byte_array(token)?;
@@ -149,6 +160,7 @@ pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNati
             &mut env,
             callback,
             &host,
+            local_bind,
             port as u16,
             fingerprint,
             token,
@@ -160,6 +172,58 @@ pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNati
         Ok(Ok(())) => "OK".to_owned(),
         Ok(Err(error)) => encode_error(&error.to_string()),
         Err(_) => encode_error("native playable QUIC receiver panicked"),
+    };
+    env.new_string(message)
+        .map_or(ptr::null_mut(), JString::into_raw)
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNative_runUdpPlayable(
+    mut env: JNIEnv,
+    _class: JClass,
+    operation_id: jlong,
+    host: JString,
+    local_address: JByteArray,
+    local_scope_id: jint,
+    port: jint,
+    token: JByteArray,
+    key: JByteArray,
+    session_id: jlong,
+    callback: JObject,
+) -> jstring {
+    let result = catch_unwind(AssertUnwindSafe(|| -> Result<(), AnyError> {
+        let operation_id = u64::try_from(operation_id).map_err(|_| "invalid operation ID")?;
+        if operation_id == 0 || !(1..=u16::MAX.into()).contains(&port) || session_id <= 0 {
+            return Err("invalid playable UDP session parameters".into());
+        }
+        let host: String = env.get_string(&host)?.into();
+        let local_address = env.convert_byte_array(local_address)?;
+        let local_bind = playable_local_bind(&local_address, local_scope_id)?;
+        let token: [u8; 32] = env
+            .convert_byte_array(token)?
+            .try_into()
+            .map_err(|_| "invalid media token length")?;
+        let key: [u8; 32] = env
+            .convert_byte_array(key)?
+            .try_into()
+            .map_err(|_| "invalid media key length")?;
+        let _run = ActiveRun::acquire(operation_id)?;
+        run_udp_playable(
+            &mut env,
+            callback,
+            &host,
+            local_bind,
+            port as u16,
+            token,
+            key,
+            session_id as u64,
+            operation_id,
+        )
+    }));
+    let message = match result {
+        Ok(Ok(())) => "OK".to_owned(),
+        Ok(Err(error)) => encode_error(&error.to_string()),
+        Err(_) => encode_error("native playable UDP receiver panicked"),
     };
     env.new_string(message)
         .map_or(ptr::null_mut(), JString::into_raw)
@@ -180,10 +244,28 @@ fn parse_fingerprint(value: &str) -> Result<[u8; 32], AnyError> {
     Ok(bytes)
 }
 
+fn playable_local_bind(address: &[u8], scope_id: jint) -> Result<SocketAddr, AnyError> {
+    let bind = match address.len() {
+        4 => SocketAddr::V4(SocketAddrV4::new(
+            Ipv4Addr::from(<[u8; 4]>::try_from(address)?),
+            0,
+        )),
+        16 if scope_id >= 0 => SocketAddr::V6(SocketAddrV6::new(
+            Ipv6Addr::from(<[u8; 16]>::try_from(address)?),
+            0,
+            0,
+            scope_id as u32,
+        )),
+        _ => return Err("invalid selected media route address".into()),
+    };
+    Ok(bind)
+}
+
 async fn run_quic_playable(
     env: &mut JNIEnv<'_>,
     callback: JObject<'_>,
     host: &str,
+    local_bind: SocketAddr,
     port: u16,
     fingerprint: [u8; 32],
     token: [u8; 32],
@@ -194,7 +276,10 @@ async fn run_quic_playable(
         return Ok(());
     }
     let remote = resolve_remote_async(host, port).await?;
-    let mut endpoint = Endpoint::client(unspecified_address(remote))?;
+    if local_bind.is_ipv4() != remote.is_ipv4() {
+        return Err("selected media route uses the wrong IP address family".into());
+    }
+    let mut endpoint = Endpoint::client(local_bind)?;
     endpoint.set_default_client_config(pinned_client_config(fingerprint)?);
     let mut connecting = Box::pin(endpoint.connect(remote, PLAY_SERVER_NAME)?);
     let connect_deadline = Instant::now() + Duration::from_secs(7);
@@ -235,49 +320,192 @@ async fn run_quic_playable(
         let assembler = match datagram.header.kind {
             bridgepad_media_protocol::PacketKind::Video => &mut video,
             bridgepad_media_protocol::PacketKind::Audio => &mut audio,
+            bridgepad_media_protocol::PacketKind::Control => continue,
         };
         let Ok(Some(frame)) = assembler.push(&bytes, received_at) else {
             continue;
         };
-        let payload = JObject::from(env.byte_array_from_slice(&frame.payload)?);
-        match frame.kind {
-            bridgepad_media_protocol::PacketKind::Video => {
-                env.call_method(
-                    &callback,
-                    "onVideoFrame",
-                    "([BJZ)V",
-                    &[
-                        JValue::Object(&payload),
-                        JValue::Long(i64::try_from(frame.presentation_timestamp_micros)?),
-                        JValue::Bool(
-                            if frame
-                                .flags
-                                .contains(bridgepad_media_protocol::PacketFlags::KEYFRAME)
-                            {
-                                1
-                            } else {
-                                0
-                            },
-                        ),
-                    ],
-                )?;
-            }
-            bridgepad_media_protocol::PacketKind::Audio => {
-                env.call_method(
-                    &callback,
-                    "onAudioFrame",
-                    "([BJ)V",
-                    &[
-                        JValue::Object(&payload),
-                        JValue::Long(i64::try_from(frame.presentation_timestamp_micros)?),
-                    ],
-                )?;
-            }
-        }
-        env.delete_local_ref(payload)?;
+        dispatch_playable_frame(env, &callback, frame)?;
     }
     connection.close(0_u32.into(), b"session stopped");
     endpoint.close(0_u32.into(), b"session stopped");
+    Ok(())
+}
+
+fn dispatch_playable_frame(
+    env: &mut JNIEnv<'_>,
+    callback: &JObject<'_>,
+    frame: AssembledFrame,
+) -> Result<(), AnyError> {
+    let payload = JObject::from(env.byte_array_from_slice(&frame.payload)?);
+    let timestamp = JValue::Long(i64::try_from(frame.presentation_timestamp_micros)?);
+    match frame.kind {
+        PacketKind::Video => {
+            let keyframe = JValue::Bool(if frame.flags.contains(PacketFlags::KEYFRAME) {
+                1
+            } else {
+                0
+            });
+            env.call_method(
+                callback,
+                "onVideoFrame",
+                "([BJZ)V",
+                &[JValue::Object(&payload), timestamp, keyframe],
+            )?;
+        }
+        PacketKind::Audio => {
+            env.call_method(
+                callback,
+                "onAudioFrame",
+                "([BJ)V",
+                &[JValue::Object(&payload), timestamp],
+            )?;
+        }
+        PacketKind::Control => {}
+    }
+    env.delete_local_ref(payload)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_udp_playable(
+    env: &mut JNIEnv<'_>,
+    callback: JObject<'_>,
+    host: &str,
+    local_bind: SocketAddr,
+    port: u16,
+    token: [u8; 32],
+    key: [u8; 32],
+    session_id: u64,
+    operation_id: u64,
+) -> Result<(), AnyError> {
+    if is_cancelled(operation_id) {
+        return Ok(());
+    }
+    let remote = resolve_remote(host, port)?;
+    if local_bind.is_ipv4() != remote.is_ipv4() {
+        return Err("selected media route uses the wrong IP address family".into());
+    }
+    let socket = Socket::new(
+        Domain::for_address(remote),
+        Type::DGRAM,
+        Some(Protocol::UDP),
+    )?;
+    socket.set_recv_buffer_size(SOCKET_RECEIVE_BUFFER_SIZE)?;
+    socket.bind(&local_bind.into())?;
+    socket.connect(&remote.into())?;
+    let socket: UdpSocket = socket.into();
+    socket.set_read_timeout(Some(Duration::from_millis(100)))?;
+    let mut hello = [0_u8; 48];
+    hello[..8].copy_from_slice(&PLAY_UDP_HELLO_MAGIC);
+    hello[8..16].copy_from_slice(&session_id.to_be_bytes());
+    hello[16..].copy_from_slice(&token);
+    let mut receiver = UdpAeadReceiver::new(&key, 1)?;
+    let mut control = UdpAeadSender::new(&key, 2)?;
+    let mut video = FrameAssembler::new(session_id, 1, 100_000, 16);
+    let mut audio = FrameAssembler::new(session_id, 2, 100_000, 16);
+    let started = Instant::now();
+    let mut last_media = Instant::now();
+    let mut last_hello = Instant::now() - Duration::from_secs(1);
+    let mut last_ping = Instant::now() - Duration::from_secs(1);
+    let mut authenticated = false;
+    let mut control_sequence = 0_u32;
+    let mut incoming = [0_u8; MAX_DATAGRAM_SIZE];
+    while !is_cancelled(operation_id) {
+        if !authenticated && last_hello.elapsed() >= Duration::from_millis(250) {
+            send_udp_control(
+                &socket,
+                &mut control,
+                session_id,
+                &mut control_sequence,
+                &hello,
+            )?;
+            last_hello = Instant::now();
+        }
+        if last_ping.elapsed() >= Duration::from_secs(1) {
+            send_udp_control(
+                &socket,
+                &mut control,
+                session_id,
+                &mut control_sequence,
+                b"PING",
+            )?;
+            last_ping = Instant::now();
+        }
+        if (!authenticated && started.elapsed() >= Duration::from_secs(15))
+            || (authenticated && last_media.elapsed() >= Duration::from_secs(30))
+        {
+            return Err("UDP media timed out waiting for encrypted video or audio".into());
+        }
+        let size = match socket.recv(&mut incoming) {
+            Ok(size) => size,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) =>
+            {
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let Ok(plaintext) = receiver.open(&incoming[..size]) else {
+            continue;
+        };
+        let Ok(datagram) = bridgepad_media_protocol::decode_datagram(&plaintext) else {
+            continue;
+        };
+        if datagram.header.session_id != session_id {
+            continue;
+        }
+        let assembler = match datagram.header.kind {
+            PacketKind::Video => &mut video,
+            PacketKind::Audio => &mut audio,
+            PacketKind::Control => continue,
+        };
+        authenticated = true;
+        last_media = Instant::now();
+        let received_at = duration_micros(&started.elapsed());
+        if let Ok(Some(frame)) = assembler.push(&plaintext, received_at) {
+            dispatch_playable_frame(env, &callback, frame)?;
+        }
+    }
+    if authenticated {
+        let _ = send_udp_control(
+            &socket,
+            &mut control,
+            session_id,
+            &mut control_sequence,
+            b"STOP",
+        );
+    }
+    Ok(())
+}
+
+fn send_udp_control(
+    socket: &UdpSocket,
+    sender: &mut UdpAeadSender,
+    session_id: u64,
+    sequence: &mut u32,
+    payload: &[u8],
+) -> Result<(), AnyError> {
+    let packets = packetize_with_max_datagram_size(
+        PacketizeRequest {
+            kind: PacketKind::Control,
+            flags: PacketFlags::NONE,
+            session_id,
+            stream_id: 3,
+            first_sequence: *sequence,
+            frame_id: *sequence,
+            presentation_timestamp_micros: 0,
+            payload,
+        },
+        1_100,
+    )?;
+    for packet in packets {
+        socket.send(&sender.seal(&packet)?)?;
+        *sequence = sequence.wrapping_add(1);
+    }
     Ok(())
 }
 
@@ -577,39 +805,55 @@ async fn run_quic_probe_async(
     hello_stream.finish()?;
 
     let expected_frames = u64::from(duration_seconds) * FRAMES_PER_SECOND;
-    let expected_packets = expected_frames * PACKETS_PER_FRAME;
     let started = Instant::now();
-    let mut measurements = ReceiveMeasurements::new(expected_packets);
+    let mut measurements = ReceiveMeasurements::new(expected_frames * PACKETS_PER_FRAME);
     let mut assembler = frame_assembler();
     let overall_timeout = Duration::from_secs(u64::from(duration_seconds) + 5);
+    let mut expected_packets = None;
+    let mut summary_received_at = None;
 
-    while measurements.received_packets < expected_packets && started.elapsed() < overall_timeout {
+    while started.elapsed() < overall_timeout {
         if is_cancelled(operation_id) {
             connection.close(1_u32.into(), b"cancelled");
             endpoint.wait_idle().await;
             return Err("cancelled".into());
         }
-        let datagram = match timeout(Duration::from_millis(100), connection.read_datagram()).await {
-            Ok(Ok(datagram)) => datagram,
-            Ok(Err(error)) => return Err(error.into()),
-            Err(_) => continue,
-        };
-        if datagram.as_ref() == QUIC_DONE_MAGIC {
-            continue;
+        if expected_packets.is_some_and(|expected| measurements.received_packets >= expected)
+            || summary_received_at
+                .is_some_and(|received: Instant| received.elapsed() >= Duration::from_millis(500))
+        {
+            break;
         }
-        let arrival = Instant::now();
-        measurements.record_arrival(arrival, datagram.len());
-        let received_at = duration_micros(&arrival.duration_since(started));
-        match assembler.push(&datagram, received_at) {
-            Ok(_) => measurements.received_packets += 1,
-            Err(_) => measurements.rejected_packets += 1,
+        tokio::select! {
+            incoming = connection.accept_uni(), if expected_packets.is_none() => {
+                let mut stream = incoming?;
+                let bytes = timeout(Duration::from_secs(2), stream.read_to_end(16)).await??;
+                expected_packets = Some(parse_quic_summary(&bytes)?);
+                summary_received_at = Some(Instant::now());
+            }
+            incoming = connection.read_datagram() => {
+                let datagram = incoming?;
+                if datagram.as_ref() == QUIC_DONE_MAGIC {
+                    continue;
+                }
+                let arrival = Instant::now();
+                measurements.record_arrival(arrival, datagram.len());
+                let received_at = duration_micros(&arrival.duration_since(started));
+                match assembler.push(&datagram, received_at) {
+                    Ok(_) => measurements.received_packets += 1,
+                    Err(_) => measurements.rejected_packets += 1,
+                }
+            }
+            () = tokio::time::sleep(Duration::from_millis(100)) => {}
         }
     }
 
+    let expected_packets = expected_packets.ok_or("QUIC sender did not return a packet summary")?;
     let elapsed = started.elapsed();
     let measurement = finish_measurement(
         local_ip,
         expected_frames,
+        expected_packets,
         elapsed,
         Some(handshake_millis),
         measurements,
@@ -695,6 +939,7 @@ fn run_udp_aead_probe(
     let measurement = finish_measurement(
         local_ip,
         expected_frames,
+        expected_packets,
         elapsed,
         None,
         measurements,
@@ -702,6 +947,13 @@ fn run_udp_aead_probe(
     );
     send_udp_report(&socket, &measurement, interface_name)?;
     Ok(measurement)
+}
+
+fn parse_quic_summary(bytes: &[u8]) -> Result<u64, AnyError> {
+    if bytes.len() != 16 || bytes[..8] != QUIC_SUMMARY_MAGIC {
+        return Err("invalid QUIC diagnostic packet summary".into());
+    }
+    Ok(u64::from_be_bytes(bytes[8..16].try_into()?))
 }
 
 struct ReceivedUdpDatagram {
@@ -850,6 +1102,7 @@ impl ReceiveMeasurements {
 fn finish_measurement(
     local_ip: IpAddr,
     expected_frames: u64,
+    expected_packets: u64,
     elapsed: Duration,
     handshake_millis: Option<u64>,
     mut measurements: ReceiveMeasurements,
@@ -862,7 +1115,7 @@ fn finish_measurement(
     Measurement {
         local_ip,
         received_packets: measurements.received_packets,
-        expected_packets: expected_frames * PACKETS_PER_FRAME,
+        expected_packets,
         completed_frames: metrics.completed_frames,
         expected_frames,
         expired_frames: metrics.expired_frames,
@@ -1089,6 +1342,17 @@ mod tests {
     }
 
     #[test]
+    fn quic_summary_sets_actual_packet_count() {
+        let mut summary = [0_u8; 16];
+        summary[..8].copy_from_slice(&QUIC_SUMMARY_MAGIC);
+        summary[8..].copy_from_slice(&5_137_u64.to_be_bytes());
+        assert_eq!(parse_quic_summary(&summary).unwrap(), 5_137);
+        assert!(parse_quic_summary(&summary[..15]).is_err());
+        summary[0] ^= 1;
+        assert!(parse_quic_summary(&summary).is_err());
+    }
+
+    #[test]
     fn playable_fingerprint_parser_accepts_the_paired_desktop_format() {
         let fingerprint = (0_u8..32)
             .map(|byte| format!("{byte:02X}"))
@@ -1099,5 +1363,16 @@ mod tests {
             std::array::from_fn(|i| i as u8)
         );
         assert!(parse_fingerprint("not-a-fingerprint").is_err());
+    }
+
+    #[test]
+    fn playable_quic_binds_the_selected_local_address() {
+        let ipv4 = playable_local_bind(&[10, 2, 3, 4], 0).unwrap();
+        assert_eq!(ipv4, "10.2.3.4:0".parse().unwrap());
+
+        let ipv6 = playable_local_bind(&[0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1], 3)
+            .unwrap();
+        assert_eq!(ipv6, "[fe80::1%3]:0".parse().unwrap());
+        assert!(playable_local_bind(&[1, 2, 3], 0).is_err());
     }
 }

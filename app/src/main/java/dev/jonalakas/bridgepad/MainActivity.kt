@@ -97,6 +97,7 @@ import dev.jonalakas.bridgepad.transport.usb.accessory.UsbAccessoryProbe
 import dev.jonalakas.bridgepad.ui.session.SessionSurface
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationStore
+import dev.jonalakas.bridgepad.streaming.PlayableMediaTransportStore
 import dev.jonalakas.bridgepad.ui.session.SessionUiEvent
 import dev.jonalakas.bridgepad.ui.session.SessionUiViewModel
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
@@ -239,6 +240,18 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+                val desktopDiscoverableLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.StartActivityForResult(),
+                ) { result ->
+                    pairedHosts = readPairedHosts()
+                    if (result.resultCode <= 0) {
+                        Toast.makeText(
+                            this@MainActivity,
+                            R.string.bluetooth_desktop_pairing_cancelled,
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
                 val hidState by sessionCoordinator.state.collectAsState()
                 val networkGameplayStatus by networkGameplayController.status.collectAsState()
                 val bluetoothDesktopGameplayStatus by
@@ -268,6 +281,10 @@ class MainActivity : ComponentActivity() {
                 val discoveryNeeded = showDiscoveryDiagnostic || choosingNetworkDesktop
                 DisposableEffect(discoveryNeeded) {
                     if (!discoveryNeeded) return@DisposableEffect onDispose {}
+                    val discoveryMethod = connectionMethodName?.let(ConnectionMethod::valueOf)
+                        ?.takeIf { it == ConnectionMethod.WIFI || it == ConnectionMethod.USB }
+                        ?: ConnectionMethod.WIFI
+                    networkDesktopCoordinator.setDiscoveryRoute(discoveryMethod)
                     var active = false
                     fun startIfNeeded() {
                         if (!active) {
@@ -299,6 +316,7 @@ class MainActivity : ComponentActivity() {
                 val useDisplayCutoutArea by
                     TouchscreenDisplaySettingsStore.useDisplayCutoutArea.collectAsState()
                 val sessionOrientationMode by SessionOrientationStore.mode.collectAsState()
+                val playableMediaTransport by PlayableMediaTransportStore.selected.collectAsState()
                 val invertedTouchpadScroll by TouchpadSettingsStore.invertedScroll.collectAsState()
                 val configurationOrientation = LocalConfiguration.current.orientation
                 val currentLayoutOrientation = if (configurationOrientation == Configuration.ORIENTATION_PORTRAIT) {
@@ -677,7 +695,10 @@ class MainActivity : ComponentActivity() {
                 } else if (showGameplayStreaming && gameplayStreamingPeerId != null) {
                     StreamingGameplayScreen(
                         peerId = checkNotNull(gameplayStreamingPeerId),
-                        requestFor = networkDesktopCoordinator::mediaRequest,
+                        mediaTransport = playableMediaTransport,
+                        requestFor = { peerId ->
+                            networkDesktopCoordinator.mediaRequest(peerId, effectiveConnectionMethod)
+                        },
                         useDisplayCutoutArea = useDisplayCutoutArea,
                         keyboardState = gameplayKeyboardState,
                         onExit = {
@@ -736,7 +757,7 @@ class MainActivity : ComponentActivity() {
                 } else if (showDesktopStreaming) {
                     DesktopStreamingScreen(
                         desktops = trustedDesktops,
-                        requestFor = networkDesktopCoordinator::mediaRequest,
+                        requestFor = { peerId -> networkDesktopCoordinator.mediaRequest(peerId) },
                         onBack = {
                             showDesktopStreaming = false
                             showTests = true
@@ -847,6 +868,7 @@ class MainActivity : ComponentActivity() {
                         physicalControllerConnected = physicalControllerConnected,
                         mappingAvailable = mappingInput != null,
                         sessionOrientationMode = sessionOrientationMode,
+                        mediaTransport = playableMediaTransport,
                         invertedTouchpadScroll = invertedTouchpadScroll,
                         useDisplayCutoutArea = useDisplayCutoutArea,
                         onOpenTests = {
@@ -866,6 +888,7 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onSessionOrientationModeChanged = SessionOrientationStore::set,
+                        onMediaTransportChanged = PlayableMediaTransportStore::set,
                         onInvertedTouchpadScrollChanged = TouchpadSettingsStore::setInvertedScroll,
                         onUseDisplayCutoutAreaChanged =
                             TouchscreenDisplaySettingsStore::setUseDisplayCutoutArea,
@@ -966,6 +989,7 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onSelectWifi = {
+                        networkDesktopCoordinator.setDiscoveryRoute(ConnectionMethod.WIFI)
                         if (connectionMethodName != ConnectionMethod.WIFI.name) {
                             connectionMethodName = ConnectionMethod.WIFI.name
                             bluetoothOutputAdapterValue = null
@@ -975,6 +999,7 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onSelectUsb = {
+                        networkDesktopCoordinator.setDiscoveryRoute(ConnectionMethod.USB)
                         if (connectionMethodName != ConnectionMethod.USB.name) {
                             connectionMethodName = ConnectionMethod.USB.name
                             bluetoothOutputAdapterValue = null
@@ -1027,6 +1052,16 @@ class MainActivity : ComponentActivity() {
                         selectedAddress = null
                         connectionGate = null
                         pendingDestination = DestinationSelection.CHOOSE_PC
+                    },
+                    onPairNewBluetoothDesktop = {
+                        pendingDestination = null
+                        connectionGate = null
+                        pairNewPcSelected = false
+                        if (hidState.sessionActive) sessionCoordinator.stop()
+                        desktopDiscoverableLauncher.launch(
+                            Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+                                .putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120),
+                        )
                     },
                     onPlay = {
                         if (
