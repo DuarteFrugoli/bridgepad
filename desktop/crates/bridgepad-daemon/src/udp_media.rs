@@ -20,6 +20,7 @@ const AUTH_TIMEOUT: Duration = Duration::from_secs(15);
 const IDLE_TIMEOUT: Duration = Duration::from_secs(6);
 const PACKET_BUDGET: Duration = Duration::from_millis(35);
 const MAX_MEDIA_DATAGRAM: usize = 1_100;
+const KEYFRAME_REQUEST_INTERVAL: Duration = Duration::from_millis(250);
 
 pub(super) fn run(
     signaling: &mut impl Write,
@@ -117,6 +118,9 @@ fn stream_media(
     let mut audio_frame_id = 0_u32;
     let mut sent_video = 0_u64;
     let mut dropped_video = 0_u64;
+    let mut keyframe_requests = 0_u64;
+    let mut awaiting_keyframe = false;
+    let mut last_keyframe_request = Instant::now() - KEYFRAME_REQUEST_INTERVAL;
     let mut last_report = Instant::now();
     let mut last_heartbeat = Instant::now();
     let started = Instant::now();
@@ -146,6 +150,13 @@ fn stream_media(
                     }
                     if datagram.payload == b"PING" {
                         last_heartbeat = Instant::now();
+                    }
+                    if datagram.payload == b"KEYFRAME"
+                        && last_keyframe_request.elapsed() >= KEYFRAME_REQUEST_INTERVAL
+                        && capture.request_keyframe().is_ok()
+                    {
+                        last_keyframe_request = Instant::now();
+                        keyframe_requests += 1;
                     }
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => break,
@@ -178,6 +189,16 @@ fn stream_media(
         }
         match capture.recv_timeout(Duration::from_millis(3)) {
             Ok(frame) => {
+                if awaiting_keyframe && !frame.keyframe {
+                    dropped_video += 1;
+                    if last_keyframe_request.elapsed() >= KEYFRAME_REQUEST_INTERVAL
+                        && capture.request_keyframe().is_ok()
+                    {
+                        last_keyframe_request = Instant::now();
+                        keyframe_requests += 1;
+                    }
+                    continue;
+                }
                 let flags = if frame.keyframe {
                     PacketFlags::KEYFRAME
                 } else {
@@ -197,10 +218,17 @@ fn stream_media(
                     &frame.data,
                 )? {
                     sent_video += 1;
+                    if frame.keyframe {
+                        awaiting_keyframe = false;
+                    }
                 } else {
                     dropped_video += 1;
-                    if frame.keyframe {
-                        let _ = capture.request_keyframe();
+                    awaiting_keyframe = true;
+                    if last_keyframe_request.elapsed() >= KEYFRAME_REQUEST_INTERVAL
+                        && capture.request_keyframe().is_ok()
+                    {
+                        last_keyframe_request = Instant::now();
+                        keyframe_requests += 1;
                     }
                 }
             }
@@ -209,7 +237,9 @@ fn stream_media(
             Err(error) => return Err(error.into()),
         }
         if last_report.elapsed() >= Duration::from_secs(2) {
-            println!("UDP media: video sent={sent_video}, skipped={dropped_video}");
+            println!(
+                "UDP media: video sent={sent_video}, skipped={dropped_video}, keyframe requests={keyframe_requests}"
+            );
             last_report = Instant::now();
         }
     }

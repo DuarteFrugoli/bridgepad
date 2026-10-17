@@ -31,6 +31,8 @@ class AndroidPlayableMediaClient(
     private val videoQueue = ArrayBlockingQueue<VideoFrame>(8)
     private val audioQueue = ArrayBlockingQueue<AudioFrame>(16)
     private val needKeyframe = AtomicBoolean(true)
+    private val videoDiscontinuity = AtomicLong(0)
+    private val videoStateLock = Any()
     @Volatile private var videoSurface: Surface? = surface
     @Volatile private var signaling: NetworkMediaSignalingClient? = null
     @Volatile private var worker: Thread? = null
@@ -139,13 +141,18 @@ class AndroidPlayableMediaClient(
     }
 
     override fun onVideoFrame(annexB: ByteArray, presentationMicros: Long, keyframe: Boolean) {
-        if (stopping.get() || (needKeyframe.get() && !keyframe)) return
-        if (keyframe) needKeyframe.set(false)
-        val frame = VideoFrame(annexB, presentationMicros, keyframe)
-        if (!videoQueue.offer(frame)) {
-            videoQueue.clear()
-            needKeyframe.set(!keyframe)
-            if (keyframe) videoQueue.offer(frame)
+        synchronized(videoStateLock) {
+            if (stopping.get() || (needKeyframe.get() && !keyframe)) return
+            if (keyframe) needKeyframe.set(false)
+            val frame = VideoFrame(annexB, presentationMicros, keyframe, videoDiscontinuity.get())
+            if (!videoQueue.offer(frame)) {
+                videoDiscontinuity.incrementAndGet()
+                videoQueue.clear()
+                needKeyframe.set(!keyframe)
+                if (keyframe) {
+                    videoQueue.offer(frame.copy(generation = videoDiscontinuity.get()))
+                }
+            }
         }
     }
 
@@ -156,6 +163,16 @@ class AndroidPlayableMediaClient(
             audioQueue.offer(AudioFrame(opus, presentationMicros))
         }
     }
+
+    override fun onVideoDiscontinuity() {
+        synchronized(videoStateLock) {
+            videoDiscontinuity.incrementAndGet()
+            videoQueue.clear()
+            needKeyframe.set(true)
+        }
+    }
+
+    override fun needsVideoKeyframe(): Boolean = needKeyframe.get()
 
     private fun decodeVideo(format: VideoFormat) {
         var firstFrame = true
@@ -187,7 +204,15 @@ class AndroidPlayableMediaClient(
                 )
                 codec.start()
                 val info = MediaCodec.BufferInfo()
+                var observedDiscontinuity = videoDiscontinuity.get()
+                var pendingFrame: VideoFrame? = null
                 while (!stopping.get()) {
+                    val currentDiscontinuity = videoDiscontinuity.get()
+                    if (currentDiscontinuity != observedDiscontinuity) {
+                        codec.flush()
+                        observedDiscontinuity = currentDiscontinuity
+                        pendingFrame = null
+                    }
                     val target = videoSurface
                     if (target != null && target !== outputSurface) {
                         try {
@@ -199,8 +224,17 @@ class AndroidPlayableMediaClient(
                             break
                         }
                     }
-                    val frame = videoQueue.poll(10, TimeUnit.MILLISECONDS)
+                    val frame = pendingFrame ?: videoQueue.poll(10, TimeUnit.MILLISECONDS)
                     if (frame != null) {
+                        val currentGeneration = videoDiscontinuity.get()
+                        if (frame.generation != currentGeneration) {
+                            pendingFrame = null
+                            continue
+                        }
+                        if (currentGeneration != observedDiscontinuity) {
+                            codec.flush()
+                            observedDiscontinuity = currentGeneration
+                        }
                         val inputIndex = codec.dequeueInputBuffer(5_000)
                         if (inputIndex >= 0) {
                             val input = checkNotNull(codec.getInputBuffer(inputIndex))
@@ -213,8 +247,13 @@ class AndroidPlayableMediaClient(
                                 )
                             } else {
                                 codec.queueInputBuffer(inputIndex, 0, 0, 0, 0)
-                                needKeyframe.set(true)
+                                onVideoDiscontinuity()
                             }
+                            pendingFrame = null
+                        } else {
+                            // Do not silently lose an H.264 reference picture while
+                            // the decoder has no input buffer available.
+                            pendingFrame = frame
                         }
                     }
                     while (!stopping.get()) {
@@ -335,7 +374,12 @@ class AndroidPlayableMediaClient(
         }
     }
 
-    private data class VideoFrame(val bytes: ByteArray, val presentationMicros: Long, val keyframe: Boolean)
+    private data class VideoFrame(
+        val bytes: ByteArray,
+        val presentationMicros: Long,
+        val keyframe: Boolean,
+        val generation: Long,
+    )
     private data class AudioFrame(val bytes: ByteArray, val presentationMicros: Long)
 
     companion object {

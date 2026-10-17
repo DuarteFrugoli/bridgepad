@@ -310,6 +310,25 @@ impl FrameAssembler {
         }
     }
 
+    /// Retires incomplete pictures older than one already selected for
+    /// presentation. They can no longer be shown and must not later appear as
+    /// fresh packet loss. Frame IDs use wrapping serial-number order.
+    pub fn discard_older_than(&mut self, frame_id: u32) {
+        let obsolete: Vec<u32> = self
+            .frames
+            .keys()
+            .copied()
+            .filter(|candidate| {
+                let advance = frame_id.wrapping_sub(*candidate);
+                advance != 0 && advance < 0x8000_0000
+            })
+            .collect();
+        for obsolete_id in obsolete {
+            self.remove(obsolete_id);
+            self.mark_terminal(obsolete_id);
+        }
+    }
+
     #[must_use]
     pub const fn metrics(&self) -> AssemblyMetrics {
         self.metrics
@@ -424,6 +443,21 @@ mod tests {
         assert_eq!(assembler.metrics().completed_frames, 1);
         assert_eq!(assembler.metrics().duplicate_packets, 1);
         assert_eq!(assembler.metrics().expired_frames, 0);
+    }
+
+    #[test]
+    fn obsolete_incomplete_frame_cannot_trigger_false_loss_after_newer_frame() {
+        let payload = vec![1; MAX_PAYLOAD_SIZE + 1];
+        let older = packetize(request(&payload, 10)).unwrap();
+        let newer = packetize(request(&payload, 11)).unwrap();
+        let mut assembler = FrameAssembler::new(7, 9, 1_000, 4);
+        assert!(assembler.push(&older[0], 100).unwrap().is_none());
+        assert!(assembler.push(&newer[0], 200).unwrap().is_none());
+        assert!(assembler.push(&newer[1], 300).unwrap().is_some());
+        assembler.discard_older_than(11);
+        assembler.expire(1_500);
+        assert_eq!(assembler.metrics().expired_frames, 0);
+        assert!(assembler.push(&older[1], 1_600).unwrap().is_none());
     }
 
     #[test]
