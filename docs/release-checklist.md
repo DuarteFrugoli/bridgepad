@@ -1,56 +1,82 @@
-# MVP Release Checklist
+# Public release checklist
 
-The first MVP is releasable only when every required item below is complete and
-the result is recorded. A code-complete feature is not sufficient evidence.
+This is a **gate for the first public Android/Windows/Linux release**, not a
+record of past prototype tests. All boxes begin unchecked: prior validation of
+Bluetooth HID or a single Windows development device does not approve the full
+product. Record results with the commit/version, Android device, Desktop OS,
+controller, connection route, power profile, duration and known limitations.
+The detailed implementation order is tracked privately; this public list
+states what a release candidate must demonstrate.
 
-## Repository
+## Scope and media
 
-- [x] CI unit-test and lint job passes.
-- [x] CI APK build job passes independently.
-- [ ] The release commit contains no secrets, local SDK paths or private notes.
-- [ ] Version name/code and changelog match the intended release.
-- [ ] License, privacy policy and third-party dependency notices are present.
+- [ ] Classify each feature as supported, experimental or excluded in the app,
+  READMEs and store listing. Internet streaming is excluded from this release.
+- [ ] Approve a measured local media path against the frozen
+  [WebRTC baseline](./streaming-baseline.md): startup, frame presentation,
+  audio sync, latency, loss recovery, quality and CPU/GPU usage.
+- [ ] Validate 720p60 and synchronized audio on each *advertised* route and
+  supported hardware; publish a lower profile when that is what testing proves.
+- [ ] Repeatedly start, stop, rotate, disconnect and reconnect streaming without
+  frozen frames, unbounded queues or an orphaned Desktop capture worker.
+- [ ] Media congestion never blocks gamepad, mouse or keyboard input. Stopping
+  video does not end or duplicate the controller session.
+- [ ] Verify selected Wi-Fi and USB routes remain distinct when both are active.
 
-## Clean installation and permissions
+## Input and multiplayer
 
-- [x] Install on a device with no existing BridgePad app data.
-- [x] Complete onboarding using only the instructions shown by the app.
-- [x] Validate permission acceptance, denial and a later successful retry.
-- [x] Validate pairing a new Windows PC and reconnecting an existing PC.
+- [ ] Approve the final authenticated IP-input transport independently of media;
+  verify neutralization, ordering and reconnection under loss and congestion.
+- [ ] Regress direct Bluetooth HID, Bluetooth Desktop/XInput, Wi-Fi and USB
+  tethering with virtual and physical controllers, mouse and keyboard.
+- [ ] Regress Compatibility and background USB capture, mapping persistence,
+  screen-off behavior, source switching and removal while buttons are held.
+- [ ] No stuck input, duplicate controller or cross-player interference after
+  app rotation, transport loss, Desktop exit or rapid reconnect.
+- [ ] If local co-op is in the advertised scope, validate independent player
+  identity and slots with two phones on Wi-Fi, Bluetooth Desktop and USB, plus
+  mixed routes. Reconnecting the same phone never creates a second XInput
+  device; losing one phone never removes another player's device.
+- [ ] If simultaneous streaming is advertised, validate two receivers and two
+  controls in a real co-op game, including one slow/disconnecting receiver.
+  State the supported viewer count and profile from measured hardware results.
+- [ ] Explain that direct HID is not managed by Desktop player slots and that
+  Windows/games, not BridgePad, assign the visible XInput player position.
 
-## Inputs and output
+## Product and compatibility
 
-- [x] Complete touchscreen controls work in `joy.cpl` and Steam Input.
-- [x] Physical Compatibility mode works while BridgePad remains visible.
-- [x] Background USB mode works outside BridgePad and with the screen off.
-- [x] The saved direct-USB mapping survives a new session.
-- [x] Switching capture modes produces no duplicate or stuck input.
-- [x] Removing the controller while controls are held returns to neutral.
+- [ ] Complete clean installation, onboarding, pairing, forgetting and recovery
+  using only the packaged app and Desktop, without SDK, ADB or Rust tools.
+- [ ] Errors identify the failed route, trust, permission or media stage and
+  offer a useful recovery action. Developer tests are outside the normal flow.
+- [ ] Validate accessibility, screen orientations, localization, permissions
+  denied/retried, app backgrounding and PC sleep/wake.
+- [ ] Run repeat-start cycles and sustained sessions on each advertised Android
+  version/device class, Windows version and Linux distribution. Record the
+  [compatibility matrix](./compatibility.md) and all known limitations.
+- [ ] Validate Steam and non-Steam games on the supported Desktop platforms.
+- [ ] No open blocking crash, ANR, security defect, stuck input or unrecoverable
+  session. Any cut in scope is explicit in UI and release notes.
 
-## Resilience
+## Security and distribution
 
-- [x] Complete 20 start/connect/stop cycles.
-- [x] Complete a continuous two-hour session.
-- [x] Recreate the Activity and return from the background.
-- [x] Turn Bluetooth off/on during setup and during a connection.
-- [x] Disconnect or turn off the Windows host during a connection.
-- [x] Cancel pairing/discoverability and recover without clearing app data.
-- [x] Copy/share a diagnostic report after a failure.
-
-## Compatibility evidence
-
-- [x] Samsung Galaxy A35 on Android 16 / API 36.
-- [ ] At least one Android device from another manufacturer, if available.
-- [ ] At least one additional supported Android version, if available.
-- [x] Windows 11 and current stable Steam.
-- [ ] Windows 10, if available.
-- [ ] GameSir X5 Lite and one additional USB gamepad, if available.
-- [x] Results and known limitations are recorded in `docs/compatibility.md`.
-
-## Distribution
-
-- [ ] A release APK is signed with the project release key.
-- [ ] The signing key is backed up securely and is not committed.
-- [ ] The signed APK installs and launches on a clean device.
-- [ ] The APK checksum is recorded with the release.
-- [ ] Gate C has zero open blocking defects.
+- [ ] Review authentication on Wi-Fi, USB and Bluetooth Desktop, certificate
+  pinning, media keys, replay protection, pairing revocation and input/media
+  authorization. Diagnostics cannot be mistaken for trusted product sessions.
+- [ ] Review logs, diagnostics and local storage for secrets or unnecessary
+  personal information; update [privacy](../PRIVACY.md) and
+  [third-party notices](../THIRD_PARTY_NOTICES.md).
+- [ ] Android tests, lint and build plus Desktop tests/build pass from a clean
+  checkout. Version codes, changelog and release notes agree.
+- [ ] Ship installable Windows and Linux Desktop packages with required driver
+  or system permissions, scoped Firewall rules, clean updates/uninstallation
+  and safe virtual-device teardown. Test on machines without development tools.
+- [ ] Protect signing keys outside the repository. Sign and smoke-test Android
+  APK/AAB and Desktop artifacts; publish checksums and matching downloads.
+- [ ] Check current Play Console requirements for target SDK, permissions,
+  foreground services, Data safety, store assets and testing tracks before
+  submission. Complete internal/closed testing and resolve pre-launch reports.
+- [ ] Audit the release commit and artifacts for secrets, private notes, local
+  paths and debug-only or intentionally insecure spike behavior.
+- [ ] Release the compatible Desktop packages before or with Android. Publish
+  the supported matrix, setup instructions, known limitations and issue route.

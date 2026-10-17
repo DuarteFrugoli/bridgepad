@@ -2,376 +2,105 @@
 
 [English](./README.md) | [Português (Brasil)](./README.pt-BR.md)
 
-> **Conecte qualquer controle. Use qualquer entrada. Jogue em qualquer lugar.**
+O BridgePad transforma um celular Android em controle, mouse e teclado para o
+PC. Ele também oferece streaming experimental de vídeo e áudio do PC para o
+celular na rede local. O projeto é gratuito e open source, mas a **v0.1.0 ainda
+é uma build de desenvolvimento, não uma versão pública**.
 
-BridgePad é um projeto Android gratuito e open source que transforma um celular
-ou tablet em uma ponte flexível de controles. Ele pode usar a tela ou um controle
-físico como entrada, normalizar os comandos em um único estado lógico de gamepad
-e enviá-los para um computador.
+## O que funciona hoje
 
-O projeto está em desenvolvimento ativo. Os caminhos atuais entre Android e PC
-funcionam por Bluetooth HID direto, Wi-Fi autenticado e Bluetooth RFCOMM/XInput
-com o BridgePad Desktop no Windows. Ainda não é uma versão pública finalizada.
+| Conexão | Precisa do Desktop | Uso atual |
+| --- | --- | --- |
+| Bluetooth HID direto | Não | Controle, mouse e teclado genéricos. A Steam Input pode exigir configuração; jogos exclusivos de XInput podem não reconhecer o controle. |
+| Bluetooth via Desktop | Sim | Comandos por RFCOMM para um controle virtual compatível com Xbox, além de mouse e teclado no Windows. É separado do HID direto. |
+| Wi-Fi | Sim | Sessões pareadas de controle, mouse e teclado; streaming local experimental de vídeo H.264 e áudio Opus. |
+| Ancoragem USB | Sim | A mesma sessão IP autenticada pela rede criada pela ancoragem USB do celular, não pelo modo de transferência de arquivos. O streaming é experimental. |
 
-## Estado atual
+O app Android oferece controle virtual multitouch personalizável, layouts
+independentes para retrato e paisagem, modos Compatibilidade e captura USB
+direta para controle físico, além de touchpad. O controle físico pode funcionar
+junto com os botões na tela. Na Home, a pessoa escolhe modo de jogo, conexão,
+computador e, no streaming, controle físico ou mouse/teclado. A sobreposição de
+controle virtual no vídeo ainda não está pronta.
 
-A versão atual de desenvolvimento é a `0.1.0`.
+O streaming local pode usar **QUIC DATAGRAM** (padrão) ou **UDP+AEAD**, escolhido
+nas Configurações do Android. Os dois caminhos já são jogáveis em
+desenvolvimento, mas ainda não passaram pelos gates finais de latência,
+recuperação de perdas e sessões longas. WebRTC permanece como referência
+medida, não como transporte local definitivo. O input usa conexão própria,
+separada da mídia.
 
-Disponível na build atual:
+O Desktop testado atualmente é o Windows. O controle virtual XInput ainda usa
+o backend de desenvolvimento ViGEmBus; faltam instalador e decisão do backend
+de produção. O Linux está planejado para a primeira versão pública, mas ainda
+não é jogável. Vários celulares com controles independentes e streaming
+simultâneo também não estão prontos para lançamento. Streaming pela internet
+fica fora do escopo inicial. Consulte as [evidências de compatibilidade](./docs/compatibility.md)
+e os [critérios de lançamento](./docs/release-checklist.md) antes de anunciar
+suporte a uma combinação.
 
-- Android 9 ou mais recente (`minSdk = 28`);
-- gamepad virtual multitouch;
-- editor persistente do layout virtual;
-- layouts simétrico, assimétrico e mobile;
-- entrada de controle físico normalizada pelo Android;
-- captura USB HID direta, inclusive em segundo plano ou com a tela apagada;
-- mapeamento opcional e salvo para os dois modos de controle físico;
-- saída Bluetooth HID de gamepad e mouse relativo;
-- saída Bluetooth pelo Desktop reconhecida como XInput no Windows;
-- touchpad de mouse integrado e touchpad grande para controle físico;
-- uso simultâneo das entradas virtual e física durante uma sessão;
-- descoberta Wi-Fi automática e sessões autenticadas por Wi-Fi ou tethering USB
-  pelo BridgePad Desktop no Windows;
-- pareamento guiado, reconexão, avisos e encerramento seguro;
-- métricas ao vivo e exportação de diagnóstico com foco em privacidade;
-- streaming experimental Windows → Android com vídeo H.264 por hardware e áudio
-  Opus por Wi-Fi ou tethering USB. O caminho WebRTC funcional é o baseline
-  mensurável enquanto o backend local dedicado é desenvolvido;
-- interface em inglês e português brasileiro;
-- janela mínima bilíngue do BridgePad Desktop com status, PIN, revogação de
-  celulares confiáveis e funcionamento pela bandeja do sistema;
-- testes unitários, lint Android e build independente do APK no CI.
+## Experimentar a build de desenvolvimento
 
-A combinação principal validada é:
+Você precisa de Android 9+, um PC Windows para desenvolvimento, Android SDK,
+JDK 17, Rust e o NDK/target Rust usado pelo módulo nativo de mídia. O
+[CI](./.github/workflows/ci.yml) mostra as dependências exatas de build. Para
+jogos XInput, instale o driver ViGEmBus separadamente enquanto não houver um
+instalador do BridgePad.
 
-```text
-GameSir X5 Lite ou touchscreen
-               |
-               v
-Samsung Galaxy A35
-Android 16 / API 36
-               |
-        Bluetooth HID
-               |
-               v
-Windows 11 + Steam Input
-```
-
-A estabilização da Fase 7 passou nessa combinação, incluindo sessão de duas
-horas, 20 ciclos de início/conexão/encerramento, interrupções do Bluetooth,
-remoção do controle físico, recriação da Activity e validação do mouse. Os
-resultados estão em [`docs/compatibility.md`](./docs/compatibility.md).
-
-Uma versão distribuível ainda depende dos itens restantes de
-[`docs/release-checklist.md`](./docs/release-checklist.md), principalmente a
-assinatura de release e evidências em mais equipamentos.
-
-## Como funciona hoje
-
-No Bluetooth, a Home pergunta explicitamente se a conexão será HID direta ou
-via BridgePad Desktop. O Desktop cria um único controle XInput compatível com
-Xbox 360, reconhecido automaticamente pela Steam e por jogos XInput. O HID
-direto não precisa do aplicativo no computador. O BridgePad não troca entre os
-dois caminhos automaticamente, e as duas saídas nunca ficam ativas ao mesmo
-tempo.
-
-O modo HID direto apresenta o Android como gamepad e mouse Bluetooth genéricos
-e não precisa do BridgePad Desktop:
-
-```text
-Touchscreen / controle físico
-              |
-              v
-      BridgePad Android
-              |
-       Bluetooth HID
-              |
-              v
-   Gamepad + mouse no Windows
-              |
-              v
-       Steam Input / jogo
-```
-
-O modo direto é HID genérico, não um dispositivo XInput nativo. Por isso, a
-Steam Input é a principal camada de compatibilidade. A Steam reconhece o
-BridgePad como controle genérico, mas pode exigir uma configuração inicial dos
-botões. Jogos que aceitam somente XInput podem não detectar diretamente o
-controle Bluetooth atual.
-
-## Fluxo da sessão
-
-A Home monta a sessão nesta ordem:
-
-1. **Modo de jogo** — usar o celular como controle ou transmitir o computador.
-2. **Conexão** — HID Bluetooth direto, Bluetooth via BridgePad Desktop, Wi-Fi e
-   tethering USB aparecem quando forem compatíveis com o modo escolhido.
-3. **Computador** — no Bluetooth, escolher um PC pareado; no Wi-Fi e no USB,
-   descobrir o BridgePad Desktop e digitar o PIN apenas no primeiro pareamento.
-
-A entrada não é mais uma escolha exclusiva. Os controles virtuais e qualquer
-controle físico detectado podem ser usados ao mesmo tempo.
-
-Uma nova configuração começa sem opções selecionadas. **Conectar e jogar** fica
-desativado até todas as escolhas e permissões necessárias estarem válidas.
-Escolher um computador pareado não torna o celular visível; isso só acontece se
-o usuário escolher parear um novo PC.
-
-Durante uma sessão, é possível trocar entre as telas de controle virtual e
-touchpad sem reconectar. A tela visível não desativa nenhuma fonte de entrada.
-
-## Modos do controle físico
-
-### Compatibilidade
-
-Usa as APIs normalizadas `InputDevice`, `KeyEvent` e `MotionEvent` do Android. É
-o caminho que aceita mais controles, mas o BridgePad precisa permanecer visível
-e a tela deve ficar ligada.
-
-### USB em segundo plano
-
-Captura diretamente um controle USB HID padrão compatível. Os comandos podem
-continuar com o BridgePad em outra janela ou com a tela do Android apagada.
-
-O assistente de mapeamento é opcional nos dois modos. Os perfis são associados à
-identidade e ao descritor HID do controle quando essas informações estão
-disponíveis. Remover uma entrada ou trocar de modo neutraliza seu estado para
-evitar comandos presos ou duplicados.
-
-Nesse nome, USB é a ligação entre o controle físico e o celular. Ainda não é uma
-saída USB do celular para o computador.
-
-## Controle virtual e mouse
-
-O controle virtual aceita toques simultâneos independentes para:
-
-- D-pad;
-- analógicos esquerdo e direito;
-- A, B, X e Y;
-- L1/R1 e gatilhos digitais;
-- Start, Select, L3 e R3;
-- touchpad de mouse relativo.
-
-O editor usa a mesma área e geometria da tela de jogo. É possível mover todos os
-componentes, redimensionar largura e altura separadamente quando aplicável,
-começar por um dos três layouts incluídos, cancelar as alterações, restaurar o
-padrão ou salvar um único layout ativo persistente.
-
-Presets personalizados com nome, gatilhos analógicos na tela, giroscópio e gestos
-avançados de mouse ainda não foram implementados.
-
-Com um controle físico ativo, o BridgePad pode mostrar um touchpad grande. O
-botão ou gesto Voltar do Android retorna à Home sem encerrar a sessão Bluetooth.
-
-## Arquitetura
-
-Entrada, estado lógico, saída e interface são separados:
-
-```text
-touch / Android InputDevice / USB direto
-                  |
-             InputRouter
-                  |
-        VirtualGamepadState
-                  |
-          OutputScheduler
-                  |
-        GamepadOutputTransport
-                  |
-          Bluetooth HID hoje
-```
-
-Os módulos Gradle atuais são:
-
-- `:domain` — estado, mapeamento, combinação, agendamento, sessão e portas em
-  Kotlin puro;
-- `:protocol` — mensagens versionadas e independentes de plataforma para o
-  receptor desktop;
-- `:transport-network` — descoberta, pareamento seguro, autenticação e sessão Wi-Fi;
-- `:transport-bluetooth-hid` — perfis Bluetooth HID, descritores e encoders;
-- `:app` — UI Android, permissões, ciclo de vida, entradas físicas, persistência
-  e composição das dependências.
-
-As dependências apontam para `:domain`. Uma entrada nova não deve conhecer o
-transporte, e uma saída deve consumir apenas estados normalizados. Consulte
-[`docs/architecture.md`](./docs/architecture.md), a fonte única da arquitetura
-atual.
-
-## Próxima direção
-
-O trabalho principal agora é endurecer e distribuir o BridgePad Desktop,
-primeiro para Windows e depois Linux.
-
-```text
-BridgePad Android
-       |
- Wi-Fi, Bluetooth ou USB
-       |
-       v
-BridgePad Desktop
-       |
-controle virtual do sistema
-       |
-       v
-      Jogo
-```
-
-A ordem pretendida é:
-
-1. consolidar e testar o protocolo versionado do desktop;
-2. substituir o backend experimental por um backend sustentável no Windows;
-3. validar e endurecer descoberta, pareamento seguro e sessões por Wi-Fi;
-4. automatizar instalação, Firewall, credenciais e atualização no Windows;
-5. endurecer o tethering USB entre celular e PC sem root ou ADB no uso normal;
-6. adicionar backend de controle virtual e empacotamento para Linux;
-7. substituir o baseline WebRTC local pelo caminho de baixa latência dedicado
-   BridgePad Media v1 e então endurecer vídeo e áudio para lançamento.
-
-Wi-Fi, Bluetooth XInput e USB precisam do BridgePad Desktop porque o computador
-deve receber o estado normalizado e criar um controle virtual nativo. Bluetooth
-HID direto é uma alternativa explícita que não exige o aplicativo complementar. O
-incremento atual de Bluetooth via Desktop confia no pareamento Bluetooth do
-sistema operacional; a autenticação no protocolo do BridgePad ainda é exigida
-antes de uma versão pública.
-
-## Ainda não implementado
-
-- backend e instalador de produção do controle virtual no Windows;
-- receptor Linux;
-- retorno de vibração/force feedback;
-- controles por giroscópio ou acelerômetro;
-- presets pessoais de layout com nome;
-- gatilhos analógicos na tela;
-- modo cooperativo local em vários celulares, com um slot de controle virtual
-  independente para cada pessoa;
-- perfis avançados por jogo;
-- macros ou calibração guiada.
-
-## Tecnologias
-
-O aplicativo Android usa:
-
-- Kotlin;
-- Jetpack Compose;
-- Android SDK;
-- Coroutines e `Flow`/`StateFlow`;
-- Gradle.
-
-O application ID é `dev.jonalakas.bridgepad`. Android, Windows e Linux são as
-plataformas atualmente planejadas.
-
-## Compilar e testar
-
-Requisitos:
-
-- Android SDK configurado em `local.properties`;
-- JDK 17 ou mais recente;
-- terminal aberto na raiz do repositório.
-
-No Windows, execute todos os testes unitários e lints usados pelo CI:
-
-```powershell
-.\gradlew.bat :domain:test :protocol:test :transport-bluetooth-hid:testDebugUnitTest :transport-bluetooth-hid:lintDebug :app:testDebugUnitTest :app:lintDebug
-```
-
-Gere o APK de debug separadamente:
-
-```powershell
-.\gradlew.bat assembleDebug
-```
-
-O APK será criado em:
-
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-Para instalar em um aparelho online no ADB:
+Na raiz do repositório, no Windows:
 
 ```powershell
 .\gradlew.bat installDebug
+cargo run --release --manifest-path desktop/Cargo.toml -p bridgepad-desktop
 ```
 
-Os procedimentos detalhados estão em [`docs/testing.md`](./docs/testing.md).
+Abra o BridgePad no celular, escolha o modo de jogo e a conexão e selecione o
+Desktop descoberto. Digite no celular o código temporário exibido no PC. As
+próximas sessões usam o pareamento salvo. Já o Bluetooth HID direto é pareado
+nas configurações Bluetooth do Android/Windows e dispensa o Desktop. Para USB,
+ative a **ancoragem USB** no celular: conectar o cabo ou escolher transferência
+de arquivos não cria a rota de rede necessária. Fechar a janela do Desktop
+mantém o processo na bandeja; use **Exit** nela para encerrar.
 
-## Estrutura do repositório
+O executável de desenvolvimento não instala regras de Firewall. Se descoberta
+ou conexão falhar numa rede pública, verifique a permissão do executável no
+Firewall em vez de mudar a rede para privada.
 
-```text
-app/                       aplicativo Android e composição
-domain/                    domínio de gamepad independente
-protocol/                  futuras mensagens do protocolo desktop
-transport-bluetooth-hid/   adaptador Bluetooth HID para Android
-docs/                      documentação pública em inglês
-README.md                  apresentação em inglês
-README.pt-BR.md            apresentação em português brasileiro
+## Compilar e verificar
+
+```powershell
+.\gradlew.bat assembleDebug
+.\gradlew.bat :domain:test :protocol:test :streaming-core:test :transport-network:test :transport-bluetooth-hid:testDebugUnitTest :transport-bluetooth-hid:lintDebug :transport-bluetooth-desktop:testDebugUnitTest :transport-bluetooth-desktop:lintDebug :transport-usb-accessory:testDebugUnitTest :transport-usb-accessory:lintDebug :app:testDebugUnitTest :app:lintDebug
+cargo test --locked --manifest-path desktop/Cargo.toml
 ```
 
-Os documentos pessoais de planejamento são privados e ignorados pelo Git. Código
-e documentação pública usam inglês; as duas versões do README são mantidas em
-paralelo.
+O APK de debug fica em `app/build/outputs/apk/debug/app-debug.apk`. As
+ferramentas diagnósticas ficam em **Configurações > Testes** no Android; não
+fazem parte do fluxo normal de configuração. Veja [BridgePad Desktop](./desktop/README.md)
+para comandos do receptor e limitações de desenvolvimento.
 
-## Documentação
+## Estrutura do projeto
 
-- [`docs/architecture.md`](./docs/architecture.md) — módulos e limites atuais;
-- [`docs/gamepad-core.md`](./docs/gamepad-core.md) — pipeline lógico e contrato
-  dos relatórios HID;
-- [`docs/ui-flow.md`](./docs/ui-flow.md) — configuração da sessão, Settings e
-  localização;
-- [`docs/testing.md`](./docs/testing.md) — procedimentos de build e hardware;
-- [`docs/compatibility.md`](./docs/compatibility.md) — resultados reais;
-- [`docs/release-checklist.md`](./docs/release-checklist.md) — gates restantes.
+- `app/`: interface Android, adaptadores de hardware e ciclo de vida da sessão.
+- `domain/`, `protocol/`, `streaming-core/`: contratos de input e mídia.
+- `transport-*/`: adaptadores de conexão Android.
+- `native/`: transporte nativo de mídia no Android.
+- `desktop/`: receptor Rust, adaptadores Windows e diagnósticos de transporte.
+- `protocol-spec/`: contratos versionados e vetores de teste.
 
-## Compatibilidade
+[Arquitetura](./docs/architecture.md) é a referência técnica atual.
+[Gamepad core](./docs/gamepad-core.md) descreve a normalização dos comandos;
+[streaming baseline](./docs/streaming-baseline.md) registra as medições da
+referência. O [CHANGELOG](./CHANGELOG.md) registra as mudanças de desenvolvimento.
 
-Bluetooth HID e as entradas Android podem variar conforme versão do Android,
-fabricante, controle, implementação Bluetooth e sistema do computador. O suporte
-é baseado em testes reais, não apenas na existência da API.
+## Privacidade, licença e contribuições
 
-O Samsung Galaxy A35 é o aparelho Android principal, e o GameSir X5 Lite é o
-controle físico principal. Eles são referências de validação, não requisitos
-fixos do código. Windows 11 foi validado; Windows 10 e Linux ainda não passaram
-pelo gate de compatibilidade do projeto.
+Os recursos locais principais do BridgePad não exigem conta, assinatura ou
+serviço de nuvem. O projeto usa a [licença Apache 2.0](./LICENSE). Consulte a
+[política de privacidade](./PRIVACY.md) e os
+[avisos de terceiros](./THIRD_PARTY_NOTICES.md).
 
-## Open source e privacidade
-
-O BridgePad pretende permanecer:
-
-- gratuito e open source;
-- sem anúncios;
-- sem assinatura;
-- sem conta obrigatória;
-- sem nuvem para as funções principais.
-
-Não haverá uma versão paga necessária para liberar funções do controle. Uma
-opção de doação voluntária poderá existir no futuro.
-
-O BridgePad usa a licença Apache License 2.0. Consulte [`LICENSE`](./LICENSE),
-[`PRIVACY.md`](./PRIVACY.md) e
-[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
-
-## Contribuições
-
-Contribuições e relatórios de hardware são bem-vindos, especialmente sobre:
-
-- aparelhos Android e controles diferentes;
-- comportamento Bluetooth;
-- mapeamento de controles;
-- bugs de input, reconexão e ciclo de vida;
-- desenvolvimento do receptor desktop para Windows/Linux;
-- testes, traduções e documentação.
-
-Ao relatar compatibilidade, informe aparelho e versão do Android, controle, tipo
-de conexão, comandos testados e versão do BridgePad. Não publique endereços
-Bluetooth ou identificadores pessoais. Revise relatórios de diagnóstico antes
-de compartilhá-los.
-
-## Integração contínua
-
-Todo push executa dois jobs independentes no GitHub Actions:
-
-- testes unitários e lint Android;
-- build do APK de debug.
-
-A build não depende do job de testes, então ambos executam mesmo que um falhe. O
-envio de e-mails é controlado pelas configurações de notificações do GitHub de
-cada colaborador.
+Contribuições e relatos de hardware são bem-vindos. Informe versões do Android
+e do PC, modelo do controle, método de conexão, versão do BridgePad e passos
+para reproduzir. Revise os logs antes de compartilhar: não publique endereços
+Bluetooth, segredos de pareamento ou outros identificadores pessoais.
