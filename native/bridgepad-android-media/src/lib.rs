@@ -405,15 +405,22 @@ fn run_udp_playable(
     hello[16..].copy_from_slice(&token);
     let mut receiver = UdpAeadReceiver::new(&key, 1)?;
     let mut control = UdpAeadSender::new(&key, 2)?;
-    let mut video = FrameAssembler::new(session_id, 1, 100_000, 16);
+    // A fragmented UDP IDR can take longer to transmit than an ordinary P frame.
+    // Leave room for the sender's 150 ms keyframe budget plus network jitter.
+    let mut video = FrameAssembler::new(session_id, 1, 250_000, 16);
     let mut audio = FrameAssembler::new(session_id, 2, 100_000, 16);
     let mut video_recovery = UdpVideoRecovery::new();
     let mut video_losses = 0_u64;
+    let mut video_delivered = 0_u64;
+    let mut video_dropped = 0_u64;
+    let mut keyframe_requests = 0_u64;
     let started = Instant::now();
     let mut last_media = Instant::now();
     let mut last_hello = Instant::now() - Duration::from_secs(1);
     let mut last_ping = Instant::now() - Duration::from_secs(1);
     let mut last_keyframe_request = Instant::now() - Duration::from_secs(1);
+    let mut last_stats = Instant::now();
+    let mut last_video_expiration = Instant::now();
     let mut authenticated = false;
     let mut control_sequence = 0_u32;
     let mut incoming = [0_u8; MAX_DATAGRAM_SIZE];
@@ -438,6 +445,52 @@ fn run_udp_playable(
             )?;
             last_ping = Instant::now();
         }
+        if last_video_expiration.elapsed() >= Duration::from_millis(20) {
+            video.expire(duration_micros(&started.elapsed()));
+            let losses = video
+                .metrics()
+                .expired_frames
+                .saturating_add(video.metrics().capacity_dropped_frames);
+            if losses > video_losses && video_recovery.frame_lost() {
+                notify_video_discontinuity(env, &callback)?;
+            }
+            video_losses = losses;
+            last_video_expiration = Instant::now();
+        }
+        if authenticated && last_stats.elapsed() >= Duration::from_secs(2) {
+            let metrics = video.metrics();
+            let report = format!(
+                "STATS delivered={video_delivered} dropped={video_dropped} complete={} expired={} duplicate={} keyframe_requests={keyframe_requests} waiting={}",
+                metrics.completed_frames,
+                metrics
+                    .expired_frames
+                    .saturating_add(metrics.capacity_dropped_frames),
+                metrics.duplicate_packets,
+                video_recovery.awaiting_keyframe(),
+            );
+            send_udp_control(
+                &socket,
+                &mut control,
+                session_id,
+                &mut control_sequence,
+                report.as_bytes(),
+            )?;
+            last_stats = Instant::now();
+        }
+        // Keep recovery active even when the socket receives a continuous
+        // stream of incomplete video fragments or audio-only packets.
+        if authenticated
+            && video_recovery.awaiting_keyframe()
+            && request_udp_keyframe(
+                &socket,
+                &mut control,
+                session_id,
+                &mut control_sequence,
+                &mut last_keyframe_request,
+            )?
+        {
+            keyframe_requests += 1;
+        }
         if (!authenticated && started.elapsed() >= Duration::from_secs(15))
             || (authenticated && last_media.elapsed() >= Duration::from_secs(30))
         {
@@ -451,25 +504,11 @@ fn run_udp_playable(
                     io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
                 ) =>
             {
-                video.expire(duration_micros(&started.elapsed()));
-                let losses = video
-                    .metrics()
-                    .expired_frames
-                    .saturating_add(video.metrics().capacity_dropped_frames);
-                if losses > video_losses && video_recovery.frame_lost() {
-                    notify_video_discontinuity(env, &callback)?;
-                }
-                video_losses = losses;
                 if authenticated
-                    && (video_recovery.awaiting_keyframe() || needs_video_keyframe(env, &callback)?)
+                    && needs_video_keyframe(env, &callback)?
+                    && video_recovery.frame_lost()
                 {
-                    request_udp_keyframe(
-                        &socket,
-                        &mut control,
-                        session_id,
-                        &mut control_sequence,
-                        &mut last_keyframe_request,
-                    )?;
+                    notify_video_discontinuity(env, &callback)?;
                 }
                 continue;
             }
@@ -507,28 +546,24 @@ fn run_udp_playable(
                         VideoDecision::Deliver => {
                             video.discard_older_than(frame.frame_id);
                             dispatch_playable_frame(env, &callback, frame)?;
+                            video_delivered += 1;
                         }
                         VideoDecision::RecoverAndDeliver => {
                             video.discard_older_than(frame.frame_id);
                             notify_video_discontinuity(env, &callback)?;
                             dispatch_playable_frame(env, &callback, frame)?;
+                            video_delivered += 1;
                         }
                         VideoDecision::RecoverAndDrop => {
                             notify_video_discontinuity(env, &callback)?;
+                            video_dropped += 1;
                         }
-                        VideoDecision::Drop => {}
+                        VideoDecision::Drop => video_dropped += 1,
                     }
                     if needs_video_keyframe(env, &callback)? {
                         if video_recovery.frame_lost() {
                             notify_video_discontinuity(env, &callback)?;
                         }
-                        request_udp_keyframe(
-                            &socket,
-                            &mut control,
-                            session_id,
-                            &mut control_sequence,
-                            &mut last_keyframe_request,
-                        )?;
                     }
                 }
             }
@@ -572,12 +607,13 @@ fn request_udp_keyframe(
     session_id: u64,
     sequence: &mut u32,
     last_request: &mut Instant,
-) -> Result<(), AnyError> {
+) -> Result<bool, AnyError> {
     if last_request.elapsed() >= Duration::from_millis(500) {
         send_udp_control(socket, sender, session_id, sequence, b"KEYFRAME")?;
         *last_request = Instant::now();
+        return Ok(true);
     }
-    Ok(())
+    Ok(false)
 }
 
 fn send_udp_control(

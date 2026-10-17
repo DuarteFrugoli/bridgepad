@@ -19,8 +19,10 @@ const HELLO_MAGIC: [u8; 8] = *b"BPMUPLAY";
 const AUTH_TIMEOUT: Duration = Duration::from_secs(15);
 const IDLE_TIMEOUT: Duration = Duration::from_secs(6);
 const PACKET_BUDGET: Duration = Duration::from_millis(35);
+const KEYFRAME_PACKET_BUDGET: Duration = Duration::from_millis(150);
 const MAX_MEDIA_DATAGRAM: usize = 1_100;
 const KEYFRAME_REQUEST_INTERVAL: Duration = Duration::from_millis(250);
+const KEYFRAME_RECOVERY_GRACE: Duration = Duration::from_millis(500);
 
 pub(super) fn run(
     signaling: &mut impl Write,
@@ -118,9 +120,13 @@ fn stream_media(
     let mut audio_frame_id = 0_u32;
     let mut sent_video = 0_u64;
     let mut dropped_video = 0_u64;
+    let mut sent_keyframes = 0_u64;
+    let mut failed_keyframes = 0_u64;
     let mut keyframe_requests = 0_u64;
     let mut awaiting_keyframe = false;
     let mut last_keyframe_request = Instant::now() - KEYFRAME_REQUEST_INTERVAL;
+    let mut last_sent_keyframe: Option<Instant> = None;
+    let mut last_keyframe_failure_log = Instant::now() - Duration::from_secs(2);
     let mut last_report = Instant::now();
     let mut last_heartbeat = Instant::now();
     let started = Instant::now();
@@ -153,10 +159,21 @@ fn stream_media(
                     }
                     if datagram.payload == b"KEYFRAME"
                         && last_keyframe_request.elapsed() >= KEYFRAME_REQUEST_INTERVAL
+                        && last_sent_keyframe
+                            .is_none_or(|sent| sent.elapsed() >= KEYFRAME_RECOVERY_GRACE)
                         && capture.request_keyframe().is_ok()
                     {
                         last_keyframe_request = Instant::now();
                         keyframe_requests += 1;
+                    }
+                    if let Some(stats) = datagram.payload.strip_prefix(b"STATS ")
+                        && stats.len() <= 160
+                        && stats
+                            .iter()
+                            .all(|byte| byte.is_ascii_graphic() || *byte == b' ')
+                        && let Ok(stats) = std::str::from_utf8(stats)
+                    {
+                        println!("UDP Android: {stats}");
                     }
                 }
                 Err(error) if error.kind() == ErrorKind::WouldBlock => break,
@@ -205,7 +222,7 @@ fn stream_media(
                     PacketFlags::NONE
                 };
                 let timestamp = u64::try_from(frame.presentation_timestamp.as_micros())?;
-                if send_frame(
+                let send = send_frame(
                     socket,
                     &mut sender,
                     PacketKind::Video,
@@ -216,13 +233,30 @@ fn stream_media(
                     &mut video_frame_id,
                     timestamp,
                     &frame.data,
-                )? {
+                )?;
+                if send.complete {
                     sent_video += 1;
                     if frame.keyframe {
                         awaiting_keyframe = false;
+                        sent_keyframes += 1;
+                        last_sent_keyframe = Some(Instant::now());
                     }
                 } else {
                     dropped_video += 1;
+                    if frame.keyframe {
+                        failed_keyframes += 1;
+                        if last_keyframe_failure_log.elapsed() >= Duration::from_secs(2) {
+                            println!(
+                                "UDP keyframe incomplete: {}/{} packets in {} ms ({} bytes, {})",
+                                send.sent_packets,
+                                send.total_packets,
+                                send.elapsed.as_millis(),
+                                frame.data.len(),
+                                send.failure_reason.unwrap_or("unknown"),
+                            );
+                            last_keyframe_failure_log = Instant::now();
+                        }
+                    }
                     awaiting_keyframe = true;
                     if last_keyframe_request.elapsed() >= KEYFRAME_REQUEST_INTERVAL
                         && capture.request_keyframe().is_ok()
@@ -237,14 +271,26 @@ fn stream_media(
             Err(error) => return Err(error.into()),
         }
         if last_report.elapsed() >= Duration::from_secs(2) {
+            let capture_stats = capture.stats();
             println!(
-                "UDP media: video sent={sent_video}, skipped={dropped_video}, keyframe requests={keyframe_requests}"
+                "UDP media: video sent={sent_video}, skipped={dropped_video}, keyframes sent/failed={sent_keyframes}/{failed_keyframes}, keyframe requests={keyframe_requests}, capture captured/encoded/dropped={}/{}/{}",
+                capture_stats.captured_frames,
+                capture_stats.encoded_frames,
+                capture_stats.dropped_before_encode,
             );
             last_report = Instant::now();
         }
     }
     println!("UDP playable stream stopped for {peer}");
     Ok(())
+}
+
+struct FrameSendStatus {
+    complete: bool,
+    sent_packets: usize,
+    total_packets: usize,
+    elapsed: Duration,
+    failure_reason: Option<&'static str>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -259,7 +305,7 @@ fn send_frame(
     frame_id: &mut u32,
     timestamp: u64,
     payload: &[u8],
-) -> Result<bool, AnyError> {
+) -> Result<FrameSendStatus, AnyError> {
     let packets = packetize_with_max_datagram_size(
         PacketizeRequest {
             kind,
@@ -275,20 +321,50 @@ fn send_frame(
     )?;
     *sequence = sequence.wrapping_add(u32::try_from(packets.len())?);
     *frame_id = frame_id.wrapping_add(1);
-    let deadline = Instant::now() + PACKET_BUDGET;
-    for packet in packets {
-        if Instant::now() >= deadline {
-            return Ok(false);
-        }
+    let total_packets = packets.len();
+    let started = Instant::now();
+    let keyframe = kind == PacketKind::Video && flags.contains(PacketFlags::KEYFRAME);
+    let budget = if keyframe {
+        KEYFRAME_PACKET_BUDGET
+    } else {
+        PACKET_BUDGET
+    };
+    let deadline = started + budget;
+    for (index, packet) in packets.into_iter().enumerate() {
+        let incomplete = |reason| FrameSendStatus {
+            complete: false,
+            sent_packets: index,
+            total_packets,
+            elapsed: started.elapsed(),
+            failure_reason: Some(reason),
+        };
         let sealed = sender.seal(&packet)?;
-        match socket.send(&sealed) {
-            Ok(size) if size == sealed.len() => {}
-            Ok(_) => return Ok(false),
-            Err(error) if error.kind() == ErrorKind::WouldBlock => return Ok(false),
-            Err(error) => return Err(error.into()),
+        loop {
+            if Instant::now() >= deadline {
+                return Ok(incomplete("time budget"));
+            }
+            match socket.send(&sealed) {
+                Ok(size) if size == sealed.len() => break,
+                Ok(_) => return Ok(incomplete("short send")),
+                Err(error)
+                    if error.kind() == ErrorKind::WouldBlock && kind == PacketKind::Video =>
+                {
+                    std::thread::yield_now();
+                }
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    return Ok(incomplete("socket busy"));
+                }
+                Err(error) => return Err(error.into()),
+            }
         }
     }
-    Ok(true)
+    Ok(FrameSendStatus {
+        complete: true,
+        sent_packets: total_packets,
+        total_packets,
+        elapsed: started.elapsed(),
+        failure_reason: None,
+    })
 }
 
 #[cfg(test)]
