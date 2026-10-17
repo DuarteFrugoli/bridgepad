@@ -295,6 +295,8 @@
     <string name="wifi_pair_again_action">Pair again</string>
     <string name="wifi_connection_lost">The Wi-Fi connection was lost after the automatic reconnection attempts.</string>
     <string name="wifi_protocol_error">This BridgePad Desktop version is not compatible with the app.</string>
+    <string name="wifi_no_controller_slot">All BridgePad controller slots are occupied. Disconnect another phone and try again.</string>
+    <string name="wifi_virtual_controller_unavailable">The computer could not create another virtual controller. Check the Desktop and controllers already connected to Windows.</string>
     <string name="wifi_connection_failed">Could not connect to BridgePad Desktop. Check the network and try again.</string>
     <string name="wifi_reconnecting">Connection interrupted. Reconnecting… (%1$d/%2$d)</string>
     <string name="network_waiting_to_reconnect">Connection interrupted. Waiting for the cable or network…</string>

@@ -10,6 +10,7 @@ import dev.jonalakas.bridgepad.protocol.BridgeInputKind
 import dev.jonalakas.bridgepad.protocol.BridgeMessage
 import dev.jonalakas.bridgepad.protocol.BridgeStopReason
 import java.io.DataInputStream
+import java.io.IOException
 import java.net.ConnectException
 import java.net.InetAddress
 import java.net.NoRouteToHostException
@@ -57,10 +58,15 @@ enum class NetworkFailureReason {
     DESKTOP_UNAVAILABLE,
     CERTIFICATE_CHANGED,
     AUTHENTICATION_REJECTED,
+    NO_CONTROLLER_SLOT,
+    VIRTUAL_CONTROLLER_UNAVAILABLE,
     CONNECTION_LOST,
     PROTOCOL_ERROR,
     UNKNOWN,
 }
+
+private class NetworkSessionRejectedException(val rejection: String) :
+    IOException("Desktop rejected the gamepad session: $rejection")
 
 sealed interface NetworkGamepadStatus {
     data object Connecting : NetworkGamepadStatus
@@ -304,8 +310,11 @@ class NetworkGamepadClient(
                     ),
                 ),
             )
-            val ready = readBridgePacket(input).message as? BridgeMessage.SessionReady
-                ?: error("Desktop did not accept the gamepad session")
+            val ready = when (val response = readBridgePacket(input).message) {
+                is BridgeMessage.SessionReady -> response
+                is BridgeMessage.Error -> throw NetworkSessionRejectedException(response.detail)
+                else -> error("Desktop did not accept the gamepad session")
+            }
             check(BridgeCapability.GAMEPAD in ready.enabledCapabilities) {
                 "Desktop did not enable gamepad input"
             }
@@ -470,6 +479,12 @@ class NetworkGamepadClient(
     private fun classifyFailure(error: Exception): NetworkGamepadStatus.Failed {
         val chain = generateSequence<Throwable>(error) { it.cause }.toList()
         val reason = when {
+            chain.filterIsInstance<NetworkSessionRejectedException>().any {
+                it.rejection == "no_slot"
+            } -> NetworkFailureReason.NO_CONTROLLER_SLOT
+            chain.filterIsInstance<NetworkSessionRejectedException>().any {
+                it.rejection == "backend_unavailable" || it.rejection == "registry_unavailable"
+            } -> NetworkFailureReason.VIRTUAL_CONTROLLER_UNAVAILABLE
             chain.any { it is PairingRejectedException || it is NetworkAuthenticationException } ->
                 NetworkFailureReason.AUTHENTICATION_REJECTED
             chain.any { it is CertificateException } ||

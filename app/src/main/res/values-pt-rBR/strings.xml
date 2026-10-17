@@ -295,6 +295,8 @@
     <string name="wifi_pair_again_action">Parear novamente</string>
     <string name="wifi_connection_lost">A conexão Wi-Fi foi perdida após as tentativas automáticas de reconexão.</string>
     <string name="wifi_protocol_error">Esta versão do BridgePad Desktop não é compatível com o aplicativo.</string>
+    <string name="wifi_no_controller_slot">Todas as vagas de controles BridgePad estão ocupadas. Desconecte outro celular e tente novamente.</string>
+    <string name="wifi_virtual_controller_unavailable">O computador não conseguiu criar outro controle virtual. Confira o BridgePad Desktop e os controles já conectados ao Windows.</string>
     <string name="wifi_connection_failed">Não foi possível conectar ao BridgePad Desktop. Confira a rede e tente novamente.</string>
     <string name="wifi_reconnecting">Conexão interrompida. Reconectando… (%1$d/%2$d)</string>
     <string name="network_waiting_to_reconnect">Conexão interrompida. Aguardando o cabo ou a rede…</string>

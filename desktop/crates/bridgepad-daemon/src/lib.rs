@@ -4,10 +4,11 @@ mod auth;
 pub mod bluetooth;
 mod discovery;
 mod input_probe;
+mod player_registry;
 mod quic_media;
-mod udp_media;
-mod udp_input;
 mod trust;
+mod udp_input;
+mod udp_media;
 
 use auth::{
     NONCE_SIZE, PBKDF2_ITERATIONS, PairingWindow, SALT_SIZE, authentication_transcript,
@@ -33,6 +34,7 @@ use bridgepad_windows_audio::{AudioCaptureError, AudioConfig, WindowsAudioLoopba
 use bridgepad_windows_capture::{CaptureConfig, CaptureError, WindowsCapturePipeline};
 use bridgepad_windows_pointer::{WindowsKeyboard, WindowsPointer};
 use bridgepad_windows_vigem::VigemGamepad;
+use player_registry::{ClaimError, PlayerKey, PlayerLease, PlayerRegistry};
 use rcgen::{CertifiedKey, generate_simple_self_signed};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ServerConfig, ServerConnection, StreamOwned};
@@ -150,7 +152,7 @@ impl DesktopServer {
             pairing: Mutex::new(PairingWindow::new()?),
             allow_unpaired: options.allow_unpaired,
             connected_clients: AtomicUsize::new(0),
-            active_sessions: AtomicUsize::new(0),
+            players: Arc::new(PlayerRegistry::default()),
             active_sockets: Mutex::new(HashMap::new()),
             active_media: Mutex::new(None),
             next_connection_id: AtomicUsize::new(1),
@@ -228,7 +230,7 @@ impl DesktopServer {
             pairing_expires_in_seconds,
             trusted_devices,
             connected_clients: self.state.connected_clients.load(Ordering::Relaxed),
-            active_sessions: self.state.active_sessions.load(Ordering::Relaxed),
+            active_sessions: self.state.players.count(),
             last_error,
         })
     }
@@ -241,10 +243,16 @@ impl DesktopServer {
     pub fn forget_peer(&self, id: &str) -> Result<bool, AnyError> {
         let id = decode_array::<PEER_ID_SIZE>(id)
             .map_err(|message| format!("invalid peer id: {message}"))?;
+        self.state.players.revoke(PlayerKey::Authenticated(id));
         Ok(lock(&self.state.trust_store)?.forget(&id)?)
     }
 
     pub fn forget_all(&self) -> Result<(), AnyError> {
+        // Active sockets will fail authentication on their next connection;
+        // close their current virtual devices immediately as well.
+        for peer in lock(&self.state.trust_store)?.all() {
+            self.state.players.revoke(PlayerKey::Authenticated(peer.id));
+        }
         lock(&self.state.trust_store)?.clear()?;
         Ok(())
     }
@@ -283,7 +291,7 @@ struct ServerState {
     pairing: Mutex<PairingWindow>,
     allow_unpaired: bool,
     connected_clients: AtomicUsize,
-    active_sessions: AtomicUsize,
+    players: Arc<PlayerRegistry>,
     active_sockets: Mutex<HashMap<usize, TcpStream>>,
     active_media: Mutex<Option<ActiveMediaSession>>,
     next_connection_id: AtomicUsize,
@@ -441,14 +449,13 @@ fn serve(
         return Err("TLS handshake did not finish".into());
     }
     println!("TLS client authenticated from {peer}");
-    let mut gamepad: Option<GamepadLease> = None;
+    let mut gamepad: Option<PlayerLease> = None;
     let mut udp_input: Option<udp_input::UdpInputSession> = None;
     let mut input_probe: Option<input_probe::InputProbeSession> = None;
     let mut pointer: Option<PointerLease> = None;
     let mut keyboard: Option<KeyboardLease> = None;
     let mut active_session_id = None;
     let mut latest_gamepad_sequence = None;
-    let mut _session_lease: Option<SessionLease> = None;
     let mut authenticated_peer = None;
     let mut pair_attempt: Option<PairAttempt> = None;
     let mut auth_attempt: Option<AuthAttempt> = None;
@@ -459,6 +466,9 @@ fn serve(
             return Ok(());
         };
         let packet = decode_packet(&bytes)?;
+        if active_session_id.is_some() && !gamepad.as_ref().is_some_and(PlayerLease::is_active) {
+            return Err("this player's session was replaced or revoked".into());
+        }
         match packet.header.message_type {
             MessageType::Ping => {
                 if packet.payload.len() != 8 {
@@ -640,11 +650,35 @@ fn serve(
                 if request.requested_capabilities & CAPABILITY_GAMEPAD == 0 {
                     return Err("the client did not request the gamepad capability".into());
                 }
-                gamepad = Some(GamepadLease::new(Box::new(VigemGamepad::connect()?))?);
+                let player = authenticated_peer
+                    .map_or(PlayerKey::Unpaired(connection_id), PlayerKey::Authenticated);
+                let claimed = state.players.claim(player, || {
+                    GamepadLease::new(Box::new(VigemGamepad::connect()?))
+                });
+                gamepad = Some(match claimed {
+                    Ok(lease) => lease,
+                    Err(error) => {
+                        let reason = match &error {
+                            ClaimError::NoSlot => "no_slot",
+                            ClaimError::Backend(_) => "backend_unavailable",
+                            ClaimError::RegistryPoisoned => "registry_unavailable",
+                        };
+                        write_session_rejection(&mut stream, packet.header, reason)?;
+                        return Err(error.into());
+                    }
+                });
+                if gamepad.as_ref().is_some_and(PlayerLease::replaced_previous) {
+                    println!(
+                        "Replaced previous gamepad session for {}",
+                        match player {
+                            PlayerKey::Authenticated(id) => encode_hex(&id),
+                            PlayerKey::Unpaired(_) => "unpaired diagnostic client".to_owned(),
+                        }
+                    );
+                }
                 pointer = Some(PointerLease::new(Box::new(WindowsPointer::connect()))?);
                 keyboard = Some(KeyboardLease::new(Box::new(WindowsKeyboard::connect())));
                 active_session_id = Some(packet.header.session_id);
-                _session_lease = Some(SessionLease::new(&state));
                 latest_gamepad_sequence = None;
                 write_response(
                     &mut stream,
@@ -720,10 +754,13 @@ fn serve(
                 if active_session_id != Some(packet.header.session_id) {
                     return Err("gamepad snapshot does not belong to the active session".into());
                 }
+                if udp_input.is_some() {
+                    return Err("TCP gamepad snapshots are unavailable during UDP input".into());
+                }
                 if is_newer_sequence(latest_gamepad_sequence, packet.header.sequence) {
                     let report = to_gamepad_report(decode_gamepad_snapshot(packet)?)?;
                     gamepad
-                        .as_mut()
+                        .as_ref()
                         .ok_or("gamepad session is not active")?
                         .update(report)?;
                     latest_gamepad_sequence = Some(packet.header.sequence);
@@ -735,30 +772,44 @@ fn serve(
                     || udp_input.is_some()
                     || !packet.payload.is_empty()
                 {
-                    return Err("UDP input offer does not belong to an active control session".into());
+                    return Err(
+                        "UDP input offer does not belong to an active control session".into(),
+                    );
                 }
-                let lease = gamepad.take().ok_or("gamepad session is not active")?;
-                let (session, port, key) = udp_input::UdpInputSession::start(
-                    lease,
-                    packet.header.session_id,
-                    peer.ip(),
-                )?;
+                let device = gamepad
+                    .as_ref()
+                    .ok_or("gamepad session is not active")?
+                    .device();
+                let (session, port, key) =
+                    udp_input::UdpInputSession::start(device, packet.header.session_id, peer.ip())?;
                 udp_input = Some(session);
                 let mut ready = Vec::with_capacity(34);
                 ready.extend_from_slice(&port.to_be_bytes());
                 ready.extend_from_slice(&key);
-                write_response(&mut stream, packet.header, MessageType::UdpInputReady, &ready)?;
+                write_response(
+                    &mut stream,
+                    packet.header,
+                    MessageType::UdpInputReady,
+                    &ready,
+                )?;
                 println!("Experimental UDP gamepad receiver ready for {peer} on port {port}");
-                udp_input.as_ref().ok_or("UDP input session ended")?.wait_for_first_packet()?;
+                udp_input
+                    .as_ref()
+                    .ok_or("UDP input session ended")?
+                    .wait_for_first_packet()?;
                 write_response(&mut stream, packet.header, MessageType::UdpInputActive, &[])?;
             }
             MessageType::InputProbeOffer => {
                 if plane != ConnectionPlane::Control
                     || (authenticated_peer.is_none() && !state.allow_unpaired)
-                    || gamepad.is_some() || udp_input.is_some() || input_probe.is_some()
+                    || gamepad.is_some()
+                    || udp_input.is_some()
+                    || input_probe.is_some()
                     || !packet.payload.is_empty()
                 {
-                    return Err("input probe requires an authenticated idle control connection".into());
+                    return Err(
+                        "input probe requires an authenticated idle control connection".into(),
+                    );
                 }
                 let (probe, port, uplink_key, downlink_key) =
                     input_probe::InputProbeSession::start(packet.header.session_id, peer.ip())?;
@@ -767,8 +818,15 @@ fn serve(
                 ready.extend_from_slice(&port.to_be_bytes());
                 ready.extend_from_slice(&uplink_key);
                 ready.extend_from_slice(&downlink_key);
-                write_response(&mut stream, packet.header, MessageType::InputProbeReady, &ready)?;
-                stream.sock.set_read_timeout(Some(Duration::from_secs(30)))?;
+                write_response(
+                    &mut stream,
+                    packet.header,
+                    MessageType::InputProbeReady,
+                    &ready,
+                )?;
+                stream
+                    .sock
+                    .set_read_timeout(Some(Duration::from_secs(30)))?;
                 println!("Input transport comparison ready for {peer} on UDP port {port}");
             }
             MessageType::Pointer => {
@@ -834,7 +892,6 @@ fn serve(
                     pointer = None;
                     keyboard = None;
                     active_session_id = None;
-                    _session_lease = None;
                     latest_gamepad_sequence = None;
                     println!("Playable gamepad session stopped for {peer}");
                 }
@@ -1192,6 +1249,18 @@ fn write_response(
     Ok(())
 }
 
+fn write_session_rejection(
+    stream: &mut impl Write,
+    request: PacketHeader,
+    reason: &str,
+) -> Result<(), AnyError> {
+    let mut payload = Vec::with_capacity(5 + reason.len());
+    payload.extend_from_slice(&4_u16.to_be_bytes()); // SESSION_REJECTED
+    payload.push(1); // fatal for this connection
+    write_string_u16(&mut payload, reason)?;
+    write_response(stream, request, MessageType::Error, &payload)
+}
+
 fn is_newer_sequence(latest: Option<u32>, candidate: u32) -> bool {
     latest.is_none_or(|previous| {
         let distance = candidate.wrapping_sub(previous);
@@ -1312,23 +1381,6 @@ impl Drop for ConnectionLease<'_> {
             self.plane,
             previous.saturating_sub(1),
         );
-    }
-}
-
-struct SessionLease<'a> {
-    state: &'a ServerState,
-}
-
-impl<'a> SessionLease<'a> {
-    fn new(state: &'a ServerState) -> Self {
-        state.active_sessions.fetch_add(1, Ordering::Relaxed);
-        Self { state }
-    }
-}
-
-impl Drop for SessionLease<'_> {
-    fn drop(&mut self) {
-        self.state.active_sessions.fetch_sub(1, Ordering::Relaxed);
     }
 }
 

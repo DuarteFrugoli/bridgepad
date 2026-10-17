@@ -283,6 +283,17 @@ This is a playable transport test, not a decision to migrate pointer/keyboard
 or to use UDP as the final input protocol. Bluetooth HID and RFCOMM are outside
 this IP migration.
 
+For Wi-Fi and USB control sessions, the Desktop now keeps one virtual gamepad
+per authenticated phone identity, not per IP address or socket. A reconnect or
+Wi-Fi/USB route switch revokes the previous generation and removes its virtual
+device before activating the replacement; late reports and teardown from the
+old connection cannot affect the new session. The registry caps managed IP
+sessions at four and rejects a fifth with an explicit no-slot error. This is
+the first multi-controller milestone, not full multi-transport support:
+Bluetooth Desktop still has its separate RFCOMM receiver and needs
+application-level identity before it can join the same registry. Direct HID
+remains outside Desktop ownership, and media still supports one viewer.
+
 Settings > Tests also offers a paired IP input transport comparison. It sends
 300 serial Ping/Pong echoes through TCP/TLS and 300 through a separately keyed
 UDP+AEAD probe on the same selected Wi-Fi or USB route. The UDP probe reuses the

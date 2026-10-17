@@ -1,7 +1,7 @@
 //! Experimental gamepad-only UDP input. TLS owns authentication and lifetime;
 //! each control session receives a fresh one-direction AEAD key and UDP socket.
 
-use super::{AnyError, GamepadLease, to_gamepad_report};
+use super::{AnyError, player_registry::PlayerDevice, to_gamepad_report};
 use bridgepad_protocol::{MessageType, decode_gamepad_snapshot, decode_packet};
 use ring::aead::{AES_256_GCM, Aad, LessSafeKey, Nonce, UnboundKey};
 use ring::rand::{SecureRandom, SystemRandom};
@@ -25,7 +25,7 @@ pub(super) struct UdpInputSession {
 
 impl UdpInputSession {
     pub(super) fn start(
-        gamepad: GamepadLease,
+        gamepad: Arc<PlayerDevice>,
         session_id: u64,
         peer_ip: IpAddr,
     ) -> Result<(Self, u16, [u8; 32]), AnyError> {
@@ -90,7 +90,7 @@ impl Drop for UdpInputSession {
 fn receive(
     socket: UdpSocket,
     cipher: LessSafeKey,
-    mut gamepad: GamepadLease,
+    gamepad: Arc<PlayerDevice>,
     session_id: u64,
     peer_ip: IpAddr,
     stop: &AtomicBool,

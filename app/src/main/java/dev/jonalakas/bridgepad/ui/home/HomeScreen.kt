@@ -902,6 +902,8 @@ private fun NetworkFailureReason.messageResource(): Int = when (this) {
     NetworkFailureReason.DESKTOP_UNAVAILABLE -> R.string.wifi_desktop_not_available
     NetworkFailureReason.CERTIFICATE_CHANGED -> R.string.wifi_identity_changed
     NetworkFailureReason.AUTHENTICATION_REJECTED -> R.string.wifi_authentication_rejected
+    NetworkFailureReason.NO_CONTROLLER_SLOT -> R.string.wifi_no_controller_slot
+    NetworkFailureReason.VIRTUAL_CONTROLLER_UNAVAILABLE -> R.string.wifi_virtual_controller_unavailable
     NetworkFailureReason.CONNECTION_LOST -> R.string.wifi_connection_lost
     NetworkFailureReason.PROTOCOL_ERROR -> R.string.wifi_protocol_error
     NetworkFailureReason.UNKNOWN -> R.string.wifi_connection_failed

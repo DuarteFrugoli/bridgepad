@@ -24,6 +24,8 @@ const translations = {
     readyDetail: "Waiting for your phone on this network.",
     connectedDetail: "Secure connection established. Waiting for a game session.",
     playingDetail: "BridgePad is sending controller input to this computer.",
+    activeControllerOne: "1 BridgePad controller active. Windows and the game may assign a different player number.",
+    activeControllerMany: "{count} BridgePad controllers active. Windows and the game may assign different player numbers.",
     errorDetail: "BridgePad Desktop is not receiving connections.",
     errorTitle: "BridgePad needs attention",
     pairEyebrow: "PAIR A PHONE",
@@ -51,6 +53,8 @@ const translations = {
     readyDetail: "Aguardando seu celular nesta rede.",
     connectedDetail: "Conexão segura estabelecida. Aguardando uma sessão de jogo.",
     playingDetail: "O BridgePad está enviando os comandos para este computador.",
+    activeControllerOne: "1 controle BridgePad ativo. O Windows e o jogo podem atribuir outro número de jogador.",
+    activeControllerMany: "{count} controles BridgePad ativos. O Windows e o jogo podem atribuir outros números de jogador.",
     errorDetail: "O BridgePad Desktop não está recebendo conexões.",
     errorTitle: "O BridgePad precisa de atenção",
     pairEyebrow: "PAREAR UM CELULAR",
@@ -147,7 +151,11 @@ function render(status) {
   latestStatus = status;
   const [label, detail] = phaseText(status.phase);
   elements.statusLabel.textContent = label;
-  elements.statusDetail.textContent = detail;
+  const activeCount = Number(status.activeSessions) || 0;
+  elements.statusDetail.textContent = status.phase === "playing"
+    ? t(activeCount === 1 ? "activeControllerOne" : "activeControllerMany")
+        .replace("{count}", String(activeCount))
+    : detail;
   elements.desktopName.textContent = status.desktopName;
   elements.statusDot.className = `status-dot ${status.phase}`;
   elements.pairingCode.textContent = status.pairingCode || "•••• — •••• — ••••";
