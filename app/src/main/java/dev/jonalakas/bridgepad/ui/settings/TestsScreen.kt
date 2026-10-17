@@ -42,6 +42,8 @@ fun TestsScreen(
     onOpenUsbAccessoryDiagnostic: () -> Unit,
     onOpenDesktopStreaming: () -> Unit,
     onOpenMediaTransportDiagnostic: () -> Unit,
+    onOpenUdpRecoveryDiagnostic: () -> Unit,
+    onOpenInputComparisonDiagnostic: () -> Unit,
     onCopyDiagnostics: () -> Unit,
     onShareDiagnostics: () -> Unit,
     onBack: () -> Unit,
@@ -119,6 +121,24 @@ fun TestsScreen(
                     TestActionButton(
                         stringResource(R.string.media_transport_test_open),
                         onOpenMediaTransportDiagnostic,
+                    )
+                }
+            }
+            item {
+                SettingsSectionCard(title = stringResource(R.string.udp_recovery_test_title)) {
+                    Text(stringResource(R.string.udp_recovery_test_description))
+                    TestActionButton(
+                        stringResource(R.string.udp_recovery_test_open),
+                        onOpenUdpRecoveryDiagnostic,
+                    )
+                }
+            }
+            item {
+                SettingsSectionCard(title = stringResource(R.string.input_comparison_title)) {
+                    Text(stringResource(R.string.input_comparison_description))
+                    TestActionButton(
+                        stringResource(R.string.input_comparison_open),
+                        onOpenInputComparisonDiagnostic,
                     )
                 }
             }

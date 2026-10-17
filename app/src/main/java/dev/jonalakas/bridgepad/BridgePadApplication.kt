@@ -11,6 +11,7 @@ import dev.jonalakas.bridgepad.session.InputRouter
 import dev.jonalakas.bridgepad.session.SessionCoordinator
 import dev.jonalakas.bridgepad.session.NetworkGameplayController
 import dev.jonalakas.bridgepad.session.NetworkDesktopCoordinator
+import dev.jonalakas.bridgepad.session.IpGamepadTransportStore
 import dev.jonalakas.bridgepad.session.BluetoothDesktopGameplayController
 import dev.jonalakas.bridgepad.session.BluetoothDesktopSessionAdapter
 import dev.jonalakas.bridgepad.session.OutputSessionOwner
@@ -43,6 +44,7 @@ class BridgePadApplication : Application() {
         TouchscreenDisplaySettingsStore.initialize(this)
         SessionOrientationStore.initialize(this)
         PlayableMediaTransportStore.initialize(this)
+        IpGamepadTransportStore.initialize(this)
         inputRouter = InputRouter(applicationScope)
         val outputSessionOwner = OutputSessionOwner()
         bluetoothDesktopGameplayController = BluetoothDesktopGameplayController(

@@ -350,6 +350,7 @@ class NetworkDesktopCoordinator(
                 requiredLocalRoute = { localAddress ->
                     NetworkRouteClassifier.matches(connectionMethod, localAddress)
                 },
+                gamepadTransport = IpGamepadTransportStore.selected.value,
             ),
             physicalCaptureMode = captureMode,
             gamepadEnabled = gamepadEnabled,
@@ -404,6 +405,26 @@ class NetworkDesktopCoordinator(
             requiredLocalRoute = connectionMethod?.let { method ->
                 { localAddress -> NetworkRouteClassifier.matches(method, localAddress) }
             },
+        )
+    }
+
+    fun inputComparisonRequest(
+        peerIdHex: String,
+        connectionMethod: ConnectionMethod,
+    ): NetworkGamepadRequest? {
+        val media = mediaRequest(peerIdHex, connectionMethod) ?: return null
+        val trusted = trustedStore.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
+            ?: return null
+        val discovered = discovery.desktops.value.firstOrNull { it.peerIdHex == peerIdHex }
+        return NetworkGamepadRequest(
+            host = media.host,
+            alternateHosts = media.alternateHosts,
+            port = discovered?.port ?: trusted.port,
+            certificateSha256 = media.certificateSha256,
+            credentials = media.credentials,
+            connectTimeoutMillis = media.connectTimeoutMillis,
+            reconnectAttempts = 0,
+            requiredLocalRoute = media.requiredLocalRoute,
         )
     }
 

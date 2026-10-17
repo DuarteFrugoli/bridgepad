@@ -7,4 +7,6 @@ public interface MediaFrameCallback {
     /** UDP recovery must discard queued/decode-pending pictures before the next IDR. */
     void onVideoDiscontinuity();
     boolean needsVideoKeyframe();
+    /** Invoked only when the UDP A/B diagnostic deliberately discards a frame. */
+    void onVideoTestDrop();
 }

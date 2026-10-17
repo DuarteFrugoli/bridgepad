@@ -3,8 +3,10 @@
 mod auth;
 pub mod bluetooth;
 mod discovery;
+mod input_probe;
 mod quic_media;
 mod udp_media;
+mod udp_input;
 mod trust;
 
 use auth::{
@@ -440,6 +442,8 @@ fn serve(
     }
     println!("TLS client authenticated from {peer}");
     let mut gamepad: Option<GamepadLease> = None;
+    let mut udp_input: Option<udp_input::UdpInputSession> = None;
+    let mut input_probe: Option<input_probe::InputProbeSession> = None;
     let mut pointer: Option<PointerLease> = None;
     let mut keyboard: Option<KeyboardLease> = None;
     let mut active_session_id = None;
@@ -626,7 +630,7 @@ fn serve(
                 if authenticated_peer.is_none() && !state.allow_unpaired {
                     return Err("authentication is required before gameplay".into());
                 }
-                if gamepad.is_some() {
+                if gamepad.is_some() || udp_input.is_some() || input_probe.is_some() {
                     return Err("a gamepad session is already active on this connection".into());
                 }
                 let request = decode_session_start(packet)?;
@@ -725,6 +729,48 @@ fn serve(
                     latest_gamepad_sequence = Some(packet.header.sequence);
                 }
             }
+            MessageType::UdpInputOffer => {
+                if plane != ConnectionPlane::Control
+                    || active_session_id != Some(packet.header.session_id)
+                    || udp_input.is_some()
+                    || !packet.payload.is_empty()
+                {
+                    return Err("UDP input offer does not belong to an active control session".into());
+                }
+                let lease = gamepad.take().ok_or("gamepad session is not active")?;
+                let (session, port, key) = udp_input::UdpInputSession::start(
+                    lease,
+                    packet.header.session_id,
+                    peer.ip(),
+                )?;
+                udp_input = Some(session);
+                let mut ready = Vec::with_capacity(34);
+                ready.extend_from_slice(&port.to_be_bytes());
+                ready.extend_from_slice(&key);
+                write_response(&mut stream, packet.header, MessageType::UdpInputReady, &ready)?;
+                println!("Experimental UDP gamepad receiver ready for {peer} on port {port}");
+                udp_input.as_ref().ok_or("UDP input session ended")?.wait_for_first_packet()?;
+                write_response(&mut stream, packet.header, MessageType::UdpInputActive, &[])?;
+            }
+            MessageType::InputProbeOffer => {
+                if plane != ConnectionPlane::Control
+                    || (authenticated_peer.is_none() && !state.allow_unpaired)
+                    || gamepad.is_some() || udp_input.is_some() || input_probe.is_some()
+                    || !packet.payload.is_empty()
+                {
+                    return Err("input probe requires an authenticated idle control connection".into());
+                }
+                let (probe, port, uplink_key, downlink_key) =
+                    input_probe::InputProbeSession::start(packet.header.session_id, peer.ip())?;
+                input_probe = Some(probe);
+                let mut ready = Vec::with_capacity(66);
+                ready.extend_from_slice(&port.to_be_bytes());
+                ready.extend_from_slice(&uplink_key);
+                ready.extend_from_slice(&downlink_key);
+                write_response(&mut stream, packet.header, MessageType::InputProbeReady, &ready)?;
+                stream.sock.set_read_timeout(Some(Duration::from_secs(30)))?;
+                println!("Input transport comparison ready for {peer} on UDP port {port}");
+            }
             MessageType::Pointer => {
                 if active_session_id != Some(packet.header.session_id) {
                     return Err("pointer report does not belong to the active session".into());
@@ -783,6 +829,7 @@ fn serve(
             }
             MessageType::SessionStop => {
                 if active_session_id == Some(packet.header.session_id) {
+                    udp_input = None;
                     gamepad = None;
                     pointer = None;
                     keyboard = None;

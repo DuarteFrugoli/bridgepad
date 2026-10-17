@@ -37,6 +37,40 @@ sealed interface BridgeMessage {
         override val type = BridgeMessageType.SESSION_READY
     }
 
+    data object UdpInputOffer : BridgeMessage {
+        override val type = BridgeMessageType.UDP_INPUT_OFFER
+    }
+
+    data class UdpInputReady(val port: Int, val key: ByteArray) : BridgeMessage {
+        override val type = BridgeMessageType.UDP_INPUT_READY
+
+        init {
+            require(port in 1..65_535)
+            require(key.size == 32)
+        }
+    }
+
+    data object UdpInputActive : BridgeMessage {
+        override val type = BridgeMessageType.UDP_INPUT_ACTIVE
+    }
+
+    data object InputProbeOffer : BridgeMessage {
+        override val type = BridgeMessageType.INPUT_PROBE_OFFER
+    }
+
+    data class InputProbeReady(
+        val port: Int,
+        val uplinkKey: ByteArray,
+        val downlinkKey: ByteArray,
+    ) : BridgeMessage {
+        override val type = BridgeMessageType.INPUT_PROBE_READY
+
+        init {
+            require(port in 1..65_535)
+            require(uplinkKey.size == 32 && downlinkKey.size == 32)
+        }
+    }
+
     data class SessionStop(val reason: BridgeStopReason) : BridgeMessage {
         override val type = BridgeMessageType.SESSION_STOP
     }

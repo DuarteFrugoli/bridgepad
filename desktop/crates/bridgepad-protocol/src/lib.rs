@@ -48,6 +48,11 @@ pub enum MessageType {
     QuicReady = 0x58,
     UdpMediaOffer = 0x59,
     UdpMediaReady = 0x5a,
+    UdpInputOffer = 0x60,
+    UdpInputReady = 0x61,
+    UdpInputActive = 0x62,
+    InputProbeOffer = 0x63,
+    InputProbeReady = 0x64,
 }
 
 impl TryFrom<u8> for MessageType {
@@ -87,6 +92,11 @@ impl TryFrom<u8> for MessageType {
             0x58 => Ok(Self::QuicReady),
             0x59 => Ok(Self::UdpMediaOffer),
             0x5a => Ok(Self::UdpMediaReady),
+            0x60 => Ok(Self::UdpInputOffer),
+            0x61 => Ok(Self::UdpInputReady),
+            0x62 => Ok(Self::UdpInputActive),
+            0x63 => Ok(Self::InputProbeOffer),
+            0x64 => Ok(Self::InputProbeReady),
             _ => Err(ProtocolError::UnknownMessageType(value)),
         }
     }

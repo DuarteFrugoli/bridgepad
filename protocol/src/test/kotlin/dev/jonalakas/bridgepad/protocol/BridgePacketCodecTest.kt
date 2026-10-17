@@ -17,6 +17,31 @@ import java.util.Properties
 
 class BridgePacketCodecTest {
     @Test
+    fun udpInputOfferAndReadyRoundTrip() {
+        val offer = BridgePacket(7, 1, 10, BridgeMessage.UdpInputOffer)
+        assertEquals(offer, BridgePacketCodec.decode(BridgePacketCodec.encode(offer)))
+        val ready = BridgePacket(7, 2, 11, BridgeMessage.UdpInputReady(42_001, ByteArray(32) { it.toByte() }))
+        val decoded = BridgePacketCodec.decode(BridgePacketCodec.encode(ready))
+        val message = decoded.message as BridgeMessage.UdpInputReady
+        assertEquals(42_001, message.port)
+        assertArrayEquals((ready.message as BridgeMessage.UdpInputReady).key, message.key)
+        val active = BridgePacket(7, 3, 12, BridgeMessage.UdpInputActive)
+        assertEquals(active, BridgePacketCodec.decode(BridgePacketCodec.encode(active)))
+        val probeOffer = BridgePacket(7, 4, 13, BridgeMessage.InputProbeOffer)
+        assertEquals(probeOffer, BridgePacketCodec.decode(BridgePacketCodec.encode(probeOffer)))
+        val probeReady = BridgePacket(7, 5, 14, BridgeMessage.InputProbeReady(
+            42_002, ByteArray(32) { it.toByte() }, ByteArray(32) { (it + 1).toByte() },
+        ))
+        val decodedProbe = BridgePacketCodec.decode(BridgePacketCodec.encode(probeReady))
+            .message as BridgeMessage.InputProbeReady
+        assertEquals(42_002, decodedProbe.port)
+        assertArrayEquals((probeReady.message as BridgeMessage.InputProbeReady).uplinkKey,
+            decodedProbe.uplinkKey)
+        assertArrayEquals((probeReady.message as BridgeMessage.InputProbeReady).downlinkKey,
+            decodedProbe.downlinkKey)
+    }
+
+    @Test
     fun gamepadLivenessMatchesSharedContract() {
         assertEquals(
             goldenVectors.getProperty("gamepad_keepalive_interval_ms").toLong(),

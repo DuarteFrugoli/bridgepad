@@ -26,7 +26,7 @@ use subtle::ConstantTimeEq;
 use tokio::time::timeout;
 
 mod udp_recovery;
-use udp_recovery::{UdpVideoRecovery, VideoDecision};
+use udp_recovery::{RecoveryMode, TestLossInjector, UdpVideoRecovery, VideoDecision};
 
 const FRAMES_PER_SECOND: u64 = 60;
 const PACKETS_PER_FRAME: u64 = 16;
@@ -52,6 +52,9 @@ const TEST_SERVER_NAME: &str = "bridgepad.test";
 const PLAY_SERVER_NAME: &str = "bridgepad.local";
 const PLAY_HELLO_MAGIC: [u8; 8] = *b"BPMQPLAY";
 const PLAY_UDP_HELLO_MAGIC: [u8; 8] = *b"BPMUPLAY";
+// Temporary UDP A/B experiment. Switch to Strict to compare with the
+// previously shipped behavior; QUIC is unaffected.
+const UDP_RECOVERY_MODE: RecoveryMode = RecoveryMode::Relaxed;
 
 static ACTIVE_RUN_ID: AtomicU64 = AtomicU64::new(0);
 static CANCELLED_RUN_ID: AtomicU64 = AtomicU64::new(0);
@@ -192,12 +195,22 @@ pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNati
     token: JByteArray,
     key: JByteArray,
     session_id: jlong,
+    recovery_mode_flag: jint,
+    test_drop_interval: jint,
     callback: JObject,
 ) -> jstring {
     let result = catch_unwind(AssertUnwindSafe(|| -> Result<(), AnyError> {
         let operation_id = u64::try_from(operation_id).map_err(|_| "invalid operation ID")?;
         if operation_id == 0 || !(1..=u16::MAX.into()).contains(&port) || session_id <= 0 {
             return Err("invalid playable UDP session parameters".into());
+        }
+        let recovery_mode =
+            RecoveryMode::from_diagnostic_flag(recovery_mode_flag, UDP_RECOVERY_MODE)
+                .ok_or("invalid UDP recovery diagnostic mode")?;
+        if !(0..=10_000).contains(&test_drop_interval)
+            || (recovery_mode_flag == -1 && test_drop_interval != 0)
+        {
+            return Err("invalid UDP diagnostic loss interval".into());
         }
         let host: String = env.get_string(&host)?.into();
         let local_address = env.convert_byte_array(local_address)?;
@@ -221,6 +234,8 @@ pub extern "system" fn Java_dev_jonalakas_bridgepad_streaming_MediaTransportNati
             key,
             session_id as u64,
             operation_id,
+            recovery_mode,
+            test_drop_interval as u32,
         )
     }));
     let message = match result {
@@ -381,6 +396,8 @@ fn run_udp_playable(
     key: [u8; 32],
     session_id: u64,
     operation_id: u64,
+    recovery_mode: RecoveryMode,
+    test_drop_interval: u32,
 ) -> Result<(), AnyError> {
     if is_cancelled(operation_id) {
         return Ok(());
@@ -409,7 +426,8 @@ fn run_udp_playable(
     // Leave room for the sender's 150 ms keyframe budget plus network jitter.
     let mut video = FrameAssembler::new(session_id, 1, 250_000, 16);
     let mut audio = FrameAssembler::new(session_id, 2, 100_000, 16);
-    let mut video_recovery = UdpVideoRecovery::new();
+    let mut video_recovery = UdpVideoRecovery::new(recovery_mode);
+    let mut test_loss = TestLossInjector::new(test_drop_interval);
     let mut video_losses = 0_u64;
     let mut video_delivered = 0_u64;
     let mut video_dropped = 0_u64;
@@ -451,7 +469,10 @@ fn run_udp_playable(
                 .metrics()
                 .expired_frames
                 .saturating_add(video.metrics().capacity_dropped_frames);
-            if losses > video_losses && video_recovery.frame_lost() {
+            if losses > video_losses
+                && video_recovery.network_frame_lost()
+                && video_recovery.holding_for_keyframe()
+            {
                 notify_video_discontinuity(env, &callback)?;
             }
             video_losses = losses;
@@ -460,13 +481,15 @@ fn run_udp_playable(
         if authenticated && last_stats.elapsed() >= Duration::from_secs(2) {
             let metrics = video.metrics();
             let report = format!(
-                "STATS delivered={video_delivered} dropped={video_dropped} complete={} expired={} duplicate={} keyframe_requests={keyframe_requests} waiting={}",
+                "STATS recovery={recovery_mode:?} delivered={video_delivered} dropped={video_dropped} injected={} complete={} expired={} duplicate={} keyframe_requests={keyframe_requests} waiting={} holding={}",
+                test_loss.dropped_frames(),
                 metrics.completed_frames,
                 metrics
                     .expired_frames
                     .saturating_add(metrics.capacity_dropped_frames),
                 metrics.duplicate_packets,
                 video_recovery.awaiting_keyframe(),
+                video_recovery.holding_for_keyframe(),
             );
             send_udp_control(
                 &socket,
@@ -506,7 +529,7 @@ fn run_udp_playable(
             {
                 if authenticated
                     && needs_video_keyframe(env, &callback)?
-                    && video_recovery.frame_lost()
+                    && video_recovery.decoder_needs_keyframe()
                 {
                     notify_video_discontinuity(env, &callback)?;
                 }
@@ -536,14 +559,28 @@ fn run_udp_playable(
                     .metrics()
                     .expired_frames
                     .saturating_add(video.metrics().capacity_dropped_frames);
-                if losses > video_losses && video_recovery.frame_lost() {
+                if losses > video_losses
+                    && video_recovery.network_frame_lost()
+                    && video_recovery.holding_for_keyframe()
+                {
                     notify_video_discontinuity(env, &callback)?;
                 }
                 video_losses = losses;
                 if let Ok(Some(frame)) = assembled {
                     let keyframe = frame.flags.contains(PacketFlags::KEYFRAME);
+                    if test_loss.should_drop(keyframe, video_recovery.awaiting_keyframe()) {
+                        video.discard_older_than(frame.frame_id);
+                        if video_recovery.network_frame_lost()
+                            && video_recovery.holding_for_keyframe()
+                        {
+                            notify_video_discontinuity(env, &callback)?;
+                        }
+                        video_dropped += 1;
+                        env.call_method(&callback, "onVideoTestDrop", "()V", &[])?;
+                        continue;
+                    }
                     match video_recovery.consider(frame.frame_id, keyframe) {
-                        VideoDecision::Deliver => {
+                        VideoDecision::Deliver | VideoDecision::RequestAndDeliver => {
                             video.discard_older_than(frame.frame_id);
                             dispatch_playable_frame(env, &callback, frame)?;
                             video_delivered += 1;
@@ -561,7 +598,7 @@ fn run_udp_playable(
                         VideoDecision::Drop => video_dropped += 1,
                     }
                     if needs_video_keyframe(env, &callback)? {
-                        if video_recovery.frame_lost() {
+                        if video_recovery.decoder_needs_keyframe() {
                             notify_video_discontinuity(env, &callback)?;
                         }
                     }

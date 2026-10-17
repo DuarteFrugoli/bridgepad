@@ -23,7 +23,8 @@ public final class MediaTransportNative {
 
     public static native String runUdpPlayable(
             long operationId, String host, byte[] localAddress, int localScopeId,
-            int port, byte[] token, byte[] key, long sessionId, MediaFrameCallback callback);
+            int port, byte[] token, byte[] key, long sessionId,
+            int recoveryModeFlag, int testDropInterval, MediaFrameCallback callback);
 
     public static native void cancelPlayable(long operationId);
 }

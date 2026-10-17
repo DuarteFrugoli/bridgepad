@@ -25,6 +25,7 @@ class AndroidPlayableMediaClient(
     private val transport: PlayableMediaTransport,
     surface: Surface,
     private val onStatus: (NetworkMediaStatus) -> Unit,
+    private val udpDiagnosticConfig: UdpPlaybackDiagnosticConfig? = null,
 ) : AutoCloseable, MediaFrameCallback {
     private val stopping = AtomicBoolean(false)
     private val runId = nextRunId.incrementAndGet()
@@ -33,6 +34,7 @@ class AndroidPlayableMediaClient(
     private val needKeyframe = AtomicBoolean(true)
     private val videoDiscontinuity = AtomicLong(0)
     private val videoStateLock = Any()
+    private val renderDiagnostic = udpDiagnosticConfig?.let { UdpRenderDiagnostic() }
     @Volatile private var videoSurface: Surface? = surface
     @Volatile private var signaling: NetworkMediaSignalingClient? = null
     @Volatile private var worker: Thread? = null
@@ -46,6 +48,8 @@ class AndroidPlayableMediaClient(
             start()
         }
     }
+
+    fun diagnosticSnapshot(): UdpRenderDiagnosticSnapshot? = renderDiagnostic?.snapshot()
 
     /** A display rotation replaces the Surface, but must not restart media or audio. */
     fun setVideoSurface(surface: Surface?) {
@@ -89,7 +93,10 @@ class AndroidPlayableMediaClient(
                     MediaTransportNative.runUdpPlayable(
                         runId, negotiation.host, negotiation.localAddress,
                         negotiation.localScopeId, negotiation.port, negotiation.token,
-                        negotiation.key, negotiation.sessionId, this,
+                        negotiation.key, negotiation.sessionId,
+                        udpDiagnosticConfig?.mode?.nativeFlag ?: -1,
+                        udpDiagnosticConfig?.dropEveryNFrames ?: 0,
+                        this,
                     )
                 else -> error("Unsupported media negotiation")
             }
@@ -146,6 +153,7 @@ class AndroidPlayableMediaClient(
             if (keyframe) needKeyframe.set(false)
             val frame = VideoFrame(annexB, presentationMicros, keyframe, videoDiscontinuity.get())
             if (!videoQueue.offer(frame)) {
+                renderDiagnostic?.onQueueOverflow()
                 videoDiscontinuity.incrementAndGet()
                 videoQueue.clear()
                 needKeyframe.set(!keyframe)
@@ -173,6 +181,10 @@ class AndroidPlayableMediaClient(
     }
 
     override fun needsVideoKeyframe(): Boolean = needKeyframe.get()
+
+    override fun onVideoTestDrop() {
+        renderDiagnostic?.onInjectedDrop()
+    }
 
     private fun decodeVideo(format: VideoFormat) {
         var firstFrame = true
@@ -203,6 +215,12 @@ class AndroidPlayableMediaClient(
                     0,
                 )
                 codec.start()
+                renderDiagnostic?.let { diagnostic ->
+                    codec.setOnFrameRenderedListener(
+                        { _, _, renderNanos -> diagnostic.onFrameRendered(renderNanos) },
+                        null,
+                    )
+                }
                 val info = MediaCodec.BufferInfo()
                 var observedDiscontinuity = videoDiscontinuity.get()
                 var pendingFrame: VideoFrame? = null
@@ -210,6 +228,7 @@ class AndroidPlayableMediaClient(
                     val currentDiscontinuity = videoDiscontinuity.get()
                     if (currentDiscontinuity != observedDiscontinuity) {
                         codec.flush()
+                        renderDiagnostic?.onDecoderFlush()
                         observedDiscontinuity = currentDiscontinuity
                         pendingFrame = null
                     }
@@ -233,6 +252,7 @@ class AndroidPlayableMediaClient(
                         }
                         if (currentGeneration != observedDiscontinuity) {
                             codec.flush()
+                            renderDiagnostic?.onDecoderFlush()
                             observedDiscontinuity = currentGeneration
                         }
                         val inputIndex = codec.dequeueInputBuffer(5_000)
@@ -276,6 +296,9 @@ class AndroidPlayableMediaClient(
                 }
                 restartDecoder = true
             } finally {
+                if (renderDiagnostic != null) {
+                    runCatching { codec.setOnFrameRenderedListener(null, null) }
+                }
                 runCatching { codec.stop() }
                 codec.release()
             }

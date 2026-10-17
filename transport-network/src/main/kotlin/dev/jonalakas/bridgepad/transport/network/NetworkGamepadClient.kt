@@ -34,6 +34,7 @@ data class NetworkGamepadRequest(
     val readTimeoutMillis: Int = 2_000,
     val reconnectAttempts: Int? = 3,
     val requiredLocalRoute: ((InetAddress) -> Boolean)? = null,
+    val gamepadTransport: IpGamepadTransport = IpGamepadTransport.TCP_TLS,
 ) {
     init {
         require(host.isNotBlank()) { "host must not be blank" }
@@ -49,6 +50,8 @@ data class NetworkGamepadRequest(
     internal val endpointHosts: List<String>
         get() = (listOf(host) + alternateHosts).distinct()
 }
+
+enum class IpGamepadTransport { TCP_TLS, UDP_AEAD_EXPERIMENTAL }
 
 enum class NetworkFailureReason {
     DESKTOP_UNAVAILABLE,
@@ -306,10 +309,48 @@ class NetworkGamepadClient(
             check(BridgeCapability.GAMEPAD in ready.enabledCapabilities) {
                 "Desktop did not enable gamepad input"
             }
+            val udpSender = if (request.gamepadTransport == IpGamepadTransport.UDP_AEAD_EXPERIMENTAL) {
+                try {
+                sequence = writeBridgePacket(
+                    connected, sessionId, sequence, BridgeMessage.UdpInputOffer,
+                )
+                val udpReadyPacket = readBridgePacket(input)
+                check(udpReadyPacket.sessionId == sessionId) {
+                    "Desktop returned UDP input details for another session"
+                }
+                val udpReady = udpReadyPacket.message as? BridgeMessage.UdpInputReady
+                    ?: error("Desktop did not accept experimental UDP gamepad input")
+                UdpGamepadSender(
+                    connected.localAddress,
+                    connected.inetAddress,
+                    udpReady.port,
+                    udpReady.key,
+                ).also { sender ->
+                    try {
+                        sender.send(sessionId, VirtualGamepadState())
+                        val activePacket = readBridgePacket(input)
+                        check(activePacket.sessionId == sessionId &&
+                            activePacket.message == BridgeMessage.UdpInputActive) {
+                            "Desktop did not confirm the UDP gamepad route"
+                        }
+                    } catch (error: Exception) {
+                        sender.close()
+                        throw error
+                    }
+                }
+                } catch (error: Exception) {
+                    // An unavailable UDP route must fail visibly rather than reconnect forever.
+                    throw IllegalStateException(
+                        "UDP gamepad setup failed: ${error.message ?: error.javaClass.simpleName}",
+                    )
+                }
+            } else null
+            try {
             hasBeenActive.set(true)
             onStatus(NetworkGamepadStatus.Active)
 
             var nextGamepadReportAt = 0L
+            var lastUdpState = VirtualGamepadState()
             var lastHeartbeatAt = System.nanoTime()
             val pendingHeartbeatNonce = AtomicLong(NO_HEARTBEAT)
             val pendingHeartbeatSince = AtomicLong(0L)
@@ -351,12 +392,18 @@ class NetworkGamepadClient(
                 var sentInput = false
                 if (loopStartedAt >= nextGamepadReportAt) {
                     val next = pollFreshGamepadTransition(loopStartedAt) ?: latestState.get()
-                    sequence = writeBridgePacket(
-                        connected,
-                        sessionId,
-                        sequence,
-                        BridgeMessage.GamepadSnapshot(next),
-                    )
+                    if (udpSender != null) {
+                        udpSender.send(sessionId, next)
+                        // Press/release edges must not depend on a single UDP packet.
+                        if (hasDiscreteGamepadTransition(lastUdpState, next)) {
+                            udpSender.send(sessionId, next)
+                        }
+                        lastUdpState = next
+                    } else {
+                        sequence = writeBridgePacket(
+                            connected, sessionId, sequence, BridgeMessage.GamepadSnapshot(next),
+                        )
+                    }
                     nextGamepadReportAt = loopStartedAt + GAMEPAD_REPORT_INTERVAL_NANOS
                     sentInput = true
                 }
@@ -400,10 +447,9 @@ class NetworkGamepadClient(
                 if (!sentInput) Thread.sleep(IDLE_POLL_MILLIS)
             }
 
-            sequence = writeBridgePacket(
-                connected,
-                sessionId,
-                sequence,
+            if (udpSender != null) udpSender.send(sessionId, VirtualGamepadState())
+            else sequence = writeBridgePacket(
+                connected, sessionId, sequence,
                 BridgeMessage.GamepadSnapshot(VirtualGamepadState()),
             )
             writeBridgePacket(
@@ -414,6 +460,9 @@ class NetworkGamepadClient(
             )
             runCatching { connected.close() }
             heartbeatReader.join(HEARTBEAT_READER_STOP_TIMEOUT_MILLIS)
+            } finally {
+                udpSender?.close()
+            }
         }
         socket = null
     }

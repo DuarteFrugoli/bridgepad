@@ -91,6 +91,7 @@ import dev.jonalakas.bridgepad.ui.settings.BluetoothDesktopDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.UsbAccessoryDiagnosticScreen
 import dev.jonalakas.bridgepad.ui.settings.DesktopStreamingScreen
 import dev.jonalakas.bridgepad.ui.settings.MediaTransportDiagnosticScreen
+import dev.jonalakas.bridgepad.ui.settings.UdpRecoveryDiagnosticScreen
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopProbe
 import dev.jonalakas.bridgepad.transport.bluetooth.desktop.BluetoothDesktopGamepadStatus
 import dev.jonalakas.bridgepad.transport.usb.accessory.UsbAccessoryProbe
@@ -98,6 +99,7 @@ import dev.jonalakas.bridgepad.ui.session.SessionSurface
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationStore
 import dev.jonalakas.bridgepad.streaming.PlayableMediaTransportStore
+import dev.jonalakas.bridgepad.session.IpGamepadTransportStore
 import dev.jonalakas.bridgepad.ui.session.SessionUiEvent
 import dev.jonalakas.bridgepad.ui.session.SessionUiViewModel
 import dev.jonalakas.bridgepad.ui.theme.BridgePadTheme
@@ -137,6 +139,8 @@ class MainActivity : ComponentActivity() {
                 var showUsbAccessoryDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showDesktopStreaming by rememberSaveable { mutableStateOf(false) }
                 var showMediaTransportDiagnostic by rememberSaveable { mutableStateOf(false) }
+                var showUdpRecoveryDiagnostic by rememberSaveable { mutableStateOf(false) }
+                var showInputComparisonDiagnostic by rememberSaveable { mutableStateOf(false) }
                 var showGameplayStreaming by rememberSaveable { mutableStateOf(false) }
                 var gameplayStreamingPeerId by rememberSaveable { mutableStateOf<String?>(null) }
                 var returnToSettingsAfterLayoutEditor by rememberSaveable { mutableStateOf(false) }
@@ -273,6 +277,7 @@ class MainActivity : ComponentActivity() {
                 val otherScreenOpen = showTouchscreenLayoutEditor || showGameplayStreaming ||
                     showBluetoothDesktopDiagnostic || showUsbAccessoryDiagnostic ||
                     showDesktopStreaming || showMediaTransportDiagnostic ||
+                    showUdpRecoveryDiagnostic || showInputComparisonDiagnostic ||
                     showNetworkDiagnostic || showUsbNetworkDiagnostic || showTests ||
                     showSettings || showGamepadMapping
                 val choosingNetworkDesktop = onboardingComplete && !otherScreenOpen &&
@@ -317,6 +322,7 @@ class MainActivity : ComponentActivity() {
                     TouchscreenDisplaySettingsStore.useDisplayCutoutArea.collectAsState()
                 val sessionOrientationMode by SessionOrientationStore.mode.collectAsState()
                 val playableMediaTransport by PlayableMediaTransportStore.selected.collectAsState()
+                val ipGamepadTransport by IpGamepadTransportStore.selected.collectAsState()
                 val invertedTouchpadScroll by TouchpadSettingsStore.invertedScroll.collectAsState()
                 val configurationOrientation = LocalConfiguration.current.orientation
                 val currentLayoutOrientation = if (configurationOrientation == Configuration.ORIENTATION_PORTRAIT) {
@@ -770,6 +776,26 @@ class MainActivity : ComponentActivity() {
                             showTests = true
                         },
                     )
+                } else if (showUdpRecoveryDiagnostic) {
+                    UdpRecoveryDiagnosticScreen(
+                        desktops = trustedDesktops,
+                        requestFor = { peerId ->
+                            networkDesktopCoordinator.mediaRequest(peerId, ConnectionMethod.WIFI)
+                        },
+                        onBack = {
+                            showUdpRecoveryDiagnostic = false
+                            showTests = true
+                        },
+                    )
+                } else if (showInputComparisonDiagnostic) {
+                    dev.jonalakas.bridgepad.ui.settings.InputComparisonDiagnosticScreen(
+                        desktops = trustedDesktops,
+                        requestFor = networkDesktopCoordinator::inputComparisonRequest,
+                        onBack = {
+                            showInputComparisonDiagnostic = false
+                            showTests = true
+                        },
+                    )
                 } else if (showNetworkDiagnostic || showUsbNetworkDiagnostic) {
                     NetworkDiagnosticScreen(
                         usbTetheringMode = showUsbNetworkDiagnostic,
@@ -829,6 +855,14 @@ class MainActivity : ComponentActivity() {
                             showTests = false
                             showMediaTransportDiagnostic = true
                         },
+                        onOpenUdpRecoveryDiagnostic = {
+                            showTests = false
+                            showUdpRecoveryDiagnostic = true
+                        },
+                        onOpenInputComparisonDiagnostic = {
+                            showTests = false
+                            showInputComparisonDiagnostic = true
+                        },
                         onCopyDiagnostics = {
                             val report = DiagnosticReport.create(
                                 BuildConfig.VERSION_NAME,
@@ -869,6 +903,7 @@ class MainActivity : ComponentActivity() {
                         mappingAvailable = mappingInput != null,
                         sessionOrientationMode = sessionOrientationMode,
                         mediaTransport = playableMediaTransport,
+                        ipGamepadTransport = ipGamepadTransport,
                         invertedTouchpadScroll = invertedTouchpadScroll,
                         useDisplayCutoutArea = useDisplayCutoutArea,
                         onOpenTests = {
@@ -889,6 +924,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onSessionOrientationModeChanged = SessionOrientationStore::set,
                         onMediaTransportChanged = PlayableMediaTransportStore::set,
+                        onIpGamepadTransportChanged = IpGamepadTransportStore::set,
                         onInvertedTouchpadScrollChanged = TouchpadSettingsStore::setInvertedScroll,
                         onUseDisplayCutoutAreaChanged =
                             TouchscreenDisplaySettingsStore::setUseDisplayCutoutArea,

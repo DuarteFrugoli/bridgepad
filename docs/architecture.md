@@ -225,6 +225,17 @@ test remains available as the reference path. These playable paths are still
 experimental: feedback-driven bitrate, loss recovery, and measured audio/video
 synchronization are not complete.
 
+For playable UDP+AEAD video, Android uses permissive H.264 loss recovery by
+default: it requests a fresh IDR after a missing frame but continues presenting
+complete frames while waiting. Decoder failure or queue overflow still pauses
+presentation until an IDR. The strict policy (flush and wait after any frame
+gap) remains available only in Settings > Tests for the UDP recovery A/B
+diagnostic, not as a gameplay option. In the measured injected-loss run,
+permissive recovery had 13.7 render gaps over 50 ms per minute versus 25.6 for
+strict, with no visible artifacts reported. Retain the strict implementation
+only while this comparison is useful; remove the diagnostic branch if it is no
+longer needed rather than leaving an unexercised production fallback.
+
 The first BridgePad Media v1 increment is intentionally transport independent.
 `bridgepad-media-protocol` owns the fixed 1200-byte datagram contract and Rust
 codec; `:streaming-core` contains the matching Kotlin codec and shared golden
@@ -260,11 +271,24 @@ verification. This exception is confined to the public diagnostic on UDP
 UDP+AEAD remains on `39495`; both candidates carry the same Media v1 inner
 datagrams and use the same strict assembly deadline.
 
-Control/input currently remains on TCP/TLS `39393` and never shares a media
-socket, worker, queue or lifecycle. Its future low-latency transport will be
-selected and documented here only after BridgePad Media v1 is validated; it is
-not predetermined to use WebRTC DataChannels. Bluetooth HID and RFCOMM are
-outside that future IP migration.
+Control/input remains independent of media. The default IP input path is
+TCP/TLS `39393`; a Settings opt-in tests gamepad snapshots on a separate
+per-session UDP+AEAD socket. The existing paired TLS control connection still
+authenticates, negotiates a fresh UDP key and ephemeral port, carries pointer
+and keyboard input plus heartbeats, and owns the gamepad lifetime. The Desktop
+accepts UDP only from the TLS peer IP, authenticates each packet, rejects old
+counters and neutralizes stale state after 150 ms. Button/trigger/D-pad edges
+are sent twice in this experiment, while full snapshots continue at 125 Hz.
+This is a playable transport test, not a decision to migrate pointer/keyboard
+or to use UDP as the final input protocol. Bluetooth HID and RFCOMM are outside
+this IP migration.
+
+Settings > Tests also offers a paired IP input transport comparison. It sends
+300 serial Ping/Pong echoes through TCP/TLS and 300 through a separately keyed
+UDP+AEAD probe on the same selected Wi-Fi or USB route. The UDP probe reuses the
+playable BPI1 envelope but does not create a virtual gamepad or inject input.
+The report includes RTT percentiles and unanswered UDP probes; it is a
+transport measurement, not an Android-touch-to-game latency measurement.
 
 Capture and media teardown are bounded. The capture callback releases its Media
 Foundation/D3D resources before stopping capture, route loss is a normal session

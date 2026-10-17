@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.jonalakas.bridgepad.R
 import dev.jonalakas.bridgepad.streaming.PlayableMediaTransport
+import dev.jonalakas.bridgepad.transport.network.IpGamepadTransport
 import dev.jonalakas.bridgepad.ui.components.SessionOrientationSelector
 import dev.jonalakas.bridgepad.ui.session.SessionOrientationMode
 
@@ -42,6 +43,7 @@ fun SettingsScreen(
     mappingAvailable: Boolean,
     sessionOrientationMode: SessionOrientationMode,
     mediaTransport: PlayableMediaTransport,
+    ipGamepadTransport: IpGamepadTransport,
     invertedTouchpadScroll: Boolean,
     useDisplayCutoutArea: Boolean,
     onOpenTests: () -> Unit,
@@ -49,6 +51,7 @@ fun SettingsScreen(
     onConfigureGamepadMapping: () -> Unit,
     onSessionOrientationModeChanged: (SessionOrientationMode) -> Unit,
     onMediaTransportChanged: (PlayableMediaTransport) -> Unit,
+    onIpGamepadTransportChanged: (IpGamepadTransport) -> Unit,
     onInvertedTouchpadScrollChanged: (Boolean) -> Unit,
     onUseDisplayCutoutAreaChanged: (Boolean) -> Unit,
     onLanguageSettings: (() -> Unit)?,
@@ -119,6 +122,27 @@ fun SettingsScreen(
                                     else R.string.media_transport_udp_aead,
                                 ),
                             )
+                        }
+                    }
+                }
+            }
+            item {
+                SettingsSectionCard(title = stringResource(R.string.ip_input_transport_title)) {
+                    Text(stringResource(R.string.ip_input_transport_description))
+                    IpGamepadTransport.entries.forEach { option ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            androidx.compose.material3.RadioButton(
+                                selected = ipGamepadTransport == option,
+                                onClick = { onIpGamepadTransportChanged(option) },
+                            )
+                            Text(stringResource(
+                                if (option == IpGamepadTransport.TCP_TLS)
+                                    R.string.ip_input_transport_tcp
+                                else R.string.ip_input_transport_udp,
+                            ))
                         }
                     }
                 }

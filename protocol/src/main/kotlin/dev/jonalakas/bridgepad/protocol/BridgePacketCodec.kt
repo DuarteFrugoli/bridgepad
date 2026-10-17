@@ -108,6 +108,18 @@ object BridgePacketCodec {
                         output.writeInt(message.requestedCapabilities.bits)
                     }
                     is BridgeMessage.SessionReady -> output.writeInt(message.enabledCapabilities.bits)
+                    BridgeMessage.UdpInputOffer -> Unit
+                    is BridgeMessage.UdpInputReady -> {
+                        output.writeShort(message.port)
+                        output.write(message.key)
+                    }
+                    BridgeMessage.UdpInputActive -> Unit
+                    BridgeMessage.InputProbeOffer -> Unit
+                    is BridgeMessage.InputProbeReady -> {
+                        output.writeShort(message.port)
+                        output.write(message.uplinkKey)
+                        output.write(message.downlinkKey)
+                    }
                     is BridgeMessage.SessionStop -> output.writeByte(message.reason.code)
                     is BridgeMessage.PairRequest -> {
                         output.writePeerId(message.peerId)
@@ -230,6 +242,18 @@ object BridgePacketCodec {
                     )
                     BridgeMessageType.SESSION_READY ->
                         BridgeMessage.SessionReady(BridgeCapabilities(input.readInt()))
+                    BridgeMessageType.UDP_INPUT_OFFER -> BridgeMessage.UdpInputOffer
+                    BridgeMessageType.UDP_INPUT_READY -> BridgeMessage.UdpInputReady(
+                        port = input.readUnsignedShort(),
+                        key = input.readSizedBytes(32),
+                    )
+                    BridgeMessageType.UDP_INPUT_ACTIVE -> BridgeMessage.UdpInputActive
+                    BridgeMessageType.INPUT_PROBE_OFFER -> BridgeMessage.InputProbeOffer
+                    BridgeMessageType.INPUT_PROBE_READY -> BridgeMessage.InputProbeReady(
+                        port = input.readUnsignedShort(),
+                        uplinkKey = input.readSizedBytes(32),
+                        downlinkKey = input.readSizedBytes(32),
+                    )
                     BridgeMessageType.SESSION_STOP ->
                         BridgeMessage.SessionStop(BridgeStopReason.fromCode(input.readUnsignedByte()))
                     BridgeMessageType.PAIR_REQUEST -> BridgeMessage.PairRequest(
