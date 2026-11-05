@@ -294,6 +294,17 @@ Bluetooth Desktop still has its separate RFCOMM receiver and needs
 application-level identity before it can join the same registry. Direct HID
 remains outside Desktop ownership, and media still supports one viewer.
 
+The Desktop shows four logical BridgePad positions for those managed IP
+controllers. Dragging one occupied position onto another (or selecting both)
+swaps their report destinations while keeping the two virtual devices alive.
+The registry serializes report routing with the swap, neutralizes both devices
+first, and waits for each phone to send a released state before accepting its
+next pressed state. Empty positions cannot be swapped. A reconnect preserves
+the phone's logical position, though replacement of its virtual device may
+still change the XInput index assigned by Windows. These positions are not
+guaranteed player numbers in a game, and Bluetooth Desktop/HID are not yet
+included in this routing UI.
+
 Settings > Tests also offers a paired IP input transport comparison. It sends
 300 serial Ping/Pong echoes through TCP/TLS and 300 through a separately keyed
 UDP+AEAD probe on the same selected Wi-Fi or USB route. The UDP probe reuses the

@@ -11,7 +11,9 @@ states what a release candidate must demonstrate.
 ## Scope and media
 
 - [ ] Classify each feature as supported, experimental or excluded in the app,
-  READMEs and store listing. Internet streaming is excluded from this release.
+  READMEs and store listing. Internet streaming is a pre-release requirement,
+  but must not be advertised as available until its direct and BridgePad-relay
+  routes pass the release gates.
 - [ ] Approve a measured local media path against the frozen
   [WebRTC baseline](./streaming-baseline.md): startup, frame presentation,
   audio sync, latency, loss recovery, quality and CPU/GPU usage.

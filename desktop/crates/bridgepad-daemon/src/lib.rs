@@ -90,6 +90,14 @@ pub struct TrustedDevice {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ActiveControllerSlot {
+    /// BridgePad's position, not a guaranteed Windows XInput user index.
+    pub position: usize,
+    pub device_id: String,
+    pub device_name: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DaemonSnapshot {
     pub desktop_name: String,
     pub desktop_id: String,
@@ -99,6 +107,7 @@ pub struct DaemonSnapshot {
     pub pairing_code: String,
     pub pairing_expires_in_seconds: u16,
     pub trusted_devices: Vec<TrustedDevice>,
+    pub active_controller_slots: Vec<ActiveControllerSlot>,
     pub connected_clients: usize,
     pub active_sessions: usize,
     pub last_error: Option<String>,
@@ -219,6 +228,29 @@ impl DesktopServer {
             })
             .collect();
         trusted_devices.sort_by(|left, right| left.name.cmp(&right.name));
+        let active_controller_slots = self
+            .state
+            .players
+            .slots()
+            .into_iter()
+            .map(|(position, key)| {
+                let (device_id, device_name) = match key {
+                    PlayerKey::Authenticated(id) => {
+                        let name = trust_store
+                            .get(&id)
+                            .map(|peer| peer.name.clone())
+                            .unwrap_or_else(|| "Paired phone".to_owned());
+                        (encode_hex(&id), name)
+                    }
+                    PlayerKey::Unpaired(_) => (String::new(), "Unpaired test session".to_owned()),
+                };
+                ActiveControllerSlot {
+                    position,
+                    device_id,
+                    device_name,
+                }
+            })
+            .collect();
         let last_error = lock(&self.state.last_error)?.clone();
         Ok(DaemonSnapshot {
             desktop_name: self.state.desktop_name.clone(),
@@ -229,6 +261,7 @@ impl DesktopServer {
             pairing_code,
             pairing_expires_in_seconds,
             trusted_devices,
+            active_controller_slots,
             connected_clients: self.state.connected_clients.load(Ordering::Relaxed),
             active_sessions: self.state.players.count(),
             last_error,
@@ -238,6 +271,10 @@ impl DesktopServer {
     pub fn rotate_pairing_code(&self) -> Result<(), AnyError> {
         lock(&self.state.pairing)?.rotate()?;
         Ok(())
+    }
+
+    pub fn swap_controller_slots(&self, first: usize, second: usize) -> Result<(), AnyError> {
+        self.state.players.swap_slots(first, second)
     }
 
     pub fn forget_peer(&self, id: &str) -> Result<bool, AnyError> {
@@ -776,12 +813,12 @@ fn serve(
                         "UDP input offer does not belong to an active control session".into(),
                     );
                 }
-                let device = gamepad
+                let input = gamepad
                     .as_ref()
                     .ok_or("gamepad session is not active")?
-                    .device();
+                    .input();
                 let (session, port, key) =
-                    udp_input::UdpInputSession::start(device, packet.header.session_id, peer.ip())?;
+                    udp_input::UdpInputSession::start(input, packet.header.session_id, peer.ip())?;
                 udp_input = Some(session);
                 let mut ready = Vec::with_capacity(34);
                 ready.extend_from_slice(&port.to_be_bytes());

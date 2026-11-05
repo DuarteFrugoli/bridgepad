@@ -6,6 +6,8 @@ const invoke = window.__TAURI__?.core?.invoke || (async (command) => {
       pairingCode: "1842-6950-3714",
       pairingExpiresInSeconds: 527,
       trustedDevices: [],
+      controllerSlots: [],
+      bluetoothSessions: 0,
       error: null,
       lowBatteryPercentage: null,
     };
@@ -15,6 +17,17 @@ const invoke = window.__TAURI__?.core?.invoke || (async (command) => {
 
 const translations = {
   en: {
+    controllerEyebrow: "CONNECTED CONTROLLERS",
+    controllerTitle: "BridgePad positions",
+    controllerHelp: "Drag one occupied controller onto another, or select both, to exchange who controls each virtual device. Release the buttons after swapping.",
+    controllerNote: "These positions are managed by BridgePad, not guaranteed Windows player numbers. Direct HID and Bluetooth Desktop are not rearrangeable here.",
+    controllerPosition: "Position {number}",
+    controllerEmpty: "Waiting for a phone",
+    controllerConnected: "Connected",
+    controllerSelected: "Choose another occupied position",
+    controllerSwapped: "Controllers swapped without disconnecting the virtual devices.",
+    controllerEmptyTarget: "Connect a second phone to swap controllers.",
+    controllerNoBluetooth: "{count} Bluetooth Desktop session(s) active outside these positions.",
     languageButton: "PT",
     lowBattery: "Notebook battery at {percent}%. Streaming may slow down; connect the charger for better performance.",
     ready: "Ready to connect",
@@ -44,6 +57,17 @@ const translations = {
     confirmForget: "Forget this phone? It will need to be paired again.",
   },
   pt: {
+    controllerEyebrow: "CONTROLES CONECTADOS",
+    controllerTitle: "Posições BridgePad",
+    controllerHelp: "Arraste um controle ocupado sobre outro, ou selecione os dois, para trocar quem controla cada dispositivo virtual. Solte os botões após a troca.",
+    controllerNote: "Estas posições são do BridgePad; o número de jogador no Windows não é garantido. HID direto e Bluetooth Desktop ainda não podem ser rearranjados aqui.",
+    controllerPosition: "Posição {number}",
+    controllerEmpty: "Aguardando celular",
+    controllerConnected: "Conectado",
+    controllerSelected: "Escolha outra posição ocupada",
+    controllerSwapped: "Controles trocados sem desconectar os dispositivos virtuais.",
+    controllerEmptyTarget: "Conecte um segundo celular para trocar os controles.",
+    controllerNoBluetooth: "{count} sessão(ões) Bluetooth Desktop ativa(s) fora destas posições.",
     languageButton: "EN",
     lowBattery: "Bateria do notebook em {percent}%. O streaming pode ficar mais lento; conecte o carregador para melhorar o desempenho.",
     ready: "Pronto para conectar",
@@ -76,6 +100,9 @@ const translations = {
 
 let language = localStorage.getItem("bridgepad-language") || (navigator.language.startsWith("pt") ? "pt" : "en");
 let latestStatus = null;
+let selectedSlot = null;
+let slotSignature = "";
+let swapBusy = false;
 
 const elements = Object.fromEntries(
   [
@@ -83,7 +110,8 @@ const elements = Object.fromEntries(
     "errorTitle", "errorText", "pairEyebrow", "pairTitle", "pairTimer", "pairingCode",
     "copyCodeButton", "copyHint", "pairHelp", "newCodeButton", "devicesEyebrow", "devicesTitle",
     "deviceCount", "deviceList", "emptyDevices", "emptyTitle", "emptyText", "trayHint", "firewallNote",
-    "batteryPanel", "batteryText",
+    "batteryPanel", "batteryText", "controllerEyebrow", "controllerTitle", "controllerHelp",
+    "controllerCount", "controllerSlots", "controllerNote", "controllerFeedback",
   ].map((id) => [id, document.getElementById(id)]),
 );
 
@@ -91,10 +119,11 @@ function t(key) { return translations[language][key]; }
 
 function applyLanguage() {
   document.documentElement.lang = language === "pt" ? "pt-BR" : "en";
-  for (const key of ["languageButton", "errorTitle", "pairEyebrow", "pairTitle", "copyHint", "pairHelp", "devicesEyebrow", "devicesTitle", "emptyTitle", "emptyText", "trayHint", "firewallNote"]) {
+  for (const key of ["languageButton", "errorTitle", "pairEyebrow", "pairTitle", "copyHint", "pairHelp", "devicesEyebrow", "devicesTitle", "emptyTitle", "emptyText", "trayHint", "firewallNote", "controllerEyebrow", "controllerTitle", "controllerHelp", "controllerNote"]) {
     elements[key].textContent = t(key);
   }
   elements.newCodeButton.textContent = t("newCode");
+  slotSignature = "";
   if (latestStatus) render(latestStatus);
 }
 
@@ -147,6 +176,95 @@ function renderDevices(devices) {
   }
 }
 
+function showSlotFeedback(message, error = false) {
+  elements.controllerFeedback.textContent = message;
+  elements.controllerFeedback.classList.toggle("error", error);
+}
+
+async function swapSlots(first, second) {
+  if (swapBusy || first === second) return;
+  const occupied = new Set((latestStatus?.controllerSlots || []).map((slot) => slot.position));
+  selectedSlot = null;
+  if (!occupied.has(first) || !occupied.has(second)) {
+    showSlotFeedback(t("controllerEmptyTarget"), true);
+    renderSlots(latestStatus?.controllerSlots || []);
+    return;
+  }
+  swapBusy = true;
+  try {
+    await invoke("swap_controller_slots", { first, second });
+    showSlotFeedback(t("controllerSwapped"));
+    await refresh();
+  } catch (error) {
+    showSlotFeedback(String(error), true);
+  } finally {
+    swapBusy = false;
+    renderSlots(latestStatus?.controllerSlots || []);
+  }
+}
+
+function renderSlots(slots) {
+  const byPosition = new Map(slots.map((slot) => [slot.position, slot]));
+  if (selectedSlot !== null && !byPosition.has(selectedSlot)) selectedSlot = null;
+  const signature = JSON.stringify([slots, selectedSlot, language]);
+  elements.controllerCount.textContent = `${slots.length}/4`;
+  if (signature === slotSignature) return;
+  slotSignature = signature;
+  elements.controllerSlots.replaceChildren();
+  for (let position = 0; position < 4; position++) {
+    const slot = byPosition.get(position);
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `controller-slot${slot ? " occupied" : ""}${selectedSlot === position ? " selected" : ""}`;
+    card.draggable = Boolean(slot);
+    card.setAttribute("aria-pressed", String(selectedSlot === position));
+    card.setAttribute("aria-label", `${t("controllerPosition").replace("{number}", position + 1)}: ${slot?.deviceName || t("controllerEmpty")}`);
+    const number = document.createElement("span");
+    number.className = "slot-number";
+    number.textContent = t("controllerPosition").replace("{number}", position + 1);
+    const name = document.createElement("span");
+    name.className = "slot-name";
+    name.textContent = slot?.deviceName || t("controllerEmpty");
+    const detail = document.createElement("span");
+    detail.className = "slot-detail";
+    detail.textContent = slot ? t("controllerConnected") : "—";
+    card.append(number, name, detail);
+    card.addEventListener("click", () => {
+      if (!slot) {
+        showSlotFeedback(t("controllerEmptyTarget"), true);
+        return;
+      }
+      if (selectedSlot === null || selectedSlot === position) {
+        selectedSlot = selectedSlot === position ? null : position;
+        showSlotFeedback(selectedSlot === null ? "" : t("controllerSelected"));
+        renderSlots(latestStatus?.controllerSlots || []);
+      } else {
+        void swapSlots(selectedSlot, position);
+      }
+    });
+    card.addEventListener("dragstart", (event) => {
+      if (!slot) return event.preventDefault();
+      event.dataTransfer.setData("text/plain", String(position));
+      event.dataTransfer.effectAllowed = "move";
+      card.classList.add("dragging");
+    });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+    card.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = slot ? "move" : "none";
+      if (slot) card.classList.add("drop-target");
+    });
+    card.addEventListener("dragleave", () => card.classList.remove("drop-target"));
+    card.addEventListener("drop", (event) => {
+      event.preventDefault();
+      card.classList.remove("drop-target");
+      const first = Number(event.dataTransfer.getData("text/plain"));
+      if (Number.isInteger(first) && first >= 0 && first < 4) void swapSlots(first, position);
+    });
+    elements.controllerSlots.append(card);
+  }
+}
+
 function render(status) {
   latestStatus = status;
   const [label, detail] = phaseText(status.phase);
@@ -169,6 +287,12 @@ function render(status) {
     if (elements.batteryText.textContent !== warning) elements.batteryText.textContent = warning;
   }
   renderDevices(status.trustedDevices || []);
+  renderSlots(status.controllerSlots || []);
+  if (status.bluetoothSessions > 0) {
+    elements.controllerNote.textContent = `${t("controllerNote")} ${t("controllerNoBluetooth").replace("{count}", status.bluetoothSessions)}`;
+  } else {
+    elements.controllerNote.textContent = t("controllerNote");
+  }
 }
 
 async function refresh() {

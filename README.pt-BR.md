@@ -28,14 +28,30 @@ nas Configurações do Android. Os dois caminhos já são jogáveis em
 desenvolvimento, mas ainda não passaram pelos gates finais de latência,
 recuperação de perdas e sessões longas. WebRTC permanece como referência
 medida, não como transporte local definitivo. O input usa conexão própria,
-separada da mídia.
+separada da mídia. Os estados de controle por Wi-Fi/USB também podem usar um
+caminho experimental de input UDP autenticado; mouse, teclado e controle da
+sessão continuam em TCP/TLS.
+
+Nas sessões de controle por Wi-Fi e USB, o Desktop agora cria um controle
+virtual independente por celular autenticado, com até quatro posições
+gerenciadas pelo BridgePad. A janela mostra posições ocupadas e vazias. Arraste
+um celular ocupado sobre outro (ou selecione os dois) para trocar quais
+dispositivos virtuais eles controlam sem desconectá-los. Solte os comandos pressionados após
+a troca. Essas são posições do BridgePad, **não números de jogador garantidos no
+XInput**: o Windows e o jogo fazem essa atribuição. O Bluetooth via Desktop
+ainda usa um receptor separado e não participa dessa troca; o HID direto não
+passa pelo Desktop. A jogabilidade com vários celulares ainda precisa de
+validação em aparelhos e jogos cooperativos reais, e múltiplos streamings
+simultâneos não foram implementados.
 
 O Desktop testado atualmente é o Windows. O controle virtual XInput ainda usa
 o backend de desenvolvimento ViGEmBus; faltam instalador e decisão do backend
 de produção. O Linux está planejado para a primeira versão pública, mas ainda
-não é jogável. Vários celulares com controles independentes e streaming
-simultâneo também não estão prontos para lançamento. Streaming pela internet
-fica fora do escopo inicial. Consulte as [evidências de compatibilidade](./docs/compatibility.md)
+não é jogável. Coop com vários celulares e streaming simultâneo ainda não estão
+prontos para lançamento. Streaming pela internet é um **requisito planejado
+antes do lançamento**, não uma função disponível hoje;
+o plano prevê coordenação e relay próprios do BridgePad, sem VPN de terceiros
+obrigatória. Consulte as [evidências de compatibilidade](./docs/compatibility.md)
 e os [critérios de lançamento](./docs/release-checklist.md) antes de anunciar
 suporte a uma combinação.
 

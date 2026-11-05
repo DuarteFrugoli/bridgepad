@@ -13,8 +13,16 @@ cargo run --release --manifest-path desktop/Cargo.toml -p bridgepad-desktop
 cargo test --locked --manifest-path desktop/Cargo.toml
 ```
 
-The Desktop displays pairing status, trusted phones and the temporary pairing
-code. Closing its window leaves it running in the system tray; use **Exit** to
+The Desktop displays pairing status, trusted phones, the temporary pairing
+code and four logical BridgePad controller positions. Authenticated Wi-Fi/USB
+phones occupy separate positions; drag one occupied position onto another (or
+select both) to exchange their virtual-device input routes without unplugging
+either device. Release held controls after the swap. The position is not a
+guaranteed Windows XInput player number. Bluetooth Desktop has a separate
+receiver and is not yet included in these positions; direct HID bypasses the
+Desktop. Multi-phone co-op still requires real-hardware validation.
+
+Closing its window leaves it running in the system tray; use **Exit** to
 stop the receiver. Do not run debug, release and the terminal daemon at the
 same time when testing discovery, pairing or ports. The graphical Desktop keeps
 its identity in the operating system's local app-data directory; the terminal
@@ -26,7 +34,9 @@ media negotiation uses TCP `39394`. Playable local video/audio uses a separate
 QUIC or UDP+AEAD media path, selected in Android Settings. Wi-Fi and USB
 tethering are distinct routes; USB requires Android's tethering mode, not file
 transfer. Bluetooth via Desktop uses RFCOMM and creates an XInput-compatible
-virtual gamepad; direct Bluetooth HID bypasses this application entirely.
+virtual gamepad; direct Bluetooth HID bypasses this application entirely. An
+experimental authenticated UDP path can carry Wi-Fi/USB gamepad snapshots;
+pointer, keyboard and session control remain on TCP/TLS.
 
 The raw executable does not install Windows Firewall rules. Allow the exact
 executable on the network profiles used for testing. A future installer must

@@ -27,14 +27,30 @@ Local streaming can use **QUIC DATAGRAM** (default) or **UDP+AEAD**, selected in
 Android Settings. Both are playable development paths; neither has passed the
 final latency, loss-recovery and long-session gates. WebRTC remains a measured
 reference, not the intended final local transport. Input has its own connection
-and does not travel through the media socket.
+and does not travel through the media socket. Wi-Fi/USB gamepad snapshots can
+also use an experimental authenticated UDP input path; mouse, keyboard and
+session control still use TCP/TLS.
+
+For Wi-Fi and USB control sessions, the Desktop now gives each authenticated
+phone its own virtual gamepad, with up to four BridgePad-managed positions. Its
+window shows occupied and empty positions. Drag one occupied phone onto another
+(or select both) to exchange which virtual devices they control without
+disconnecting those devices. Release held controls after swapping. These are
+BridgePad positions, **not guaranteed XInput player numbers**: Windows and the
+game assign those. Bluetooth via Desktop still uses a separate receiver and is
+not included in this swap UI; direct HID never passes through the Desktop.
+Multi-phone gameplay still needs real-device and co-op-game validation, and
+simultaneous video streams are not implemented.
 
 The currently exercised desktop is Windows. The virtual XInput device uses the
 development ViGEmBus backend; an installer and production backend decision are
 still outstanding. Linux support is planned for the first public release but
-is not playable yet. Multiple independent phone controllers and simultaneous
-streams are also not release-ready. Internet streaming is outside the initial
-scope. See [compatibility evidence](./docs/compatibility.md) and the
+is not playable yet. Multi-phone co-op and simultaneous streams are not
+release-ready. Internet streaming is a **planned
+pre-release requirement**, not a feature available today; the plan calls for
+BridgePad-owned connection coordination and relay infrastructure rather than
+a mandatory third-party VPN. See
+[compatibility evidence](./docs/compatibility.md) and the
 [release gates](./docs/release-checklist.md) before making support claims.
 
 ## Try the development build

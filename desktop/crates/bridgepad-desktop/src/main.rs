@@ -25,12 +25,22 @@ struct TrustedDeviceDto {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+struct ControllerSlotDto {
+    position: usize,
+    device_id: String,
+    device_name: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct DesktopStatusDto {
     phase: &'static str,
     desktop_name: String,
     pairing_code: String,
     pairing_expires_in_seconds: u16,
     trusted_devices: Vec<TrustedDeviceDto>,
+    controller_slots: Vec<ControllerSlotDto>,
+    bluetooth_sessions: usize,
     connected_clients: usize,
     active_sessions: usize,
     error: Option<String>,
@@ -57,6 +67,8 @@ fn desktop_status(state: State<'_, DesktopState>) -> Result<DesktopStatusDto, St
             pairing_code: String::new(),
             pairing_expires_in_seconds: 0,
             trusted_devices: Vec::new(),
+            controller_slots: Vec::new(),
+            bluetooth_sessions: 0,
             connected_clients: 0,
             active_sessions: 0,
             error: Some(error),
@@ -93,11 +105,38 @@ fn desktop_status(state: State<'_, DesktopState>) -> Result<DesktopStatusDto, St
                 name: device.name,
             })
             .collect(),
+        controller_slots: snapshot
+            .active_controller_slots
+            .into_iter()
+            .map(|slot| ControllerSlotDto {
+                position: slot.position,
+                device_id: slot.device_id,
+                device_name: slot.device_name,
+            })
+            .collect(),
+        bluetooth_sessions: bluetooth.active_sessions,
         connected_clients,
         active_sessions,
         error: snapshot.last_error,
         low_battery_percentage,
     })
+}
+
+#[tauri::command]
+fn swap_controller_slots(
+    first: usize,
+    second: usize,
+    state: State<'_, DesktopState>,
+) -> Result<(), String> {
+    let server = state
+        .server
+        .lock()
+        .map_err(|_| "desktop state lock failed")?;
+    server
+        .as_ref()
+        .ok_or_else(|| "BridgePad Desktop is not running".to_owned())?
+        .swap_controller_slots(first, second)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -221,6 +260,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             desktop_status,
+            swap_controller_slots,
             new_pairing_code,
             forget_device
         ])
