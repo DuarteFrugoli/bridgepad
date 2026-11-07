@@ -1,10 +1,6 @@
 package dev.jonalakas.bridgepad.input.mapping
 
 import android.content.Context
-import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
-import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
-import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
-import dev.jonalakas.bridgepad.core.mapping.AxisBinding
 import dev.jonalakas.bridgepad.core.mapping.GamepadMapping
 import java.util.concurrent.ConcurrentHashMap
 
@@ -25,41 +21,13 @@ object GamepadMappingStore {
     private fun loadPersisted(deviceKey: String): GamepadMapping {
         val saved = context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .getString(deviceKey, null).orEmpty()
-        val buttons = mutableMapOf<VirtualControl, VirtualControl>()
-        val axes = mutableMapOf<VirtualAxis, AxisBinding>()
-        val dpad = mutableMapOf<DpadDirection, DpadDirection>()
-        saved.lineSequence().forEach { line ->
-            val parts = line.split(',')
-            runCatching {
-                when (parts.firstOrNull()) {
-                    "B" -> buttons[VirtualControl.valueOf(parts[1])] = VirtualControl.valueOf(parts[2])
-                    "A" -> axes[VirtualAxis.valueOf(parts[1])] = AxisBinding(
-                        VirtualAxis.valueOf(parts[2]),
-                        parts.getOrNull(3)?.toBoolean() == true,
-                    )
-                    "D" -> dpad[DpadDirection.valueOf(parts[1])] = DpadDirection.valueOf(parts[2])
-                }
-            }
-        }
-        return if (buttons.isEmpty() && axes.isEmpty() && dpad.isEmpty()) {
-            GamepadMapping()
-        } else {
-            GamepadMapping(
-                buttons = buttons,
-                axes = axes,
-                dpad = dpad.ifEmpty { DpadDirection.entries.associateWith { it } },
-            )
-        }
+        return GamepadMappingCodec.decode(saved)
     }
 
     fun save(deviceKey: String, mapping: GamepadMapping) {
         check(::context.isInitialized)
         cache[deviceKey] = mapping
-        val value = buildString {
-            mapping.buttons.forEach { (target, source) -> appendLine("B,$target,$source") }
-            mapping.axes.forEach { (target, binding) -> appendLine("A,$target,${binding.source},${binding.inverted}") }
-            mapping.dpad.forEach { (target, source) -> appendLine("D,$target,$source") }
-        }
+        val value = GamepadMappingCodec.encode(mapping)
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .edit()
             .putString(deviceKey, value)

@@ -87,6 +87,9 @@ fun GamepadMappingScreen(
     val axes = rememberSaveable(
         saver = axesMappingSaver(),
     ) { mutableStateMapOf<VirtualAxis, AxisBinding>() }
+    val triggerButtons = rememberSaveable(
+        saver = triggerButtonMappingSaver(),
+    ) { mutableStateMapOf<VirtualAxis, VirtualControl>() }
     val dpad = rememberSaveable(
         saver = dpadMappingSaver(),
     ) { mutableStateMapOf<DpadDirection, DpadDirection>() }
@@ -127,11 +130,13 @@ fun GamepadMappingScreen(
                 if (source != null) {
                     val usedBy = buttons.entries.firstOrNull {
                         it.value == source && it.key != currentStep.target
-                    }?.key
+                    }?.key?.displayName() ?: triggerButtons.entries.firstOrNull {
+                        it.value == source
+                    }?.key?.displayName()
                     if (usedBy != null) {
                         instruction = MappingInstruction(
                             R.string.mapping_button_used,
-                            listOf(usedBy.displayName()),
+                            listOf(usedBy),
                         )
                     } else {
                         buttons[currentStep.target] = source
@@ -178,8 +183,28 @@ fun GamepadMappingScreen(
                         instruction = MappingInstruction(R.string.mapping_axis_used)
                     } else {
                         axes[currentStep.target] = candidate
+                        triggerButtons.remove(currentStep.target)
                         armed = false
                         stepIndex++
+                    }
+                } else if (currentStep.target == VirtualAxis.LEFT_TRIGGER ||
+                    currentStep.target == VirtualAxis.RIGHT_TRIGGER
+                ) {
+                    val source = pressedNow.firstOrNull()
+                    if (source != null) {
+                        val usedBy = buttons.entries.firstOrNull {
+                            it.value == source
+                        }?.key?.displayName() ?: triggerButtons.entries.firstOrNull {
+                            it.value == source && it.key != currentStep.target
+                        }?.key?.displayName()
+                        if (usedBy != null) {
+                            instruction = MappingInstruction(R.string.mapping_button_used, listOf(usedBy))
+                        } else {
+                            triggerButtons[currentStep.target] = source
+                            axes.remove(currentStep.target)
+                            armed = false
+                            stepIndex++
+                        }
                     }
                 }
             }
@@ -217,7 +242,10 @@ fun GamepadMappingScreen(
                             when (val previous = steps[previousIndex]) {
                                 is MappingStep.Button -> buttons.remove(previous.target)
                                 is MappingStep.Dpad -> dpad.remove(previous.target)
-                                is MappingStep.Axis -> axes.remove(previous.target)
+                                is MappingStep.Axis -> {
+                                    axes.remove(previous.target)
+                                    triggerButtons.remove(previous.target)
+                                }
                             }
                             stepIndex = previousIndex
                         }
@@ -235,6 +263,7 @@ fun GamepadMappingScreen(
                                 buttons = buttons.toMap(),
                                 axes = axes.toMap(),
                                 dpad = dpad.toMap(),
+                                triggerButtons = triggerButtons.toMap(),
                             ),
                         )
                     },
@@ -246,7 +275,10 @@ fun GamepadMappingScreen(
                         when (val previous = steps[previousIndex]) {
                             is MappingStep.Button -> buttons.remove(previous.target)
                             is MappingStep.Dpad -> dpad.remove(previous.target)
-                            is MappingStep.Axis -> axes.remove(previous.target)
+                            is MappingStep.Axis -> {
+                                axes.remove(previous.target)
+                                triggerButtons.remove(previous.target)
+                            }
                         }
                         stepIndex = previousIndex
                     },
@@ -305,6 +337,21 @@ private fun axesMappingSaver() = listSaver<
             saved.forEach { value ->
                 val parts = value.split(',')
                 put(VirtualAxis.valueOf(parts[0]), AxisBinding(VirtualAxis.valueOf(parts[1]), parts[2].toBoolean()))
+            }
+        }
+    },
+)
+
+private fun triggerButtonMappingSaver() = listSaver<
+    androidx.compose.runtime.snapshots.SnapshotStateMap<VirtualAxis, VirtualControl>,
+    String,
+>(
+    save = { map -> map.map { (target, source) -> "$target,$source" } },
+    restore = { saved ->
+        mutableStateMapOf<VirtualAxis, VirtualControl>().apply {
+            saved.forEach { value ->
+                val (target, source) = value.split(',', limit = 2)
+                put(VirtualAxis.valueOf(target), VirtualControl.valueOf(source))
             }
         }
     },

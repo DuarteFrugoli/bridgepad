@@ -69,7 +69,11 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
         val timestamp = event.eventTime * NANOS_PER_MILLISECOND
 
         val dpadKeys = pressedDpadKeys.getOrPut(sourceId) { mutableSetOf() }
-        if (event.keyCode in DPAD_KEYS) {
+        if (triggerForKeyCode(event.keyCode) != null) {
+            digitalTriggerEvent(sourceId, event.keyCode, pressed, timestamp) { axis ->
+                device.firstRange(triggerCandidates(axis)) != null
+            }?.let(registry::apply)
+        } else if (event.keyCode in DPAD_KEYS) {
             if (pressed) dpadKeys += event.keyCode else dpadKeys -= event.keyCode
             registry.apply(RawInputEvent.Dpad(sourceId, dpadDirection(dpadKeys), timestamp))
         } else {
@@ -104,9 +108,9 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
             intArrayOf(MotionEvent.AXIS_RX, MotionEvent.AXIS_Z),
             intArrayOf(MotionEvent.AXIS_RY, MotionEvent.AXIS_RZ), updatedAxes)
         processTrigger(device, event, sourceId, timestamp, VirtualAxis.LEFT_TRIGGER,
-            intArrayOf(MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE), updatedAxes)
+            triggerCandidates(VirtualAxis.LEFT_TRIGGER), updatedAxes)
         processTrigger(device, event, sourceId, timestamp, VirtualAxis.RIGHT_TRIGGER,
-            intArrayOf(MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS), updatedAxes)
+            triggerCandidates(VirtualAxis.RIGHT_TRIGGER), updatedAxes)
         processHat(device, event, sourceId, timestamp, updatedAxes)
 
         lastRawEvent = if (updatedAxes.isEmpty()) {
@@ -267,6 +271,31 @@ class AndroidGamepadController(context: Context) : InputManager.InputDeviceListe
         (flat / ((max - min) / 2f)).coerceIn(0f, 0.99f)
 
     companion object {
+        internal fun triggerForKeyCode(keyCode: Int): VirtualAxis? = when (keyCode) {
+            KeyEvent.KEYCODE_BUTTON_L2 -> VirtualAxis.LEFT_TRIGGER
+            KeyEvent.KEYCODE_BUTTON_R2 -> VirtualAxis.RIGHT_TRIGGER
+            else -> null
+        }
+
+        internal fun digitalTriggerEvent(
+            sourceId: SourceId,
+            keyCode: Int,
+            pressed: Boolean,
+            timestampNanos: Long,
+            hasAnalogAxis: (VirtualAxis) -> Boolean,
+        ): RawInputEvent.Axis? {
+            val axis = triggerForKeyCode(keyCode) ?: return null
+            // Controllers may emit both forms; the analog value retains its full range.
+            if (hasAnalogAxis(axis)) return null
+            return RawInputEvent.Axis(sourceId, axis, if (pressed) 1f else 0f, timestampNanos)
+        }
+
+        private fun triggerCandidates(axis: VirtualAxis): IntArray = when (axis) {
+            VirtualAxis.LEFT_TRIGGER -> intArrayOf(MotionEvent.AXIS_LTRIGGER, MotionEvent.AXIS_BRAKE)
+            VirtualAxis.RIGHT_TRIGGER -> intArrayOf(MotionEvent.AXIS_RTRIGGER, MotionEvent.AXIS_GAS)
+            else -> error("Expected a trigger axis")
+        }
+
         private const val NANOS_PER_MILLISECOND = 1_000_000L
         private const val FALLBACK_DEADZONE = 0.1f
         private val DPAD_KEYS = setOf(

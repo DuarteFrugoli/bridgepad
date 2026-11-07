@@ -30,6 +30,15 @@ Stick axes use `[-1, 1]`, while triggers use `[0, 1]`. Values are clamped before
 they enter a source state. Stick deadzones are radial and can optionally rescale
 the remaining range so full travel is retained.
 
+Android capture accepts trigger axes and digital L2/R2 key events. A digital
+trigger is normalized to `0` on release and `1` on press; when the device exposes
+an analog trigger axis, duplicate key events do not overwrite its analog value.
+Controller mappings can also bind a raw USB button to either logical trigger.
+These bindings are saved with the profile and do not change button indices or
+the output wire format. Inverting a normalized trigger uses `1 - value`, while
+a stick mapped to a trigger uses only the selected direction from its neutral
+center.
+
 Session lifecycle is represented separately from controller input. Stopping a
 session clears pending output and produces a neutral gamepad state.
 

@@ -74,7 +74,8 @@ internal class UsbHidReportParser(descriptor: ByteArray) {
             when (prefix and 0xfc) {
                 0x04 -> page = unsigned
                 0x14 -> min = signed
-                0x24 -> max = signed
+                // HID maxima are unsigned when the corresponding minimum is non-negative.
+                0x24 -> max = if (min < 0) signed else unsigned
                 0x74 -> size = unsigned
                 0x94 -> count = unsigned
                 0x84 -> reportId = unsigned

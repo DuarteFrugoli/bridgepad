@@ -6,6 +6,17 @@ The project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Compatibility capture now accepts digital L2/R2 key events while preserving
+  analog values on controllers that report both keys and axes.
+- Controller mapping now supports saved button-to-trigger bindings, including
+  direct USB controllers with digital triggers. Trigger inversion also preserves
+  the normalized range and stick-to-trigger bindings remain neutral in the
+  opposite direction.
+- Direct USB HID capture now reads unsigned logical maxima correctly, including
+  one-byte `255` and two-byte `65535` ranges that previously neutralized input.
+
 ### Changed
 
 - Network sessions now keep reconnecting while the user still wants the

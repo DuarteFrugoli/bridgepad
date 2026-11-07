@@ -3,11 +3,59 @@ package dev.jonalakas.bridgepad.input.android
 import android.view.KeyEvent
 import dev.jonalakas.bridgepad.core.gamepad.DpadDirection
 import dev.jonalakas.bridgepad.core.gamepad.VirtualControl
+import dev.jonalakas.bridgepad.core.gamepad.RawInputEvent
+import dev.jonalakas.bridgepad.core.gamepad.SourceId
+import dev.jonalakas.bridgepad.core.gamepad.VirtualAxis
+import dev.jonalakas.bridgepad.core.mapping.SourceStateRegistry
+import dev.jonalakas.bridgepad.output.hid.HidReportEncoder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class AndroidGamepadControllerTest {
+    @Test
+    fun digitalTriggerKeysReachHidAndReleaseIndependently() {
+        val source = SourceId("digital-controller")
+        val registry = SourceStateRegistry()
+        fun apply(key: Int, pressed: Boolean): ByteArray {
+            val event = requireNotNull(
+                AndroidGamepadController.digitalTriggerEvent(source, key, pressed, 123L) { false },
+            )
+            return HidReportEncoder.encode(registry.apply(event).gamepad)
+        }
+        assertEquals(255, apply(KeyEvent.KEYCODE_BUTTON_L2, true)[7].toInt() and 0xff)
+        val both = apply(KeyEvent.KEYCODE_BUTTON_R2, true)
+        assertEquals(255, both[7].toInt() and 0xff)
+        assertEquals(255, both[8].toInt() and 0xff)
+        val rightOnly = apply(KeyEvent.KEYCODE_BUTTON_L2, false)
+        assertEquals(0, rightOnly[7].toInt())
+        assertEquals(255, rightOnly[8].toInt() and 0xff)
+        assertEquals(0, apply(KeyEvent.KEYCODE_BUTTON_R2, false)[8].toInt())
+    }
+
+    @Test
+    fun duplicateKeyEventsDoNotOverwriteAnalogTriggerValues() {
+        val source = SourceId("analog-controller")
+        val registry = SourceStateRegistry()
+        val analog = RawInputEvent.Axis(source, VirtualAxis.LEFT_TRIGGER, 0.35f, 1L)
+        registry.apply(analog)
+        for (pressed in listOf(true, false)) {
+            val duplicate = AndroidGamepadController.digitalTriggerEvent(
+                source, KeyEvent.KEYCODE_BUTTON_L2, pressed, 2L,
+            ) { it == VirtualAxis.LEFT_TRIGGER }
+            assertNull(duplicate)
+        }
+        assertEquals(0.35f, registry.snapshots().single().gamepad.leftTrigger, 0f)
+        val rightDigital = requireNotNull(
+            AndroidGamepadController.digitalTriggerEvent(source, KeyEvent.KEYCODE_BUTTON_R2, true, 3L) {
+                it == VirtualAxis.LEFT_TRIGGER
+            },
+        )
+        val state = registry.apply(rightDigital).gamepad
+        assertEquals(0.35f, state.leftTrigger, 0f)
+        assertEquals(1f, state.rightTrigger, 0f)
+    }
+
     @Test
     fun mapsRequiredAndroidButtonsByPhysicalPosition() {
         val expected = mapOf(
