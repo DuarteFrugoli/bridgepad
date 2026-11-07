@@ -29,7 +29,7 @@ jobs:
         run: cargo install cargo-ndk --version 4.1.2 --locked
 
       - name: Install Android NDK
-        run: sdkmanager "ndk;28.2.13676358"
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
@@ -62,7 +62,7 @@ jobs:
         run: cargo install cargo-ndk --version 4.1.2 --locked
 
       - name: Install Android NDK
-        run: sdkmanager "ndk;28.2.13676358"
+        run: '"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
